@@ -1,4 +1,4 @@
-    #!/usr/bin/env python
+#!/usr/bin/env python
 
 from setuptools import setup
 try:
@@ -14,16 +14,16 @@ with open('requirements.txt') as f:
     requirements = f.read().splitlines()
 print(requirements)
 
-setup(name='docx_localization',
-      version='0.0.1'
-      description='docx_localization',
+setup(name='pdfgen',
+      version='0.0.4',
+      description='pdfgen',
       long_description= "" if not os.path.isfile("README.md") else read_md('README.md'),
       author='Taylor Archibald',
       author_email='taylor.archibald@byu.edu',
-      url='https://github.com/tahlor/docx_localization',
+      url='https://github.com/tahlor/pdfgen',
       setup_requires=['pytest-runner',],
       tests_require=['pytest','python-coveralls'],
-      packages=['docx_localization'],
+      packages=['pdfgen'],
       install_requires=[
           *requirements,
       ],

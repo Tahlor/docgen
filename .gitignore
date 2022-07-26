@@ -3,10 +3,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+temp/
 password*
 credentials*
 *credentials*
 *.swp
+*deprecated/
 
 # C extensions
 *.so
@@ -39,7 +41,7 @@ var/
 pip-log.txt
 pip-delete-this-directory.txt
 
-# Unit test / coverage reports
+# Unit ttest / coverage reports
 htmlcov/
 .tox/
 .coverage

@@ -1,0 +1,652 @@
+import warnings
+import random
+from io import BytesIO
+from PyPDF2 import PdfFileReader, PdfFileWriter
+from PyPDF2.generic import TextStringObject, NameObject, ContentStream
+from PyPDF2._utils import b_
+from pdfgen.localize import generate_localization_from_bytes, generate_localization_from_file
+from PyPDF2.generic import ArrayObject as arr
+from pathlib import Path
+from pdfgen.rendertext.render_word_font import RenderText
+from synthetic_text_gen import SyntheticWord
+import fitz
+from math import ceil
+from pdfgen.img_tools import *
+import matplotlib.pyplot as plt
+import numpy as np
+import PIL
+from PIL import ImageChops, ImageDraw, PpmImagePlugin
+from pdfgen.utils import display
+from typing import Literal, List
+from pdfgen.bbox import BBox
+
+FONT_DIR = r"C:\Users\tarchibald\github\brian\fslg_documents\data\fonts\fonts"
+CLEAR_FONTS = r"C:\Users\tarchibald\github\brian\fslg_documents\data\fonts\clear_fonts.csv"
+
+
+def delete_all_content(input_bytes_io,
+                       output_path=None,
+                       first_page_only=True):
+    reader = PdfFileReader(input_bytes_io)
+    writer = PdfFileWriter()
+    last_page_index = 1 if first_page_only else reader.getNumPages()
+    for page_idx in range(0, last_page_index): # !!! loop through all pages
+
+        # Get the current page and it's contents
+        page = reader.getPage(page_idx)
+
+        content_object = page["/Contents"].getObject()
+        content = ContentStream(content_object, reader)
+        #print_all(content, reset=True)
+        for operands, operator in content.operations:
+            # print(operator, operands)
+            if operator == b_("BDC"):
+                #operands[1][NameObject("/Contents")] = TextStringObject("xyz")
+                operands[1][NameObject("/Contents")] = TextStringObject("")
+
+            if operator == b_("TJ"):
+                # Delete the text!
+                operands[0] = TextStringObject("")
+                # b'TJ' [['T', 6, 'A', -6, 'Y', 5, 'L', -5, 'OR']]
+        page[NameObject('/Contents')] = content
+        writer.addPage(page)
+
+    # Write the stream
+    with BytesIO() as output_stream:
+        writer.write(output_stream)
+        output_bytes = output_stream.getvalue()
+        if output_path:
+            with open(output_path, "wb") as fp:
+                fp.write(output_bytes)
+    return output_bytes
+
+def auto_create_new_text(page,
+                       rect,
+                       text="THIS IS MY NEW TEXT",
+                       font_name ="Times-Roman",
+                       font_size = 14,
+                       draw_box=True,
+                       box_color=(.25,1,.25),
+                       size_constraint="font",
+                       margin = 2
+                       ):
+    """
+        size_constraint (font, box): font: font_size is locked, make text box bigger
+                                     box: box is locked, make font_size smaller
+                                     both: both constraints are active
+
+    Returns:
+
+    """
+    text_length = fitz.get_text_length(text,
+                                   fontname=font_name,
+                                   fontsize=font_size)
+    box_width = rect[2]-rect[0]
+    box_height = rect[3]-rect[1]
+    too_big = text_length + margin > box_width or font_size + margin > box_height
+
+    if too_big:
+        if size_constraint == "box":
+            box_width = rect[2]-rect[0]
+            # *2 just because 1pt is too small for a char. It mantains a good ratio for rect's width with larger text, but behaviour is not assured.
+            new_font_size = min(box_width / len(text) * 2, box_height - margin)
+
+            if box_height < new_font_size + margin or new_font_size < 1:
+                raise Exception(f"Box height {box_height} too small for font {font_size} with margin {margin} and constrained box")
+
+            print(f"Font {font_size} too big for box {rect}, using {new_font_size}")
+            font_size = new_font_size
+        elif size_constraint == "font":
+            rect_x2 = ceil(rect[0] + text_length + margin)  # needs margin
+            rect_y2 = ceil(rect[1] + font_size + margin)  # needs margin
+            new_rect = rect[0:2] + (rect_x2, rect_y2)
+            print(f"Rectangle {rect} too small for font size {font_size}, new rectangle {new_rect}")
+            rect  = new_rect
+        elif size_constraint == "both":
+            raise Exception(f"Box height {box_height} too small for font {font_size} with margin {margin}")
+        else:
+            raise Exception(f"Unexpected {size_constraint} size_constraint option")
+
+    return create_new_textbox(page, rect, text, font_name, font_size, draw_box, box_color)
+
+def create_new_textbox(page,
+                       rect,
+                       text="THIS IS MY NEW TEXT",
+                       font_name ="Times-Roman",
+                       font_size = 14,
+                       draw_box=True,
+                       box_color=(.25,1,.25)):
+    """
+
+    Args:
+        page:
+        text:
+        rect: x1,y1,x2,y2
+        font_name:
+        font_size:
+        draw_box:
+        box_color:
+
+    Returns:
+
+    """
+
+    if draw_box:
+        page.draw_rect(rect,color=box_color)
+
+    rc = page.insert_textbox(rect, text,
+                             fontsize=font_size,
+                             fontname=font_name,
+                             align=1)
+
+    return rc
+
+class ScaleOptions:
+    """ max_upscale_factor (float):
+        max_downscale_factor (float):
+        scale_strategy (fit_x, fit_y, None, random): scale image to fit destination based on which dimension?
+        max_threshold_x: do not scale beyond e.g. 110% reference box
+        max_threshold_y
+        scale_jitter_factor (.9,1.1: applied after scaling has happened
+        random_pad: if smaller than destination box, apply random padding
+    """
+
+    def resize(self, source_dim, dest_dim):
+        pass
+
+def composite_images(background_image, paste_image, position):
+    """
+    Args:
+        background_image:
+        paste_image:
+        position:
+
+    Returns:
+
+    """
+    if not isinstance(background_image, np.ndarray):
+        background_image = np.array(background_image)
+    paste_image = np.asarray(paste_image)
+
+    # Converting to numpy necessitates transposing the positions; y is now first
+    x,y = position
+
+    yslice = slice(y, y+get_y(paste_image))
+    xslice = slice(x, x+get_x(paste_image))
+    if paste_image.ndim < 3:
+        paste_image = np.tile(paste_image[:, :, None], 3)
+    try:
+        background_image[yslice, xslice] = np.minimum(paste_image, background_image[yslice,xslice])
+    except:
+        pass
+
+    return background_image
+
+def merge_img(bck, fore, pos):
+    """ Preserves formlines etc. during pasting
+        Crop window from FORM_IMG and merge with word image before pasting
+
+    Args:
+        bck:
+        fore:
+        pos:
+
+    Returns:
+
+    """
+    bck = bck.crop((pos[0], pos[1], pos[0]+fore.size[0],pos[1]+fore.size[1]))
+    if bck.mode == "RGB" and fore.mode != "RGB":
+        fore = fore.convert("RGB")
+    elif fore.mode == "RGB" and bck.mode != "RGB":
+        bck = bck.convert("RGB")
+
+    return ImageChops.multiply(fore, bck)
+
+def shape(item):
+    if isinstance(item, np.ndarray):
+        return item.shape
+    elif isinstance(item, PpmImagePlugin.PpmImageFile):
+        return item.size
+
+def get_x(item):
+    if isinstance(item, np.ndarray):
+        return item.shape[1]
+    elif isinstance(item, PpmImagePlugin.PpmImageFile):
+        return item.size[0]
+
+def get_y(item):
+    if isinstance(item, np.ndarray):
+        return item.shape[0]
+    elif isinstance(item, PpmImagePlugin.PpmImageFile):
+        return item.size[1]
+
+
+def estimate_space(word_imgs, vertical_space, horizontal_space):
+    """ Estimate how much space is needed for horizontal_min_to_fit
+        Also scale option...ugh
+
+    Returns:
+
+    """
+    widths = [word.shape[0] + horizontal_space for word in word_imgs]
+    total_length_concat = np.cumsum(widths)
+
+
+def fill_area_with_words(word_imgs,
+                         bbox,
+                         text_list: List[str],
+                         horizontal_space_min_max=[.4,.5],
+                         vertical_space_min_max=[.3,.4],
+                         max_intraline_vertical_space_offset=1,
+                         horizontal_min_to_fit=False,
+                         vertical_min_to_fit=False,
+                         error_handling: Literal['force', 'skip_bad', "expand"]="skip_bad",
+                         max_attempts=3):
+    """ Return word level localization
+
+    Args:
+        word_imgs:
+        bbox (x1,y1,x2,y2):
+        text_list List[str]: list of text words to put in, necessary because all may not fit and needs to return actual list
+        horizontal_space_min_max (0,1): spacing as a % of image height
+        vertical_space_min_max (0,1): spacing as a % of image height
+        TODO: horizontal_min_to_fit (bool): use minimum horizontal space if it probably won't fit
+        TODO: vertical_min_to_fit (bool): use minimum vertical space if it probably won't fit
+        TODO: vertical_drift: how much vertical space can change between words
+        error_handling (str): skip_bad - skip this word/line and move to next one; set max_attempts to give up
+                              force - paste word, even if it execeeds the boundary of the box
+                              expand - make canvas bigger (line wider, box taller, etc.)
+                                          # when 1 word is too big for a line
+                                          # when the lines are too tall for the box
+        max_attempts (int): if doing skip_bad, will try multiple times
+    Returns:
+
+    - mcmc - choose offset from previous line
+           - sum offsets
+           - find vocab_size/min
+           - this is the line thickness
+
+    TODO: Handle words that are too wide for bbox
+    """
+    word_attempts = 0
+    line_attempts = 0
+
+    text = ""
+    localization = []
+    page_lines = []
+    current_line = []
+
+    # Ys attributes of lines at box level
+    y_start_lines = [0]
+    vertical_line_spaces = [0]
+    starting_height_with_vertical_space = [0]
+
+    # Xs,Ys within a line
+    ys_within_line = []
+    xs_within_line = []
+    localization = []
+    x_start = x_end = 0
+    word_imgs = [np.array(w)/255.0 for w in word_imgs]
+    out_text = []
+
+    max_line_width = bbox[2]-bbox[0]
+    max_height = bbox[3]-bbox[1]
+
+    def end_of_the_line():
+        nonlocal ys_within_line, current_line, xs_within_line, line_attempts, x_start, x_end
+        ys_sum = np.cumsum(ys_within_line)
+        ys_sum -= np.min(ys_sum)
+        y_height_for_current_line = max([w.shape[0] + ys_sum[i] for i, w in enumerate(current_line)])
+        y_start_lines.append(y_height_for_current_line)
+        line_tensor = np.ones([y_height_for_current_line, x_end], dtype=np.float32)
+        for i, _word in enumerate(current_line):
+            line_tensor[ys_sum[i]:ys_sum[i] + _word.shape[0], xs_within_line[i]:xs_within_line[i] + _word.shape[1]] = _word
+
+        # Naively concatenate spaces and words; instead, we define array and replace it to handle vertical space
+        # page_lines.append(np.concatenate(current_line, 1))
+        page_lines.append(line_tensor)
+
+        current_line = []
+
+        xs_within_line, ys_within_line = [], []
+        x_start = 0
+        # Ys
+        y_start_lines.append(y_height_for_current_line)
+        vert_space = int(random.uniform(*vertical_space_min_max))
+        starting_height_with_vertical_space.append(vert_space + y_height_for_current_line)
+        vertical_line_spaces.append(vert_space)
+
+        # If the next line puts us over the limit
+        # if starting_height_with_vertical_space[-1] > max_height:
+        # Doesn't account for vertical offsets; as long as these are small, shouldn't matter;
+            # Since image size is enforced with skip_bad/force, these would just be cropped slightly
+        if not last_word and starting_height_with_vertical_space[-1] + word_imgs[ii + 1].shape[0] > max_height:
+            if error_handling != "expand":
+
+                # Failed to generate first line
+                if len(page_lines) == 1:
+                    warnings.warn("First line was too tall for box")
+                    if error_handling == "force":
+                        return "break"  # no reason to generate more lines, just end
+                    elif error_handling == "skip_bad":
+                        line_attempts += 1
+                        if line_attempts >= max_attempts:
+                            warnings.warn(f"First line too tall despite {line_attempts} attempts")
+                            return "break"
+                        return "continue"
+                return "break"
+        line_attempts = 0
+
+    def add_next_word():
+        nonlocal x_start, x_end
+        # Add next word
+        offset = random.randint(-max_intraline_vertical_space_offset, max_intraline_vertical_space_offset)
+        if word_img.shape[0] > max_height:
+            warnings.warn("Word taller than maximum allowable height in box")
+        current_line.append(word_img)
+        xs_within_line.append(x_start)
+        ys_within_line.append(offset)
+        out_text.append(text_list[ii])
+
+        x_end = x_start + word_img.shape[1]
+
+        localization.append(
+            BBox("ul",
+                 [x_start,offset,x_end, offset+word_img.shape[0]],
+                 line_number=len(page_lines),
+                 line_word_index=len(current_line)-1,  # word was just added
+                 text=out_text[-1],
+                 parent_obj_bbox=bbox)
+        )
+
+        # x_start for new word - must be after localization
+        horizontal_space = int(random.uniform(*horizontal_space_min_max) * word_img.shape[0])
+        x_start = x_end + horizontal_space
+
+    # WORD BUILDING LOOP
+    for ii,word_img in enumerate(word_imgs):
+        """
+        For Y's:
+            # line starting position -- can't be known until all offsets are calculated
+            # where the previous line left off
+            # 
+        """
+        last_word = ii+1 == len(word_imgs)
+        # Skip word if it is wider than max line width
+        if error_handling == "skip_bad":
+            if word_img.shape[1] > max_line_width or word_img.shape[0] > max_height:
+                word_attempts += 1
+                if word_attempts >= max_attempts:
+                    warnings.warn(
+                        f"Tried {word_attempts} times, but specified line too narrow for words, e.g. {text_list[ii]}")
+                    break
+                continue
+
+        word_attempts = 0
+
+        end_of_line = x_start + word_img.shape[1] > max_line_width
+        if end_of_line: # Don't add next word if it would make the line too long
+            result = end_of_the_line()
+            if result=="break":
+                break
+            elif result=="continue":
+                continue
+        add_next_word()
+    end_of_the_line()
+
+    # if line is too long, max width equals that line, part of the "force" paradigm
+    if error_handling=="expand":
+        max_line_width = max(max_line_width, *[line.shape[1] for line in page_lines])
+
+    cum_height = np.cumsum(starting_height_with_vertical_space)
+
+    # Put lines together
+    page_ = []
+    for i, line in enumerate(page_lines):
+        vertical_line_space = np.ones([vertical_line_spaces[i], max_line_width])
+        if error_handling == "force" and line.shape[0] > max_line_width:
+            line = line[:max_line_width]
+        right_pad_ = np.ones([line.shape[0], max_line_width - line.shape[1]])
+        page_.append(np.concatenate([line, right_pad_], 1))
+        page_.append(vertical_line_space)
+
+
+    for bbox in localization:
+        # if bbox.line_number > :
+        bbox.offset_origin(offset_y=cum_height[bbox.line_number])
+
+    page = np.concatenate(page_, 0)
+
+    if error_handling in ("force", "skip_bad"):
+        page = page[:max_height,:max_line_width]
+
+    return page * 255, localization
+
+def resize_image_to_bbox(img:Image.Image,
+                         bbox:tuple[float, ...],
+                         resize_method:Literal["fit","height","none"]="fit"):
+    resample=Image.BICUBIC
+    new_size_x, new_size_y = img.size
+    old_x, old_y = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    scale_factor_width = old_x / new_size_x
+    scale_factor_height = old_y / new_size_y
+    if resize_method == "fit":
+        scale_factor = min(scale_factor_width, scale_factor_height)
+        img = img.resize([int(old_x * scale_factor),
+                         int(old_y * scale_factor)],
+                         resample=resample)
+    elif resize_method == "width_only":
+        img = img.resize([int(new_size_x * scale_factor_width),
+                         int(new_size_y * scale_factor_width)],
+                         resample=resample)
+    elif resize_method == "height_only":
+        img = img.resize([int(new_size_x * scale_factor_height),
+                         int(new_size_y * scale_factor_height)],
+                         resample=resample)
+    return img
+
+class PDF:
+    def __init__(self, renderer,
+                 remove_chars=[],
+                 mark_for_replacement_char=False):
+        """
+
+        Args:
+            renderer:
+            remove_chars:
+            mark_for_replacement_char:
+        """
+        self.RT = renderer
+        self.remove_chars = remove_chars + [chr(7)]
+        self.mark_for_replacement = mark_for_replacement_char
+
+    def clnstr(self, txt):
+        return txt.translate(None, ''.join(self.remove_chars))
+
+    def gen_word_image(self, word):
+        return self.RT.render_word(word)
+
+    def replace_text_with_images(self,
+                                 pdf,
+                                 new_words=None,
+                                 localization=None,
+                                 delete_text=True,
+                                 vertical_inversion=True,
+                                 composite=True,
+                                 request_same_word=False,
+                                 resize_words: Literal["fit","height_only","width_only","none"]="fit",
+                                 first_page_only=True
+                                 ):
+        """
+
+        Args:
+            pdf:
+            new_words:
+            delete_text:
+            vertical_inversion (bool): PDF localization origin is Lower Left, image origin is Upper Left
+            composite (bool): True: composite images instead of pasting, i.e., merge/take darkest pixel
+            resize_words: fit-make sure new word height/width will fit
+                          height-only: make sure it is not taller than original word
+                          width-only: make sure it is not wider than original word
+                          none: no resize
+
+            fit_error_handling:
+                          truncate: don't use if end of textbox is reached
+        Returns:
+
+        """
+        # User must supply words to be replaced, or it will replace it with the same one already there
+        assert not new_words is None or request_same_word
+
+        # Perform localization
+        if isinstance(pdf, str) or isinstance(pdf, Path):
+            with Path(pdf).open('rb') as _p:
+                # For each text box, replace it with HWR resized to fit the same space
+                pdf_obj = _p.read()
+        else:
+            pdf_obj = pdf
+
+        pdf_io = BytesIO(pdf_obj)
+
+        if localization is None:
+            localization = generate_localization_from_bytes(pdf_io, first_page_only=first_page_only)
+        elif first_page_only:
+            localization = {0: localization[0]}
+
+        new_localization = {}
+
+        # delete text
+        if delete_text:
+            pdf_obj = delete_all_content(pdf_io, first_page_only=first_page_only)
+
+        images = convert_pdf_bytes_to_img_bytes(pdf_obj)
+        if first_page_only:
+            images = [images[0]]
+
+        # Paste new word images
+        for page in localization:
+            if isinstance(page,int):
+                new_localization[page] = {}
+                img_w = images[page].size[0]
+                img_h = images[page].size[1]
+                new_localization[page]["localization_word"] = []
+                for i, textbox in enumerate(localization[page]["localization_word"]):
+                    if "replace" in textbox and not textbox["replace"]:
+                        continue
+                    if request_same_word:
+                        # Replace existing text with same text, new font/handwriting
+                        phrase_text = textbox["text"]
+                    else:
+                        # Use generator to find text
+                        phrase_text = new_words[i]
+
+                    # Generate new image
+                    phrase_obj = self.gen_word_image(phrase_text)
+
+                    # Convert from numpy to PIL
+                    phrase_img = Image.fromarray(phrase_obj["image"])
+
+                    x = textbox["norm_bbox"][0]
+
+                    # Need to invert y coordinates and use "lower" coordinate instead of upper coordinate
+                    y = 1-textbox["norm_bbox"][3] if vertical_inversion else textbox["norm_bbox"][1]
+                    pos = int(x * get_x(images[page])), int(y * get_y(images[page]))
+
+                    abs_pixel_bbox = textbox["norm_bbox"][0]*img_w,textbox["norm_bbox"][1]*img_h,textbox["norm_bbox"][2]*img_w,textbox["norm_bbox"][3]*img_h
+                    if resize_words != "none":
+                        phrase_img = resize_image_to_bbox(phrase_img, abs_pixel_bbox, resize_method=resize_words)
+
+                    if composite: # i.e., something closer to taking darkest pixel
+                        # My numpy version - dangerous, just keep everything in PIL or everything will get screwed up
+                        # images[page] = composite_images(images[page], phrase_img, pos)
+
+                        # PIL only
+                        phrase_img = merge_img(images[page], phrase_img, pos)
+                        images[page].paste(phrase_img, pos)
+
+                    else: # naive paste
+                        images[page].paste(phrase_img, pos)
+
+                    new_localization[page]["localization_word"].append({"text": phrase_text,
+                                                                        "bbox": BBox.img_and_pos_to_bbox(phrase_img,pos),
+                                                                        })
+
+                if isinstance(images[page], np.ndarray):
+                    images[page] = Image.fromarray(np.uint8(images[page]))
+
+        # Paste word image
+
+        # loop through bounding boxes
+            # get the original data for these bounding boxes???
+            # render them as images
+            # resize
+            # paste the images
+        return images, new_localization
+
+
+def draw_bbox(img, bboxs):
+    img1 = ImageDraw.Draw(img)
+    for bbox in bboxs:
+        img1.rectangle(bbox)
+    return img1
+
+def offset_bboxes(bboxes, origin):
+    for i, bbox in enumerate(bboxes):
+        bboxes[i]=bbox + origin
+
+def delete_text_test():
+    input_path = Path("../temp/TEMPLATE.pdf")
+    output_path = input_path.parent / (input_path.stem + "_modded.pdf")
+    delete_all_content(input_path, output_path)
+
+def add_some_textboxes_test(input_path, output_path):
+    doc = fitz.open(input_path)
+    page = doc[0]  # choose some page
+    try:
+        auto_create_new_text(page, rect=(20,20,300,21), font_size=8, size_constraint="box")
+    except Exception as e:
+        print(f"Exception: {e}")
+    try:
+        auto_create_new_text(page, rect=(20,20,300,28), font_size=8, size_constraint="both")
+    except Exception as e:
+        print(f"Exception: {e}")
+
+    auto_create_new_text(page, rect=(20, 20, 300, 28), font_size=8, size_constraint="font")
+    auto_create_new_text(page, rect=(20, 20, 300, 34), text="Message1", font_size=16, size_constraint="box")
+
+    doc.save(output_path)
+
+
+def localization_test(input_path):
+    """ Example of creating new textbox on PDF
+
+    Returns:
+
+    """
+    return generate_localization_from_file(input_path)
+
+
+
+if __name__ == '__main__':
+    input_path = "../temp/TEMPLATE.pdf"
+    output_path = "../temp/TEMPLATE_with_textbox.pdf"
+    input_path = "../temp/french_census_12.pdf"
+    output_path = "../temp/french_census_12_MOD.pdf"
+
+    #drawing_test(input_path, output_path)
+    localization_test(input_path)
+
+    #### TOMORROW:
+        # fix logic:
+            # want to check if end of the line at the beginning, so we don't add another word to the line
+            # BUT we need to add the last word to the last line too
+            # Proposal:
+                # have end the line be after, but have a quick check to see if the word should be added
+                # THIS won't work, because then we go to the next word
+            ### OR:
+                # have the last item in the list be a dummy item; when we get to the dummy, end the line
+                # or just call the function again
+            # break/continue won't work with subfunction; just return something that relays this to the loop
+
+    ### MAKE FORMS
+    ### MAKE DATA FOR DESSURT FOR IAM
