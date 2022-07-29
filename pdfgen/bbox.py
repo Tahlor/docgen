@@ -11,7 +11,8 @@ class BBox:
                  line_number=None,
                  line_word_index=None,
                  text=None,
-                 parent_obj_bbox=None):
+                 parent_obj_bbox=None,
+                 paragraph_index=None):
         """
 
         Args:
@@ -29,6 +30,7 @@ class BBox:
         self.line_word_index = line_word_index
         self.text = text
         self.parent_bbox = parent_obj_bbox
+        self.paragraph_index = paragraph_index
 
     def change_origin(self, origin: Literal['ul', 'll'], height):
         """ If the self.parent_bbox is defined, user can use it to compute height.
@@ -73,10 +75,14 @@ class BBox:
         return img1
 
     def draw_box(self, img, color="red"):
+        BBox._draw_box(self.bbox, img, color)
+
+    @staticmethod
+    def _draw_box(bbox, img, color="red"):
         if isinstance(img, np.ndarray):
-            return self.draw_box_numpy(self.bbox, img, color)
+            return BBox.draw_box_numpy(bbox, img, color)
         elif isinstance(img, Image.Image):
-            return self.draw_box_pil(self.bbox, img, color)
+            return BBox.draw_box_pil(bbox, img, color)
 
     @staticmethod
     def bbox_norm(bbox, image_w, image_h):
@@ -124,4 +130,18 @@ class BBox:
         return self.bbox[i]
 
     def __repr__(self):
-        return self.bbox
+        return str(self.bbox)
+
+    @staticmethod
+    def get_maximal_box(list_of_bboxes):
+        """
+        list_of_bboxes: [x1,y1,x2,y2,xx1,yy1,xx2,yy2,...]
+        Returns:
+
+        """
+        boxes = np.array(list_of_bboxes).reshape(-1,4)
+        #boxes = np.array(range(0,20))
+        return [np.min(boxes[:, 0]),
+        np.min(boxes[:, 1]),
+        np.max(boxes[:, 2]),
+        np.max(boxes[:, 3])]

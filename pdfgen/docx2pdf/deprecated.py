@@ -1,7 +1,7 @@
 import sys
 import subprocess
 import re
-import docx2pdf
+#import docx2pdf
 
 LINUX_PATH = "/usr/bin/libreoffice7.3"
 MACOS_PATH = "/Applications/LibreOffice.app/Contents/MacOS/soffice"

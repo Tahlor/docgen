@@ -2,15 +2,7 @@ import random
 import sys
 
 import numpy.random
-from pdf2image import convert_from_path
-#from pdfgen import docx_to_pdf
-from pdfgen import localize
-import docx
-import io
-import tempfile
-#from pdfgen import docx2pdf
-import docx2pdf
-from pathlib import Path
+from pdfgen import docx2pdf
 from pdfgen.content.table_from_faker import TableDataFromFaker
 from pdfgen.docx_tools.docx_tools import *
 from pdfgen.utils import *
@@ -21,8 +13,16 @@ from pdfgen.bbox import BBox
 from pdfgen.utils import coco_dataset
 from torch.utils.data import Dataset, DataLoader
 
-OFFFICE_PATH=r"C:\Program Files\LibreOffice\program\swriter.exe"
+if True:
+    OFFICE_PATH=r"C:\Program Files\LibreOffice\program\swriter.exe"
+    WORD = None
+else:
+    OFFICE_PATH=None
+    import win32com.client
+    WORD = win32com.client.Dispatch("Word.Application")
 
+
+MARK=chr(96)
 providers = [{"provider": "faker.providers.address", "locale": "fr_FR"},
                                 {"provider": "faker.providers.person", "locale": "fr_FR"},
                                 {"provider": "faker.providers.ssn", "locale": "fr_FR"},
@@ -48,7 +48,9 @@ def make_docx(output_folder,
     generator = TableDataFromFaker(functions=functions,
                                    include_row_number=True,
                                    provider_dict_list=providers,
-                                   mark_for_replacement_fields=mark_for_replacement_fields)
+                                   mark_for_replacement_fields=mark_for_replacement_fields,
+                                   replacement_char=MARK
+                                   )
     rows = random.randint(30,60)
     column_widths = numpy.random.random(len(generator)) * 3
 
@@ -80,8 +82,8 @@ def StartWord(i):
     import win32com.client
     return win32com.client.Dispatch("Word.Application")
 
+WORKERS = 4
 def threading():
-    WORKERS = 4
     import win32com.client
     import pythoncom
 
@@ -105,7 +107,7 @@ class DocxGen(Dataset):
     def __init__(self,
                  root_dir="./temp/french_census",
                  pdf=None,
-                 office_path=OFFFICE_PATH):
+                 office_path=OFFICE_PATH):
         self.root_dir = file_incrementer(root_dir, create_dir=True)
         (self.root_dir / "images").mkdir(exist_ok=True, parents=True)
         self.pdf = pdf
@@ -120,7 +122,7 @@ class DocxGen(Dataset):
         while failed:
             if True:
                 out = make_docx(self.root_dir, idx=idx)
-                pdf_dict = self.docx_to_img(out, word_instance=self.word_instance(idx % WORKERS))
+                pdf_dict = self.docx_to_img(out, word_instance=WORD)
                 failed = False
             #except Exception as e:
             #    print(e)
@@ -136,12 +138,14 @@ class DocxGen(Dataset):
         docx2pdf.convert(docx_file, pdf_path, word=word_instance, office_path=self.office_path)
 
         # Localize
-        localization = localize.generate_localization_from_file(pdf_path, first_page_only=True)
+        # localization = localize.generate_localization_from_file(pdf_path,
+        #                   first_page_only=True,
+        #                   mark_for_replacement=self.pdf.mark_for_replacement)
 
         # Only get first page
         images, new_localization = self.pdf.replace_text_with_images(pdf_path,
                                              request_same_word=True,
-                                             localization=localization,
+                                             localization=None,
                                              resize_words="width_only",
                                              first_page_only=True)
         image = images[0]
@@ -196,7 +200,7 @@ def small_test(doctor_gen):
 
 if __name__ == '__main__':
     renderer = RenderWordFont(format="numpy")
-    pdf = PDF(renderer=renderer)
+    pdf = PDF(renderer=renderer, mark_for_replacement_char=MARK)
     root = Path("./temp/french_census")
     doctor_gen = DocxGen(root_dir=root,
                          pdf=pdf)
@@ -300,4 +304,7 @@ POSSIBLE FEATURES:
 ASAP:
     ## REQUIREMENTS
     ## PUSH GIT
+
+LIBRE SUCKS!!!!!
+DON'T DELETE IF NOT REPLACE!!!
 """

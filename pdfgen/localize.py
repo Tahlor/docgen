@@ -40,14 +40,14 @@ def normalize_bbox(bbox, size_x, size_y):
                        bbox[2] / size_x,
                        bbox[3] / size_y)
 
-def clnstr(txt, remove_chars):
-    return txt.translate(None, ''.join(remove_chars))
+def clnstr(txt, table):
+    return txt.translate(table)
 
 def generate_localization_from_bytes(pdf_file,
                                      level="word",
                                      first_page_only=False,
                                      ignore_chars=[],
-                                     mark_for_replacement=False
+                                     mark_for_replacement=None
                                      ):
     """
 
@@ -58,6 +58,11 @@ def generate_localization_from_bytes(pdf_file,
     Returns:
 
     """
+    # A special mark to designate a field to be repurposed; delete it when transcribing
+    if not mark_for_replacement is None:
+        ignore_chars += mark_for_replacement
+    cln_str_table = str.maketrans(f"\u00A0\u2011"," -", "".join(ignore_chars))
+
     def character():
         while len(stack) > 0:
             obj = stack.pop(0)
@@ -95,8 +100,8 @@ def generate_localization_from_bytes(pdf_file,
                                              localization[pg_num]["size"][1])
 
             # Manage Text
-            replace = True if mark_for_replacement in word or not mark_for_replacement else False
-            word = clnstr(word).replace("\u00A0", " ").replace("\u2011", "-")
+            replace = True if mark_for_replacement is None or mark_for_replacement in word else False
+            word = clnstr(word, cln_str_table)
 
             item = {"text": word.strip(),
                     "bbox": bbox,

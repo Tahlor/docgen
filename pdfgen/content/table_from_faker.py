@@ -7,7 +7,8 @@ class TableDataFromFaker:
                  header_names=None,
                  include_row_number=True,
                  provider_dict_list=None,
-                 mark_for_replacement_fields=None):
+                 mark_for_replacement_fields=None,
+                 replacement_char=None):
         self.include_row_number = include_row_number
         if header_names is None:
             self.header_names = [x.title().replace("_"," ") for x in functions]
@@ -17,7 +18,9 @@ class TableDataFromFaker:
             self.header_names = header_names
         self.row_builder = RowBuilder(functions=functions,
                                       provider_dict_list=provider_dict_list,
-                                      mark_for_replacement_fields=mark_for_replacement_fields)
+                                      mark_for_replacement_fields=mark_for_replacement_fields,
+                                      replacement_char=replacement_char)
+
         assert len(self.header_names)==len(functions)+include_row_number
 
     def gen_content(self, rows):

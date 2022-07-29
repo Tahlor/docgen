@@ -10,22 +10,26 @@ import re
 
 """
 
-try:
-    # 3.8+
-    from importlib.metadata import version
-except ImportError:
-    from importlib_metadata import version
-
-__version__ = version(__package__)
+# try:
+#     # 3.8+
+#     from importlib.metadata import version
+# except ImportError:
+#     from importlib_metadata import version
+#
+# __version__ = version(__package__)
 
 LINUX_PATH = "/usr/bin/libreoffice"
 MACOS_PATH = "/Applications/LibreOffice.app/Contents/MacOS/soffice"
 
 
-def windows(paths, keep_active):
+def windows(paths, keep_active, word=None):
     import win32com.client
 
-    word = win32com.client.Dispatch("Word.Application")
+    if word is None:
+        word = win32com.client.Dispatch("Word.Application")
+    else:
+        keep_active = True
+
     wdFormatPDF = 17
 
     def convert():
@@ -120,7 +124,8 @@ def docx2pdf_oo(paths, keep_active, office_path=None):
 
     """
     def convert():
-        args = [libreoffice_exec() if office_path is None else office_path, '--headless', '--convert-to', 'pdf', '--outdir', pdf_filepath, docx_filepath]
+        _pdf_filepath = Path(pdf_filepath).parent if Path(pdf_filepath).suffix == ".pdf" else pdf_filepath
+        args = [libreoffice_exec() if office_path is None else office_path, '--headless', '--convert-to', 'pdf', '--outdir', _pdf_filepath, docx_filepath]
         process = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
         #filename = re.search('-> (.*?) using filter', process.stdout.decode())
         #filename.group(1)
@@ -145,14 +150,14 @@ def libreoffice_exec():
     return 'libreoffice'
 
 
-def convert(input_path, output_path=None, keep_active=False, office_path=None):
+def convert(input_path, output_path=None, keep_active=False, office_path=None, word=None):
     paths = resolve_paths(input_path, output_path)
     if not office_path is None:
         return docx2pdf_oo(paths, keep_active, office_path=office_path)
     if sys.platform == "darwin":
         return macos(paths, keep_active)
     elif sys.platform == "win32":
-        return windows(paths, keep_active)
+        return windows(paths, keep_active, word=word)
     elif sys.platform == "linux":
         return docx2pdf_oo(paths, keep_active)
     else:

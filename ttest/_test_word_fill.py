@@ -52,7 +52,7 @@ if __name__ == '__main__':
     text_list = words.sample(n=40)
     word_imgs = [renderer.render_word(t, size=32) for t in text_list]
 
-    background_img = Image.new("RGB", (800, 1280), (255, 255, 255))
+    background_img = Image.new("RGB", (768, 1152), (255, 255, 255))
     shp = utils.shape(background_img)
     box1, bboxs1 = fill_area_with_words(word_imgs=[w["image"] for w in word_imgs],
                          bbox=[0, 0, 600, 1200],
@@ -60,12 +60,16 @@ if __name__ == '__main__':
                          )
     box2, bboxs2 = fill_area_with_words(word_imgs=[w["image"] for w in word_imgs],
                         bbox=[0, 0, 300, 1200],
-                         text_list=[w["raw_text"] for w in word_imgs]
-                         )
+                         text_list=[w["raw_text"] for w in word_imgs],
+                        max_intraline_vertical_space_offset = 5
+    )
     box3, bboxs3 = fill_area_with_words(word_imgs=[w["image"] for w in word_imgs],
                         bbox=[0, 0, 300, 1200],
-                         text_list=[w["raw_text"] for w in word_imgs]
+                         text_list=[w["raw_text"] for w in word_imgs],
+                        max_intraline_vertical_space_offset=15
                          )
+
+    result = convert_to_ocr_format(bboxs1)
 
     bbox1_origin = (100, 50)
     bbox2_origin = (50, 450)
@@ -93,3 +97,4 @@ if __name__ == '__main__':
 
     display(background_img)
     pass
+
