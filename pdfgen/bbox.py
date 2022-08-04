@@ -1,8 +1,9 @@
 from typing import Literal
 from PIL import ImageDraw, Image
-from cv2 import rectangle
+from cv2 import rectangle as np_rectangle
 import numpy as np
 from matplotlib.colors import to_rgb
+import cv2
 
 class BBox:
     def __init__(self,
@@ -56,17 +57,22 @@ class BBox:
 
     def offset_origin(self, offset_x=0, offset_y=0):
         self.bbox = self._offset_origin(self.bbox, offset_x=offset_x, offset_y=offset_y)
+        return self
 
     @staticmethod
     def _offset_origin(bbox, offset_x=0, offset_y=0):
-        bbox[0], bbox[2] = bbox[0] + offset_x, bbox[2] + offset_x
-        bbox[1], bbox[3] = bbox[1] + offset_y, bbox[3] + offset_y
-        return bbox
+        new_bbox = bbox.copy()
+        new_bbox[0], new_bbox[2] = int(new_bbox[0] + offset_x), int(new_bbox[2] + offset_x)
+        new_bbox[1], new_bbox[3] = int(new_bbox[1] + offset_y), int(new_bbox[3] + offset_y)
+        return new_bbox
 
     @staticmethod
     def draw_box_numpy(bbox, img, color="red", thickness=None):
-        color = to_rgb(color)
-        rectangle(img, bbox[0:2], bbox[2:], color=color, thickness=thickness)
+        color = (np.array(to_rgb(color)).astype(int) * 255).tolist()
+        if img.ndim <3:
+            img = img[:,:,None]
+
+        np_rectangle(img, bbox[0:2], bbox[2:], color=color, thickness=thickness)
 
     @staticmethod
     def draw_box_pil(bbox, img, color):
@@ -141,7 +147,7 @@ class BBox:
         """
         boxes = np.array(list_of_bboxes).reshape(-1,4)
         #boxes = np.array(range(0,20))
-        return [np.min(boxes[:, 0]),
-        np.min(boxes[:, 1]),
-        np.max(boxes[:, 2]),
-        np.max(boxes[:, 3])]
+        return [int(np.min(boxes[:, 0])),
+        int(np.min(boxes[:, 1])),
+        int(np.max(boxes[:, 2])),
+        int(np.max(boxes[:, 3]))]

@@ -1,6 +1,8 @@
 import warnings
 import random
 from io import BytesIO
+
+import cv2
 from PyPDF2 import PdfFileReader, PdfFileWriter
 from PyPDF2.generic import TextStringObject, NameObject, ContentStream
 from PyPDF2._utils import b_
@@ -9,7 +11,6 @@ from PyPDF2.generic import ArrayObject as arr
 from pathlib import Path
 from pdfgen.rendertext.render_word_font import RenderText
 from synthetic_text_gen import SyntheticWord
-import fitz
 from math import ceil
 from pdfgen.img_tools import *
 import matplotlib.pyplot as plt
@@ -118,54 +119,6 @@ def edit(input_bytes_io,
     return output_bytes
 
 
-def auto_create_new_text(page,
-                       rect,
-                       text="THIS IS MY NEW TEXT",
-                       font_name ="Times-Roman",
-                       font_size = 14,
-                       draw_box=True,
-                       box_color=(.25,1,.25),
-                       size_constraint="font",
-                       margin = 2
-                       ):
-    """
-        size_constraint (font, box): font: font_size is locked, make text box bigger
-                                     box: box is locked, make font_size smaller
-                                     both: both constraints are active
-
-    Returns:
-
-    """
-    text_length = fitz.get_text_length(text,
-                                   fontname=font_name,
-                                   fontsize=font_size)
-    box_width = rect[2]-rect[0]
-    box_height = rect[3]-rect[1]
-    too_big = text_length + margin > box_width or font_size + margin > box_height
-
-    if too_big:
-        if size_constraint == "box":
-            box_width = rect[2]-rect[0]
-            # *2 just because 1pt is too small for a char. It mantains a good ratio for rect's width with larger text, but behaviour is not assured.
-            new_font_size = min(box_width / len(text) * 2, box_height - margin)
-
-            if box_height < new_font_size + margin or new_font_size < 1:
-                raise Exception(f"Box height {box_height} too small for font {font_size} with margin {margin} and constrained box")
-
-            print(f"Font {font_size} too big for box {rect}, using {new_font_size}")
-            font_size = new_font_size
-        elif size_constraint == "font":
-            rect_x2 = ceil(rect[0] + text_length + margin)  # needs margin
-            rect_y2 = ceil(rect[1] + font_size + margin)  # needs margin
-            new_rect = rect[0:2] + (rect_x2, rect_y2)
-            print(f"Rectangle {rect} too small for font size {font_size}, new rectangle {new_rect}")
-            rect  = new_rect
-        elif size_constraint == "both":
-            raise Exception(f"Box height {box_height} too small for font {font_size} with margin {margin}")
-        else:
-            raise Exception(f"Unexpected {size_constraint} size_constraint option")
-
-    return create_new_textbox(page, rect, text, font_name, font_size, draw_box, box_color)
 
 def create_new_textbox(page,
                        rect,
@@ -263,7 +216,7 @@ def merge_img(bck, fore, pos):
 def shape(item):
     if isinstance(item, np.ndarray):
         return item.shape
-    elif isinstance(item, PpmImagePlugin.PpmImageFile):
+    elif isinstance(item, (PpmImagePlugin.PpmImageFile,Image.Image)):
         return item.size
 
 def get_x(item):
@@ -290,7 +243,7 @@ def estimate_space(word_imgs, vertical_space, horizontal_space):
     total_length_concat = np.cumsum(widths)
 
 
-def convert_to_ocr_format(localization, box="box"):
+def convert_to_ocr_format(localization, box="bbox", origin_offset=(0,0), section=0):
 
     def start_next_line(line=None):
         nonlocal current_line_num
@@ -299,7 +252,7 @@ def convert_to_ocr_format(localization, box="box"):
             line[box] = BBox.get_maximal_box(line[box])
             line["text"] = " ".join(line["text"])
             current_paragraph_dict["lines"].append(line)
-            current_paragraph_dict["box"].append(line[box])
+            current_paragraph_dict[box].append(line[box])
         return {box: [], "text": [], "words": []}
 
     def start_next_paragraph(paragraph=None):
@@ -308,7 +261,7 @@ def convert_to_ocr_format(localization, box="box"):
             current_paragraph = word.paragraph_index
             paragraph[box] = BBox.get_maximal_box(paragraph[box])
             ocr_dict_page["paragraphs"].append(paragraph)
-            ocr_dict_page["box"].append(paragraph[box])
+            ocr_dict_page[box].append(paragraph[box])
         return {"lines": [], box: []}
 
     ocr_dict_page = {"paragraphs": [], box: []}
@@ -328,10 +281,11 @@ def convert_to_ocr_format(localization, box="box"):
             current_paragraph_dict = start_next_paragraph(current_paragraph_dict)
 
         current_line_dict["text"].append(word.text)
-        current_word = {box: word.bbox,
+        current_word = {box: word.offset_origin(origin_offset[0],
+                                                origin_offset[1]).bbox,
                         "text": word.text,
-                        "id": [0,
-                               0,
+                        "id": [section,
+                               current_paragraph,
                                word.line_number,
                                word.line_word_index]}
         current_line_dict["words"].append(current_word)
@@ -357,7 +311,8 @@ def fill_area_with_words(word_imgs,
                                                  "force_hard",
                                                  "skip_bad_hard",
                          ]="skip_bad",
-                         max_attempts=3):
+                         max_attempts=3,
+                         scale=1):
     """ Return word level localization
 
     Args:
@@ -407,7 +362,10 @@ def fill_area_with_words(word_imgs,
     localization = []
 
     x_start = x_end = 0
-    word_imgs = [np.array(w)/255.0 for w in word_imgs]
+    if np.max(word_imgs[0])>1:
+        word_imgs = [np.array(w)/255.0 for w in word_imgs]
+    if scale != 1:
+        word_imgs = [resize(w,scale) for w in word_imgs]
     out_text = []
 
     max_line_width = bbox[2]-bbox[0]
@@ -545,7 +503,7 @@ def fill_area_with_words(word_imgs,
                 continue
 
         add_next_word()
-        if out_text[-1][-1] == "\n":
+        if out_text[-1] and out_text[-1][-1] == "\n":
             end_of_the_line()
             new_paragraph(word_img)
 
@@ -568,9 +526,14 @@ def fill_area_with_words(word_imgs,
         page_.append(vertical_line_space)
 
     # Update the Y-positions in the localization, now that lines are spaced etc.
-    for bbox in localization:
-        intra_line_offset = list_of_y_sums[bbox.line_number][bbox.line_word_index]
-        bbox.offset_origin(offset_y=cum_height[bbox.line_number]+intra_line_offset)
+    for _bbox in localization:
+        intra_line_offset = list_of_y_sums[_bbox.line_number][_bbox.line_word_index]
+        final_y = int(cum_height[_bbox.line_number]+intra_line_offset)
+        if bbox[0]!=0 or bbox[1] != 0:
+            _bbox.offset_origin(offset_y=final_y+bbox[1],
+                                offset_x=bbox[0])
+        else:
+            _bbox.offset_origin(offset_y=final_y)
 
     page = np.concatenate(page_, 0)
 
@@ -601,6 +564,17 @@ def resize_image_to_bbox(img:Image.Image,
                          int(new_size_y * scale_factor_height)],
                          resample=resample)
     return img
+
+def resize(img, decimal_percent):
+
+    width = ceil(img.shape[1] * decimal_percent)
+    height = ceil(img.shape[0] * decimal_percent)
+    dim = (width, height)
+    if width > 0 and height > 0:
+        return cv2.resize(img, dim)
+    else:
+        return img.reshape(height,width)
+
 
 class PDF:
     def __init__(self, renderer,
@@ -762,22 +736,6 @@ def delete_text_test():
     output_path = input_path.parent / (input_path.stem + "_modded.pdf")
     delete_all_content(input_path, output_path)
 
-def add_some_textboxes_test(input_path, output_path):
-    doc = fitz.open(input_path)
-    page = doc[0]  # choose some page
-    try:
-        auto_create_new_text(page, rect=(20,20,300,21), font_size=8, size_constraint="box")
-    except Exception as e:
-        print(f"Exception: {e}")
-    try:
-        auto_create_new_text(page, rect=(20,20,300,28), font_size=8, size_constraint="both")
-    except Exception as e:
-        print(f"Exception: {e}")
-
-    auto_create_new_text(page, rect=(20, 20, 300, 28), font_size=8, size_constraint="font")
-    auto_create_new_text(page, rect=(20, 20, 300, 34), text="Message1", font_size=16, size_constraint="box")
-
-    doc.save(output_path)
 
 
 def localization_test(input_path):
