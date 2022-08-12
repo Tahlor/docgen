@@ -297,6 +297,9 @@ def convert_to_ocr_format(localization, box="bbox", origin_offset=(0,0), section
     ocr_dict_page[box] = BBox.get_maximal_box(ocr_dict_page[box])
     return ocr_dict_page
 
+def calculate_median(img):
+    signle = np.median(np.linalg.norm(img[:,:2], axis=1))
+
 def fill_area_with_words(word_imgs,
                          bbox,
                          text_list: List[str],

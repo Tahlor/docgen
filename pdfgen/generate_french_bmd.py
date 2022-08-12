@@ -32,14 +32,13 @@ def main():
     basic_text_dataset = Wikipedia(
         dataset=load_dataset("wikipedia", "20220301.en")["train"],
         vocabulary=set(VOCABULARY),  # set(self.model.netconverter.dict.keys())
-        exclude_chars="0123456789()+*;#:!/",
+        exclude_chars="", #"0123456789()+*;#:!/",
         min_sentence_length=60,
         max_sentence_length=64
     )
     renderer = HWGenerator(next_text_dataset=basic_text_dataset,
                            batch_size=BATCH_SIZE,
                            model="CVL")
-
     dataloader = DataLoader(basic_text_dataset,
                             batch_size=BATCH_SIZE,
                             collate_fn=basic_text_dataset.collate_fn)
