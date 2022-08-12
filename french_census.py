@@ -10,7 +10,7 @@ from pdfgen.pdf_edit import PDF
 from pdfgen.rendertext.render_word import RenderWordFont
 from handwriting.data.saved_handwriting_dataset import SavedHandwriting
 from pdfgen.bbox import BBox
-from pdfgen.utils import coco_dataset
+from pdfgen.dataset_utils import coco_dataset
 from torch.utils.data import Dataset, DataLoader
 
 if True:
