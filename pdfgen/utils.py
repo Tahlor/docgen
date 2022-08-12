@@ -67,6 +67,12 @@ def _resize(im, nR=None, nC=None, square=True):
 
 
 def display(img, cmap="gray"):
+    # if isinstance(img, PpmImagePlugin.PpmImageFile) or isinstance(img, Image.Image):
+    #     img.show()
+    # else:
+    #
+    if isinstance(img,list):
+        img = img[0]
     fig, ax = plt.subplots(figsize=(10, 10))
     if channels(img)==3:
         cmap = None

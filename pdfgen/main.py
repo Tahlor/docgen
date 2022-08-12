@@ -4,9 +4,12 @@ from pdfgen.rendertext.render_word import RenderWordFont
 from handwriting.data.saved_handwriting_dataset import SavedHandwriting
 import numpy as np
 from pdfgen import utils
+from pdfgen.utils import display as disp
 
 PATH= r"C:\Users\tarchibald\github\handwriting\handwriting\data\datasets\synth_hw\style_298_samples_0.npy"
 PDF_FILE = r"C:\Users\tarchibald\github\docx_localization\temp\TEMPLATE.pdf"
+PDF_FILE = r"C:\Users\tarchibald\Downloads\EXAMPLES\french_census_0000.pdf"
+
 #PDF_FILE = r"C:\Users\tarchibald\github\docx_localization\temp\example.pdf"
 
 UNIGRAMS = r"C:\Users\tarchibald\github\textgen\textgen\datasets\unigram_freq.csv"
@@ -69,7 +72,7 @@ def main():
                                 format="PIL",
                                 dataset_path=PATH,
                                 random_ok=True,
-                                conversion=lambda image: np.uint8(image*255)
+                                conversion=None #lambda image: np.uint8(image*255)
                                 )
 
     r2 = renderer2.render_word(word="this")["image"]
@@ -77,9 +80,10 @@ def main():
 
     pdf = PDF(renderer=renderer)
     for i in range(1):
-        images = pdf.replace_text_with_images(PDF_FILE, words)
+        images = pdf.replace_text_with_images(PDF_FILE, words, resize_words="height_only")
 
     utils.display(images[0])
+    images[0][0].save(r"C:\Users\tarchibald\Downloads\EXAMPLES\example.png")
     pass
 
 if __name__ == '__main__':

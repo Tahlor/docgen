@@ -707,7 +707,10 @@ class PDF:
                     phrase_obj = self.gen_word_image(phrase_text)
 
                     # Convert from numpy to PIL
-                    phrase_img = Image.fromarray(phrase_obj["image"])
+                    if isinstance(phrase_obj["image"], np.ndarray):
+                        phrase_img = Image.fromarray(phrase_obj["image"])
+                    else:
+                        phrase_img = phrase_obj["image"]
 
                     x = textbox["norm_bbox"][0]
 

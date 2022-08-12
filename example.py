@@ -6,7 +6,7 @@ import io
 import tempfile
 from pdfgen import docx2pdf
 from pathlib import Path
-
+from pdfgen import img_tools
 
 def create_a_table(heading, data, column_headers=None, output=None):
     """
@@ -82,10 +82,12 @@ def main(root):
         pdf_temp = Path(f"./temp/{root}.pdf")
         img_path = f"./temp/{root}" + "{}.jpg"
 
+        pdf_temp = r"C:\Users\tarchibald\Downloads\EXAMPLES\french_census_0000.pdf"
+
     if False:
         success = create_a_table(heading, data, column_headers, docx_temp)
 
-    if True:
+    if False:
         # Convert to PDF and Image
         docx2pdf.convert(docx_temp, pdf_temp)
 
@@ -96,7 +98,8 @@ def main(root):
     print("done with localization")
 
     # Save as image
-    convert_to_img(pdf_temp, img_path)
+    print(img_path)
+    img_tools.convert_pdf_to_img_paths(pdf_temp, img_path)
 
 if __name__ == '__main__':
     main("TEMPLATE")
