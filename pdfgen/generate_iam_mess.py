@@ -46,11 +46,11 @@ def main():
     remainder = 1000
     for i, d in enumerate(dataloader):
         process_batch(d, renderer)
-
-        if remainder > i % FREQ:
+        ii = i * BATCH_SIZE
+        if remainder > ii % FREQ:
             with OUTPUT_OCR_JSON.open("w") as ff:
                 json.dump(OUTPUT_DICT, ff)
-        remainder = i % FREQ
+        remainder = ii % FREQ
 
 def try_try_again(func):
     def try_again(*args,**kwargs):
@@ -137,13 +137,13 @@ def process_batch(d, renderer):
         # for bbox in bboxs1:
         #     bbox.draw_box(background_img)
 
-        display(background_img)
+        # display(background_img)
 
         file_name = f"{IDX:07.0f}"
         #draw_boxes_sections(ocr_out, background_img)
 
         utils.save_image(background_img,OUTPUT_PATH / (file_name + ".jpg"))
-        print(shape(background_img))
+        # print(shape(background_img))
         OUTPUT_DICT[file_name] = ocr_out
         IDX += 1
 
