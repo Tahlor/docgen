@@ -182,6 +182,23 @@ class RenderWordFont(RenderWord):
                 "bbox":None,
                 "raw_text":word}
 
+class RenderImageTextPair:
+
+    def __init__(self, renderer, textgen):
+        self.renderer = renderer
+        self.textgen = textgen
+
+    @property
+    def font_size(self):
+        return self.renderer.font_size
+
+    def __len__(self):
+        return len(self.textgen)
+
+    def __getitem__(self,i):
+        d = self.renderer.render_word(self.textgen[i])
+        return d["image"], d["raw_text"]
+
 
 if __name__ == '__main__':
     from matplotlib import pyplot as plt

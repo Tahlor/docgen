@@ -16,6 +16,7 @@ from datasets import load_dataset
 from torch.utils.data import DataLoader
 from utils import file_incrementer
 from pdfgen.dataset_utils import load_json, draw_boxes_sections
+from pdf_edit import convert_to_ocr_format
 
 PATH= r"C:\Users\tarchibald\github\handwriting\handwriting\data\datasets\synth_hw\style_298_samples_0.npy"
 PDF_FILE = r"C:\Users\tarchibald\github\docx_localization\temp\TEMPLATE.pdf"
@@ -87,7 +88,7 @@ def process_batch(d, renderer):
             origin = origin[0]+offset[0], origin[1]+offset[1]
 
         scale = random.uniform(.7,1.8)
-        box1, bboxs1 = fill_area_with_words(word_imgs=sample["words"],
+        box1, localization = fill_area_with_words(word_imgs=sample["words"],
                                         bbox=[0,0,*size],
                                         text_list=sample["raw_text"].split(" "),
                                         max_intraline_vertical_space_offset=5,
@@ -95,8 +96,8 @@ def process_batch(d, renderer):
                                         scale=scale
                                         )
         background_img.paste(Image.fromarray(box1), origin)
-        ocr_format = convert_to_ocr_format(bboxs1, origin_offset=origin, section=section)
-        return size,origin,box1, bboxs1, ocr_format
+        ocr_format = convert_to_ocr_format(localization, origin_offset=origin, section=section)
+        return size,origin,box1, localization, ocr_format
 
     """
     font_resize_factor = random.uniform(.8,2.5)

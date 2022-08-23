@@ -13,3 +13,4 @@ git+https://github.ancestry.com/tarchibald/docgen
 git+https://github.ancestry.com/tarchibald/hwgen
 git+https://github.ancestry.com/tarchibald/textgen
 git+https://github.ancestry.com/tarchibald/Faker
+git+https://github.com/NVlabs/ocrodeg

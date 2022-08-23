@@ -45,9 +45,9 @@ def delete_extra_images(path):
             os.remove(file)
             #time.sleep(0.01)
 
-def ocr_to_coco(ocr_dict, data_set_name="Synthetic Forms - Pre-alpha Release"):
+def ocr_dataset_to_coco(ocr_dict, data_set_name="Synthetic Forms - Pre-alpha Release"):
     if isinstance(ocr_dict, Path) or isinstance(ocr_dict, str):
-        ocr_dict = load_json(path)
+        ocr_dict = load_json(ocr_dict)
 
     images = []
     annotations = []
@@ -73,7 +73,8 @@ def ocr_to_coco(ocr_dict, data_set_name="Synthetic Forms - Pre-alpha Release"):
                         annotations.append(process_item(word, img_id, "word"))
                     annotations.append(process_item(line, img_id, "line"))
                 annotations.append(process_item(paragraph, img_id, "paragraph"))
-            annotations.append(process_item(section, img_id, "section"))
+            category = section["category"] if "category" in section.keys() else "section"
+            annotations.append(process_item(section, img_id, category))
 
     info = DEFAULT_COCO_INFO.copy()
     info["description"] = data_set_name
@@ -191,6 +192,12 @@ def draw_boxes_sections(ocr_format, background_img):
     for section in ocr_format["sections"]:
         draw_boxes_paragraph(section, background_img)
 
+def draw_boxes_sections_COCO(coco_format, idx, background_img):
+    for annotation in coco_format["annotations"]:
+        if annotation["image_id"] == idx:
+            BBox._draw_box(annotation["bbox"], background_img)
+
+
 def fix(path):
     path = Path(path)
     dict = load_json(path)
@@ -213,22 +220,33 @@ def fix2(path):
     return dict
 
 
-def load_and_draw_and_display(file_path, d=None):
-    if d is None:
-        d = load_json(Path(file_path).parent / "OCR.json")
-    idx = Path(file_path).stem
-    img = Image.open(file_path)
-    draw_boxes_sections(d[idx], img)
-    display(img)
+def load_and_draw_and_display(image_path, dataset_dict=None, format="OCR"):
+    if dataset_dict is None:
+        dataset_dict = load_json(Path(image_path).parent / "OCR.json")
+    elif isinstance(dataset_dict, (str, Path)):
+        dataset_dict = load_json(dataset_dict)
+
+    idx = Path(image_path).stem
+    img = Image.open(image_path)
+    if format == "OCR":
+        draw_boxes_sections(dataset_dict[idx], img)
+    elif format == "COCO":
+        draw_boxes_sections_COCO(dataset_dict, idx, img)
+
+    #display(img)
+    img.show()
 
 if __name__ == '__main__':
-    path = "/home/taylor/anaconda3/DATASET_0021/OCR.json"
-    coco = "/home/taylor/anaconda3/DATASET_0021/COCO.json"
+    root = Path("/home/taylor/anaconda3/DATASET_0021")
+    root = Path(r"C:\Users\tarchibald\github\pdfgen\pdfgen\temp")
+
+    path = root / "OCR.json"
+    coco = root / "COCO.json"
 
     #dict = fix(path="/home/taylor/anaconda3/DATASET_0021/OCR.json")
     #delete_extra_images(path)
 
-    save_json(Path(path).parent / "COCO.json", ocr_to_coco(ocr_dict=path, data_set_name="Handwritten Pages"))
+    save_json(Path(path).parent / "COCO.json", ocr_dataset_to_coco(ocr_dict=path, data_set_name="Handwritten Pages"))
     #load_json(coco)
 
     if False:

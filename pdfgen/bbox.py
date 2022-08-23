@@ -17,15 +17,17 @@ class BBox:
         """
 
         Args:
-            origin:
+            origin: ul = upper left, ll = lower left; lower left not IMPLEMENTED
             bbox: ALWAYS x1,y1,x2,y2; assume origin is top left, x1,y1 is top left and smaller than x2,y2
             line_number (int): if generated in a box, the index of the word within the line
             line_word_index (int): if generated in a box, the line number
             text (str): the word (optional)
-            parent_obj_bbox (x1,y1,x2,y2): bbox always gives you the position within the box it was created
-                                           to find abs position, offset it by the parent_obj_bbox
+            parent_obj_bbox (x1,y1,x2,y2):
         """
         #self.origin = self.set_origin(origin)
+        if origin=="ll":
+            raise NotImplementedError
+
         self.bbox = list(bbox)
         self.line_number = line_number
         self.line_word_index = line_word_index
@@ -66,19 +68,48 @@ class BBox:
         new_bbox[1], new_bbox[3] = int(new_bbox[1] + offset_y), int(new_bbox[3] + offset_y)
         return new_bbox
 
+    def get_dim(self):
+        return self._get_dim(self.bbox)
+
     @staticmethod
-    def draw_box_numpy(bbox, img, color="red", thickness=None):
+    def _get_dim(bbox):
+        return bbox[2]-bbox[0], bbox[3]-bbox[1]
+
+    @staticmethod
+    def _get_height(bbox):
+        return bbox[3]-bbox[1]
+
+    @staticmethod
+    def _get_width(bbox):
+        return bbox[2]-bbox[0]
+
+    @property
+    def size(self):
+        return self.get_dim()
+
+    @property
+    def height(self):
+        return self._get_height(self.bbox)
+
+    @property
+    def width(self):
+        return self._get_width(self.bbox)
+
+    @staticmethod
+    def draw_box_numpy(bbox, img, color="red", thickness=None, fill=None):
         color = (np.array(to_rgb(color)).astype(int) * 255).tolist()
         if img.ndim <3:
             img = img[:,:,None]
 
         np_rectangle(img, bbox[0:2], bbox[2:], color=color, thickness=thickness)
+        return img
 
     @staticmethod
-    def draw_box_pil(bbox, img, color):
+    def draw_box_pil(bbox, img, color, fill=None):
+        #img1 = ImageDraw.Draw(img) if not isinstance(img, ImageDraw.ImageDraw) else img
         img1 = ImageDraw.Draw(img)
-        img1.rectangle(bbox, outline=color)
-        return img1
+        img1.rectangle(bbox, outline=color, fill=fill)
+        return img
 
     def draw_box(self, img, color="red"):
         BBox._draw_box(self.bbox, img, color)
@@ -87,8 +118,10 @@ class BBox:
     def _draw_box(bbox, img, color="red"):
         if isinstance(img, np.ndarray):
             return BBox.draw_box_numpy(bbox, img, color)
-        elif isinstance(img, Image.Image):
+        elif isinstance(img, (Image.Image, ImageDraw.ImageDraw)):
             return BBox.draw_box_pil(bbox, img, color)
+        else:
+            raise NotImplementedError
 
     @staticmethod
     def bbox_norm(bbox, image_w, image_h):
@@ -130,7 +163,23 @@ class BBox:
         else:
             raise NotImplementedError
 
+    @staticmethod
+    def _draw_center(bbox, img, color):
+        width, height = BBox._get_dim(bbox)
+        x_center = (bbox[0]+bbox[2])/2
+        y_center = (bbox[1] + bbox[3]) / 2
+        bbox = (width * -.1 + x_center,
+               height * -.1 + y_center,
+                width * .1 + x_center,
+                height * .1 + y_center,
+            )
 
+        if isinstance(img, np.ndarray):
+            return BBox.draw_box_numpy(bbox, img, color)
+        elif isinstance(img, (Image.Image, ImageDraw.ImageDraw)):
+            return BBox.draw_box_pil(bbox, img, color, fill="red")
+        else:
+            raise NotImplementedError
 
     def __iter__(self, i):
         return self.bbox[i]
@@ -143,6 +192,7 @@ class BBox:
         """
         list_of_bboxes: [x1,y1,x2,y2,xx1,yy1,xx2,yy2,...]
         Returns:
+            The union of all bboxes
 
         """
         boxes = np.array(list_of_bboxes).reshape(-1,4)

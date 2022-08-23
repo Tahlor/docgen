@@ -1,9 +1,11 @@
+import random
 import json
 import matplotlib.pyplot as plt
 import numpy as np
 import PIL
 from pathlib import Path
 from PIL import PpmImagePlugin, Image
+import traceback
 
 def shape(item):
     """
@@ -80,6 +82,9 @@ def display(img, cmap="gray"):
     plt.show()
 
 
+def flip(prob=.5):
+    return random.random() < prob
+
 # def open_image(path):
 #     with Path(path).open("rb") as f:
 #         return Image.open(f)
@@ -149,6 +154,18 @@ def save_image(img, img_path):
         # cv2.imwrite("filename.png", img)
     #elif isinstance(img, PpmImagePlugin.PpmImageFile) or isinstance(img, Image.Image):
     img.save(img_path)
+
+def handler(testing=False, return_on_fail=None):
+    def wrapper(func, *args, **kwargs):
+        if not testing:
+            try:
+                return func(*args,**kwargs)
+            except:
+                traceback.print_exc()
+                return return_on_fail
+        else:
+            return func(*args,**kwargs)
+    return wrapper
 
 if __name__ == '__main__':
     f = r"C:\Users\tarchibald\github\docx_localization\temp\french_census_0002\french_census_coco.json"
