@@ -4,6 +4,16 @@ import random
 from PIL import Image
 import numpy as np
 
+"""
+COST OF EACH
+blur	215	1.0
+splotches	2754	12.8
+ruled_surface_distortions	600	2.8
+random_distortions	3206	14.9
+fibrous1	10304	47.9
+fibrous2	10554	49.1
+"""
+
 def blur(img, s=range(1,3)):
     sigma = random.uniform(*s)
     return ndi.gaussian_filter(img, sigma)
@@ -46,11 +56,9 @@ def degradation_function_composition(img):
 
     number_of_distortions = random.randint(0, len(all_funcs))
     random.shuffle(all_funcs)
-    for f in all_funcs[:number_of_distortions]:
-        img = np.clip(img, 0, 1)
-        img = f(img)
 
-    img = np.clip(img,0,1)
+    img = apply_all(img, all_funcs[:number_of_distortions])
+
     if rescale:
         img = img * 255
         img = img.astype(np.uint8)
@@ -59,5 +67,14 @@ def degradation_function_composition(img):
 
     return img
 
+def apply_all(img, funcs=all_funcs):
+    for f in funcs:
+        img = np.clip(img, 0, 1)
+        img = f(img)
+    img = np.clip(img, 0, 1)
+    return img
+
+
 if __name__ == "__main__":
-    pass
+    noise = np.random.uniform(size=3200*2500).reshape(3200, -1)
+    apply_all(noise)

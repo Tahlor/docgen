@@ -1,6 +1,8 @@
 from torch.utils.data import Dataset, DataLoader, IterableDataset
 from pdfgen.degradation.degrade import degradation_function_composition
+from pdfgen.utils import handler
 
+TESTING=False
 
 class LayoutDataset(Dataset):
     def __init__(self, layout_generator, render_text_pairs, output_path, lenth=100000, *args, **kwargs):
@@ -22,6 +24,7 @@ class LayoutDataset(Dataset):
     def __len__(self):
         return self.lenth
 
+    @handler(testing=TESTING, return_on_fail=(None, None))
     def __getitem__(self, i):
         return self.make_one_image(i)
 

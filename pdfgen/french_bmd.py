@@ -13,14 +13,13 @@ import multiprocessing
 from pdfgen.layoutgen.layout_dataset import LayoutDataset
 from torch.utils.data import DataLoader
 
-TESTING = True
-MULTITHREAD = False
+TESTING = False # TESTING = disables error handling
+WORKERS = multiprocessing.cpu_count() - 2
 PATH = r"C:\Users\tarchibald\github\handwriting\handwriting\data\datasets\synth_hw\style_298_samples_0.npy"
 UNIGRAMS = r"C:\Users\tarchibald\github\textgen\textgen\datasets\unigram_freq.csv"
 
-
 def multiprocess(func, output, iterations):
-    if MULTITHREAD:
+    if False:
         temp_results = process_map(func, range(0, iterations),
                                    max_workers=multiprocessing.cpu_count())  # iterates through everything all at once
         for name, result in temp_results:
@@ -58,12 +57,12 @@ def main():
                                           right_margin=(-.02, .5))
     paragraph_margins = MarginGenerator(top_margin=(-.05, .05),
                                         bottom_margin=(-.05, .05),
-                                        left_margin=(-.02, .02),
-                                        right_margin=(-.02, .02))
+                                        left_margin=(-.05, .02),
+                                        right_margin=(-.05, .02))
     margin_margins = MarginGenerator(top_margin=(-.1, .2),
                                      bottom_margin=(-.05, .3),
                                      left_margin=(-.05, .1),
-                                     right_margin=(-.05, .1))
+                                     right_margin=(-.08, .1))
 
     paragraph_note_margins = MarginGenerator(top_margin=(-.05, .2),
                                              bottom_margin=(-.05, .2),
@@ -104,16 +103,18 @@ def main():
     layout_loader = DataLoader(layout_dataset,
                                batch_size=4,
                                collate_fn=layout_dataset.collate_fn,
-                               num_workers=5) # multiprocessing.cpu_count()
+                               num_workers=WORKERS)
 
     ocr_dataset = {}
 
     # Multiprocessing
-    #multiprocess(make_one_image, ocr_dataset, 5)
-    for batch in tqdm(layout_loader):
-        for name,data in batch:
-            ocr_dataset[name] = data
-        pass
+    if False:
+        multiprocess(make_one_image, ocr_dataset, 5)
+    else:
+        for batch in tqdm(layout_loader):
+            for name,data in batch:
+                ocr_dataset[name] = data
+            pass
 
     save_json(OCR_PATH, ocr_dataset)
     coco = ocr_dataset_to_coco(ocr_dataset, "French BMD Layout - v0.0.0.1 pre-Alpha")

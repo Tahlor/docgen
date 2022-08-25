@@ -156,16 +156,18 @@ def save_image(img, img_path):
     img.save(img_path)
 
 def handler(testing=False, return_on_fail=None):
-    def wrapper(func, *args, **kwargs):
-        if not testing:
-            try:
+    def wrapper1(func):
+        def wrapper2(*args, **kwargs):
+            if not testing:
+                try:
+                    return func(*args,**kwargs)
+                except:
+                    traceback.print_exc()
+                    return return_on_fail
+            else:
                 return func(*args,**kwargs)
-            except:
-                traceback.print_exc()
-                return return_on_fail
-        else:
-            return func(*args,**kwargs)
-    return wrapper
+        return wrapper2
+    return wrapper1
 
 if __name__ == '__main__':
     f = r"C:\Users\tarchibald\github\docx_localization\temp\french_census_0002\french_census_coco.json"
