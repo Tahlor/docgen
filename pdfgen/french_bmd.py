@@ -1,8 +1,9 @@
+import os
 from tqdm import tqdm
 from tqdm.contrib.concurrent import process_map
 import traceback
 from layoutgen.layoutgen import *
-from handwriting.data.saved_handwriting_dataset import SavedHandwriting
+from handwriting.data.saved_handwriting_dataset import SavedHandwriting, SavedHandwritingRandomAuthor
 from textgen.unigram_dataset import Unigrams
 from rendertext.render_word import RenderImageTextPair
 from pathlib import Path
@@ -14,22 +15,8 @@ from pdfgen.layoutgen.layout_dataset import LayoutDataset
 from torch.utils.data import DataLoader
 
 TESTING = False # TESTING = disables error handling
-WORKERS = multiprocessing.cpu_count() - 2
-PATH = r"C:\Users\tarchibald\github\handwriting\handwriting\data\datasets\synth_hw\style_298_samples_0.npy"
-UNIGRAMS = r"C:\Users\tarchibald\github\textgen\textgen\datasets\unigram_freq.csv"
 
-def multiprocess(func, output, iterations):
-    if False:
-        temp_results = process_map(func, range(0, iterations),
-                                   max_workers=multiprocessing.cpu_count())  # iterates through everything all at once
-        for name, result in temp_results:
-            if not name is None:
-                output[name] = result
-    else:
-        for i in range(0, iterations):
-            name, result = func(i)
-            output[name] = result
-
+#PATH = r"C:\Users\tarchibald\github\handwriting\handwriting\data\datasets\synth_hw\style_298_samples_0.npy"
 
 @handler(testing=TESTING, return_on_fail=(None, None))
 def make_one_image(i):
@@ -46,7 +33,6 @@ def make_one_image(i):
 def draw_layout(layout, image):
     image = lg.draw_doc_boxes(layout, image)
     image.show()
-
 
 def main():
     global OUTPUT, render_text_pair, lg
@@ -80,44 +66,70 @@ def main():
                          pages_per_image=(1, 3)
                          )
 
-    renderer = SavedHandwriting(
-        format="PIL",
-        dataset_path=PATH,
-        random_ok=True,
-        conversion=None,  # lambda image: np.uint8(image*255)
-        font_size=32
-    )
-    words = Unigrams(csv_file=UNIGRAMS, newline_freq=0)
-    render_text_pair = RenderImageTextPair(renderer, words)
-
-    OUTPUT = Path("./temp/FRENCH_BMD_LAYOUTv2")
+    DATASETS = Path("/home/taylor/anaconda3/datasets/")
+    OUTPUT = DATASETS / "FRENCH_BMD_LAYOUTv2"
     OUTPUT = file_incrementer(OUTPUT, create_dir=True)
     OUTPUT.mkdir(exist_ok=True, parents=True)
     OCR_PATH = OUTPUT / "OCR.json"
     COCO_PATH = OUTPUT / "COCO.json"
+    HWR_FILES = Path("/home/taylor/anaconda3/datasets/HANDWRITING_WORD_DATA/")
+    HWR_FILE = list(HWR_FILES.rglob("*.npy"))[0]
+    #UNIGRAMS = r"C:\Users\tarchibald\github\textgen\textgen\datasets\unigram_freq.csv"
+    UNIGRAMS = r"../../textgen/textgen/datasets/unigram_freq.csv"
+    WORKERS = multiprocessing.cpu_count() - 8
+    #WORKERS = 0
+    LENGTH = 100000
+    BATCH_SIZE = 4
 
-    layout_dataset = LayoutDataset(layout_generator=lg,
-                            render_text_pairs=render_text_pair,
-                            output_path=OUTPUT,
-                            lenth=1000)
-    layout_loader = DataLoader(layout_dataset,
-                               batch_size=4,
-                               collate_fn=layout_dataset.collate_fn,
-                               num_workers=WORKERS)
+    if False:
+        words = Unigrams(csv_file=UNIGRAMS, newline_freq=0)
+    else:
+        from datasets import load_dataset
+        from textgen.wikipedia_dataset import Wikipedia, WikipediaWord
+        from handwriting.data.basic_text_dataset import VOCABULARY, ALPHA_VOCABULARY
 
+        words = WikipediaWord(
+                Wikipedia(
+                dataset=load_dataset("wikipedia", "20220301.en")["train"],
+                vocabulary=set(ALPHA_VOCABULARY),  # set(self.model.netconverter.dict.keys())
+                exclude_chars="0123456789()+*;#:!/.,",
+                min_sentence_length=None,
+                max_sentence_length=None,
+                shuffle=True,
+            ),
+            process_fn=lambda x:x.lower()
+        )
+
+    def create_dataset():
+        renderer = SavedHandwritingRandomAuthor(
+            format="PIL",
+            dataset_root=HWR_FILES,
+            #dataset_path=HWR_FILE,
+            random_ok=True,
+            conversion=None,  # lambda image: np.uint8(image*255)
+            font_size=32
+        )
+
+        render_text_pair = RenderImageTextPair(renderer, words)
+        layout_dataset = LayoutDataset(layout_generator=lg,
+                                render_text_pairs=render_text_pair,
+                                output_path=OUTPUT,
+                                lenth=LENGTH)
+        layout_loader = DataLoader(layout_dataset,
+                                   batch_size=BATCH_SIZE,
+                                   collate_fn=layout_dataset.collate_fn,
+                                   num_workers=WORKERS)
+        return layout_loader
+
+    layout_loader = create_dataset()
     ocr_dataset = {}
 
-    # Multiprocessing
-    if False:
-        multiprocess(make_one_image, ocr_dataset, 5)
-    else:
-        for batch in tqdm(layout_loader):
-            for name,data in batch:
-                ocr_dataset[name] = data
-            pass
+    for batch in tqdm(layout_loader):
+        for name,data in batch:
+            ocr_dataset[name] = data
 
     save_json(OCR_PATH, ocr_dataset)
-    coco = ocr_dataset_to_coco(ocr_dataset, "French BMD Layout - v0.0.0.1 pre-Alpha")
+    coco = ocr_dataset_to_coco(ocr_dataset, "French BMD Layout - v0.0.0.3 pre-Alpha")
     save_json(COCO_PATH, coco)
 
     ## TEST LAST IMAGE - OCR AND COCO DATASET + BBOXS

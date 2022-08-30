@@ -326,7 +326,7 @@ def fill_area_with_words_skewed(word_img_pairs, bbox):
 
 def fill_area_with_words(word_imgs,
                          bbox,
-                         text_list: List[str] | None,
+                         text_list: List[str],
                          horizontal_space_min_max=[.4,.5],
                          vertical_space_min_max=[.3,.4],
                          max_intraline_vertical_space_offset=1,
