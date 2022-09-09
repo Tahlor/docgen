@@ -14,7 +14,14 @@ packaging==21.3
 #git+https://github.ancestry.com/tarchibald/Faker
 #git+https://github.ancestry.com/tarchibald/docdegrade
 
-git+https://github.com/tahlor/hwgen
-git+https://github.com/tahlor/textgen
-git+https://github.com/tahlor/Faker
-git+https://github.com/tahlor/docdegrade
+-f git+https://github.com/tahlor/hwgen
+hwgen
+
+-f git+https://github.com/tahlor/textgen
+textgen
+
+-f git+https://github.com/tahlor/Faker
+faker
+
+-f git+https://github.com/tahlor/docdegrade
+docdegrade
