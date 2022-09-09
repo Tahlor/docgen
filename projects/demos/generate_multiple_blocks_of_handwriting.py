@@ -14,8 +14,16 @@ from textgen.wikipedia_dataset import Wikipedia
 from handwriting.data.hw_generator import HWGenerator
 from datasets import load_dataset
 from torch.utils.data import DataLoader
-from utils import file_incrementer
+from pdfgen.utils import file_incrementer
 from pdfgen.dataset_utils import load_json, draw_boxes_sections
+from pdfgen.pdf_edit import convert_to_ocr_format
+
+""" TODO
+* truncate words
+* bad lining up
+* last line cutoff
+
+"""
 
 PATH= r"C:\Users\tarchibald\github\handwriting\handwriting\data\datasets\synth_hw\style_298_samples_0.npy"
 PDF_FILE = r"C:\Users\tarchibald\github\docx_localization\temp\TEMPLATE.pdf"
@@ -32,24 +40,25 @@ def main():
     basic_text_dataset = Wikipedia(
         dataset=load_dataset("wikipedia", "20220301.en")["train"],
         vocabulary=set(VOCABULARY),  # set(self.model.netconverter.dict.keys())
-        exclude_chars="", #"0123456789()+*;#:!/",
+        exclude_chars="0123456789()+*;#:!/",
         min_sentence_length=60,
         max_sentence_length=64
     )
     renderer = HWGenerator(next_text_dataset=basic_text_dataset,
                            batch_size=BATCH_SIZE,
                            model="CVL")
+
     dataloader = DataLoader(basic_text_dataset,
                             batch_size=BATCH_SIZE,
                             collate_fn=basic_text_dataset.collate_fn)
     remainder = 1000
     for i, d in enumerate(dataloader):
         process_batch(d, renderer)
-
-        if remainder > i % FREQ:
+        ii = i * BATCH_SIZE
+        if remainder > ii % FREQ:
             with OUTPUT_OCR_JSON.open("w") as ff:
                 json.dump(OUTPUT_DICT, ff)
-        remainder = i % FREQ
+        remainder = ii % FREQ
 
 def try_try_again(func):
     def try_again(*args,**kwargs):
@@ -86,7 +95,7 @@ def process_batch(d, renderer):
             origin = origin[0]+offset[0], origin[1]+offset[1]
 
         scale = random.uniform(.7,1.8)
-        box1, bboxs1 = fill_area_with_words(word_imgs=sample["words"],
+        box1, localization = fill_area_with_words(word_imgs=sample["words"],
                                         bbox=[0,0,*size],
                                         text_list=sample["raw_text"].split(" "),
                                         max_intraline_vertical_space_offset=5,
@@ -94,8 +103,8 @@ def process_batch(d, renderer):
                                         scale=scale
                                         )
         background_img.paste(Image.fromarray(box1), origin)
-        ocr_format = convert_to_ocr_format(bboxs1, origin_offset=origin, section=section)
-        return size,origin,box1, bboxs1, ocr_format
+        ocr_format = convert_to_ocr_format(localization, origin_offset=origin, section=section)
+        return size,origin,box1, localization, ocr_format
 
     """
     font_resize_factor = random.uniform(.8,2.5)
@@ -136,13 +145,13 @@ def process_batch(d, renderer):
         # for bbox in bboxs1:
         #     bbox.draw_box(background_img)
 
-        display(background_img)
+        # display(background_img)
 
         file_name = f"{IDX:07.0f}"
         #draw_boxes_sections(ocr_out, background_img)
 
         utils.save_image(background_img,OUTPUT_PATH / (file_name + ".jpg"))
-        print(shape(background_img))
+        # print(shape(background_img))
         OUTPUT_DICT[file_name] = ocr_out
         IDX += 1
 

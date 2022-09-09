@@ -2,10 +2,10 @@ import os
 from tqdm import tqdm
 from tqdm.contrib.concurrent import process_map
 import traceback
-from layoutgen.layoutgen import *
+from pdfgen.layoutgen.layoutgen import *
 from handwriting.data.saved_handwriting_dataset import SavedHandwriting, SavedHandwritingRandomAuthor
 from textgen.unigram_dataset import Unigrams
-from rendertext.render_word import RenderImageTextPair
+from pdfgen.rendertext.render_word import RenderImageTextPair
 from pathlib import Path
 from pdfgen.dataset_utils import load_and_draw_and_display, save_json
 from pdfgen.degradation.degrade import degradation_function_composition

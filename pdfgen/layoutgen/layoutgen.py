@@ -465,10 +465,12 @@ if __name__ == "__main__":
     image = lg.draw_doc_boxes(layout)
     display(image)
 """
+COCO:
 {"categories": [{"id": 1, "name": "text_paragraph", "supercategory": "text_paragraph"}, {"id": 2, "name": "text_header", "supercategory": "text_header"}, {"id": 3, "name": "paragraph_notes", "supercategory": "paragraph_notes"}, {"id": 4, "name": "text_margin", "supercategory": "text_margin"}, {"id": 5, "name": "text_table", "supercategory": "text_table"}, {"id": 6, "name": "titles", "supercategory": "titles"}],
 "images": [{"id": 0, "license": 1, "file_name": "62058_b961185-00149.jpg", "height": 3264, "width": 4576, "date_captured": null}
 ...
 
+OCR
 
 TODO:
 output format

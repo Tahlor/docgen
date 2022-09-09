@@ -13,7 +13,8 @@ class BBox:
                  line_word_index=None,
                  text=None,
                  parent_obj_bbox=None,
-                 paragraph_index=None):
+                 paragraph_index=None,
+                 force_int=True):
         """
 
         Args:
@@ -29,11 +30,20 @@ class BBox:
             raise NotImplementedError
 
         self.bbox = list(bbox)
+        self.force_int = self._force_int if force_int else lambda *x:x
         self.line_number = line_number
         self.line_word_index = line_word_index
         self.text = text
         self.parent_bbox = parent_obj_bbox
         self.paragraph_index = paragraph_index
+
+    @staticmethod
+    def _force_int(bbox):
+        if isinstance(bbox,BBox):
+            bbox.bbox = BBox._force_int(bbox.bbox)
+            return bbox.bbox
+        else:
+            return [int(x) for x in bbox]
 
     def change_origin(self, origin: Literal['ul', 'll'], height):
         """ If the self.parent_bbox is defined, user can use it to compute height.
@@ -52,24 +62,48 @@ class BBox:
             self.invert_y_axis(height)
 
     def invert_y_axis(self, height):
-            self.bbox = self.bbox[0], height-self.bbox[3], self.bbox[2], height-self.bbox[1]
+            self.bbox = self.force_int([self.bbox[0], height-self.bbox[3], self.bbox[2], height-self.bbox[1]])
 
     def swap_bbox_axes(self, bbox):
         return bbox[1], bbox[0], bbox[3], bbox[2],
 
     def offset_origin(self, offset_x=0, offset_y=0):
-        self.bbox = self._offset_origin(self.bbox, offset_x=offset_x, offset_y=offset_y)
+        self.bbox = self.force_int(
+            self._offset_origin(self.bbox, offset_x=offset_x, offset_y=offset_y)
+        )
         return self
 
     @staticmethod
     def _offset_origin(bbox, offset_x=0, offset_y=0):
         new_bbox = bbox.copy()
-        new_bbox[0], new_bbox[2] = int(new_bbox[0] + offset_x), int(new_bbox[2] + offset_x)
-        new_bbox[1], new_bbox[3] = int(new_bbox[1] + offset_y), int(new_bbox[3] + offset_y)
+        new_bbox[0], new_bbox[2] = new_bbox[0] + offset_x, new_bbox[2] + offset_x
+        new_bbox[1], new_bbox[3] = new_bbox[1] + offset_y, new_bbox[3] + offset_y
         return new_bbox
 
     def get_dim(self):
         return self._get_dim(self.bbox)
+
+    def __getitem__(self, idx):
+        return self.bbox[idx]
+
+    def __len__(self):
+        return len(self.bbox)
+
+    @property
+    def x1(self):
+        return self.bbox[0]
+
+    @property
+    def y1(self):
+        return self.bbox[1]
+
+    @property
+    def x2(self):
+        return self.bbox[2]
+
+    @property
+    def y2(self):
+        return self.bbox[3]
 
     @staticmethod
     def _get_dim(bbox):

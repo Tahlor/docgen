@@ -205,6 +205,19 @@ def composite_images(background_image, paste_image, position):
     return background_image
 
 def composite_images2(background, paste, pos):
+    """
+
+    Args:
+        background:
+        paste:
+        pos: (x,y) or BBox
+
+    Returns:
+
+    """
+    if isinstance(pos, BBox):
+        pos = pos.bbox[:2]
+
     phrase_img = merge_img(background, paste, pos)
     background.paste(phrase_img, pos)
     return background
@@ -217,7 +230,7 @@ def merge_img(bck, fore, pos):
     Args:
         bck:
         fore:
-        pos:
+        pos: (x,y) or BBox
 
     Returns:
 
@@ -407,8 +420,8 @@ def fill_area_with_words(word_imgs,
 
     out_text = []
 
-    max_line_width = bbox[2]-bbox[0]
-    max_height = bbox[3]-bbox[1]
+    max_line_width = int(bbox[2]-bbox[0])
+    max_height = int(bbox[3]-bbox[1])
 
     def random_horizontal_space(height):
         return int(random.uniform(*horizontal_space_min_max)*height)
@@ -559,7 +572,7 @@ def fill_area_with_words(word_imgs,
 
     # if line is too long, max width equals that line, part of the "expand" paradigm
     if error_handling=="expand":
-        max_line_width = max(max_line_width, *[line.shape[1] for line in page_lines])
+        max_line_width = int(max(max_line_width, *[line.shape[1] for line in page_lines]))
 
     cum_height = np.cumsum(starting_height_with_vertical_space)
 

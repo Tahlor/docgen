@@ -16,13 +16,26 @@ Or:
     export PATH="$PATH:/opt/libreoffice5.0/program"
     sudo yum install libXinerama.x86_64 cups-libs dbus-glib
 
+## degradation
+## docx2pdf
+Docx can be created programmatically from Python, and then converted into a PDF with localization information preserved.
+
+docx2pdf include in this module is based on the publicly available module, with small chanages to accommodate Linux / LibreOffice. 
+
+## layoutgen
+
+LayoutGen is pure Python to create something that resembles the French BMD documents (handwritten header, paragraphs, margins).
+
+## rendertext
+
+
+## reportlab_tools
+
+Reportlab is a module that is used to create PDF documents from Python.
 
 # Install
     
     pip3 install git+ssh://git@github.com/tahlor/pdfgen --upgrade
-
-
-
 
 # Rename Package
     

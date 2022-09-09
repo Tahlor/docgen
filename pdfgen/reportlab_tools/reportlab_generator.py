@@ -8,7 +8,7 @@ import os
 from typing import Literal
 from easydict import EasyDict as edict
 from reportlab.pdfbase.pdfmetrics import stringWidth
-
+from pdfgen.bbox import BBox
 folder = Path(os.path.dirname(__file__))
 
 """
@@ -20,19 +20,26 @@ p.drawOn(self.canvas, x_pos, y_pos)
 class FormGenerator():
 
     def __init__(self,
-                 field_label: Literal['adjacent','inside']="adjacent",
-                 ):
-        self.field_label = field_label
+                 field_label_position: Literal['adjacent','inside']="adjacent",
+                 fill_fields_with_text: bool=False):
+        """
+
+        Args:
+            field_label: field label inside field OR to the left of the field
+            fill_fields_with_text:
+        """
+        self.field_label_position = field_label_position
         self.margins = edict({"L":40,"T":40,"R":40,"B":40}) # L T R B
         self.horizontal_space = 10
         self.vertical_space = 12  # intended as whitespace between lines
         self.leading = 0.9
-        self.output_form = {}
         self.line_idx = 0
         self.within_line_idx = 0
+        self.fill_fields_with_text = fill_fields_with_text
 
     def create_new_form(self, fields, form_name='simple_form.pdf'):
-        self.output_form = {}
+        self.ocr = {"sections": []}
+
         self.c = canvas.Canvas(form_name)
         # self.c._pagesize
         self.c.setPageSize((595, 842))
@@ -47,15 +54,35 @@ class FormGenerator():
         self.form = self.c.acroForm
         self.add_fields(fields)
         self.c.save()
+        return self.ocr
 
     def setFont(self, font, size):
         self.c.setFont(font, size)
         self.line_height = self.fontHeight() + self.vertical_space
 
+    def add_to_ocr(self,
+                   text,
+                   bbox,
+                   category=""):
+        self.ocr["sections"].append({"paragraphs": [{"bbox":bbox, "text":text, "category":category}]})
+
+    def pos_to_bbox(self, width, height=None, x1=None, y1=None):
+        x1 = self.current_position[0] if x1 is None else x1
+        y1 = self.current_position[1] if y1 is None else y1
+        height = self.line_height if height is None else height
+        x2, y2 = x1 + width, y1 + height
+        return BBox("ul", bbox=[x1,y1,x2,y2])
+
+
     def add_title(self, title):
-        center = int((self.shape_excl_margins[0]-self.stringWidth(title))/2)+self.margins.L
+        string_width=self.stringWidth(title)
+        center = int((self.shape_excl_margins[0]-string_width)/2)+self.margins.L
         # self.c.drawCenteredString()
         self.c.drawString(center, self.current_position[1], title)
+
+        bbox = self.pos_to_bbox(width=string_width)
+        self.add_to_ocr(title, bbox, "title")
+
         # x = self.margins.L + self.shape_excl_margins[0]/2
         # self.c.rect(x-self.stringWidth(title)/2, self.current_position[1], self.stringWidth(title), 20)
 
@@ -63,11 +90,13 @@ class FormGenerator():
                                  self.current_position[1] - self.line_height]
 
     def add_table(self):
+        raise NotImplemented
         t = Table(tableData, style=tStyle)
         t.canv = myCanvas
         w, h = t.wrap(0, 0)
 
     def add_checkbox(self):
+        raise NotImplemented
         self.c.drawString(10, 650, 'Dog:')
         self.form.checkbox(name='cb1', tooltip='Field cb1',
                       x=110, y=645, buttonStyle='check',
@@ -113,12 +142,16 @@ class FormGenerator():
         value_width = max(self.stringWidth(value), user_specified_value_width)
         title_width = self.stringWidth(title)
         self.move_to_next_line_if_needed(text_width=title_width, form_field_width=value_width)
-        if self.field_label=="adjacent":
+        if self.field_label_position== "adjacent":
             position_with_vertical_offset = self.current_position[1] + (self.line_height-self.fontHeight())/2
             self.c.drawString(self.current_position[0], position_with_vertical_offset, title)
+            bbox = self.pos_to_bbox(width=self.stringWidth(title))
+            self.add_to_ocr(title, bbox, "field_name")
+
             self.current_position[0] += self.stringWidth(title) + self.horizontal_space
 
-        elif self.field_label=="inside":
+        elif self.field_label_position== "inside":
+            raise NotImplementedError
             self.c.drawString(*self.current_position, title)
 
         if self.within_line_idx==0:
@@ -127,6 +160,7 @@ class FormGenerator():
 
         print(self.current_position)
         box_height = self.fontHeight() + self.vertical_space / 2
+
         if False:
             self.form.textfield(name=title, tooltip=title,
                                 x=self.current_position[0],
@@ -137,12 +171,17 @@ class FormGenerator():
                                 forceBorder=True,
                                 value=value)
         else:
-            self.c.rect(x=self.current_position[0],
-                                y=self.current_position[1] + (self.line_height-box_height)/2,
-                                width=value_width,
-                                height=box_height)
+            bbox = self.pos_to_bbox(value_width,
+                                    box_height,
+                                    self.current_position[0],
+                                    self.current_position[1] + (self.line_height-box_height)/2
+            )
+            self.c.rect(x=bbox.x1,y=bbox.y1,width=bbox.width,height=bbox.height)
             position_with_vertical_offset = self.current_position[1] + (self.line_height - self.fontHeight()) / 2
-            self.c.drawString(self.current_position[0], position_with_vertical_offset,value)
+
+            if self.fill_fields_with_text:
+                self.c.drawString(self.current_position[0], position_with_vertical_offset,value)
+            self.add_to_ocr(value, bbox, "field")
 
         self.within_line_idx += 1
         self.current_position[0] += value_width + self.horizontal_space
@@ -203,5 +242,4 @@ if __name__ == '__main__':
                                    include_row_number=False,
                                    random_fields=27)
     one_row = filter_to_one_row(list(generator.gen_content(1))[0])
-
     fg.create_new_form(zip(generator.header_names+generator.extra_headers, one_row))

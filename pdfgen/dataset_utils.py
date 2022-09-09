@@ -236,6 +236,103 @@ def load_and_draw_and_display(image_path, dataset_dict=None, format="OCR"):
     #display(img)
     img.show()
 
+
+""" OCR DATASET
+{
+  "0000000": {
+    "sections": [
+      {
+        "paragraphs": [
+          {
+            "lines": [
+              {
+                "bbox": [
+                  171,139,502,198
+                ],
+                "text": "in his view a",
+                "words": [
+                  {
+                    "bbox": [
+                      171,145,224,198
+                    ],
+                    "text": "in",
+                    "id": [
+                      0,0,0,0
+                    ]
+                  },
+                  {
+                    "bbox": [
+                      245,145,324,198
+                    ],
+                    "text": "his",
+                    "id": [
+                      0,0,0,1
+                    ]
+                  },
+                  {
+                    "bbox": [
+                      348,143,453,196
+                    ],
+                    "text": "view",
+                    "id": [
+                      0,0,0,2
+                    ]
+                  },
+                  {
+                    "bbox": [
+                      475,139,502,192
+                    ],
+                    "text": "a",
+                    "id": [
+                      0,0,0,3
+                    ]
+                  }
+                ]
+              },
+              {
+                "bbox": [
+                  58,198,473,259
+                ],
+                "text": "revolution is by",
+                "words": [
+                  {
+                    "bbox": [
+                      58,206,321,259
+                    ],
+                    "text": "revolution",
+                    "id": [
+                      0,0,1,0
+                    ]
+                  },
+                  {
+                    "bbox": [
+                      342,203,395,256
+                    ],
+                    "text": "is",
+                    "id": [
+                      0,0,1,1
+                    ]
+                  },
+                  {
+                    "bbox": [
+                      420,198,473,251
+                    ],
+                    "text": "by",
+                    "id": [
+                      0,0,1,2
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+"""
+
 if __name__ == '__main__':
     root = Path("/home/taylor/anaconda3/DATASET_0021")
     root = Path(r"C:\Users\tarchibald\github\pdfgen\pdfgen\temp")

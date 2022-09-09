@@ -63,8 +63,6 @@ GridWarp
 
 """
 
-
-
 def main():
     words = Unigrams(csv_file=UNIGRAMS)
     renderer2 = RenderWordFont(format="PIL")

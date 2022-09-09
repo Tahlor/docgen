@@ -201,7 +201,7 @@ def small_test(doctor_gen):
 if __name__ == '__main__':
     renderer = RenderWordFont(format="numpy")
     pdf = PDF(renderer=renderer, mark_for_replacement_char=MARK)
-    root = Path("./temp/french_census")
+    root = Path("../../temp/french_census")
     doctor_gen = DocxGen(root_dir=root,
                          pdf=pdf)
 
