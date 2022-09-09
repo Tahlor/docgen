@@ -1,13 +1,13 @@
-from pdfgen.rendertext.utils.filelock import FileLock, FileLockException
-from pdfgen.rendertext.utils.util import ensure_dir
+from docgen.rendertext.utils.filelock import FileLock, FileLockException
+from docgen.rendertext.utils.util import ensure_dir
 import threading
 from synthetic_text_gen import SyntheticWord
 import os, random, re, time
 import numpy as np
-from pdfgen.rendertext.utils import img_f
+from docgen.rendertext.utils import img_f
 import argparse
 from cv2 import resize
-from pdfgen.utils import *
+from docgen.utils import *
 from PIL import Image
 from typing import Literal
 

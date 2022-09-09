@@ -3,7 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-pdfgen/rendertext/data
+docgen/rendertext/data
 
 temp/
 password*

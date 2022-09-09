@@ -6,21 +6,21 @@ import cv2
 from PyPDF2 import PdfFileReader, PdfFileWriter
 from PyPDF2.generic import TextStringObject, NameObject, ContentStream
 from PyPDF2._utils import b_
-from pdfgen.localize import generate_localization_from_bytes, generate_localization_from_file
+from docgen.localize import generate_localization_from_bytes, generate_localization_from_file
 from PyPDF2.generic import ArrayObject as arr
 from pathlib import Path
-from pdfgen.rendertext.render_word_font import RenderText
+from docgen.rendertext.render_word_font import RenderText
 from synthetic_text_gen import SyntheticWord
 from math import ceil
-from pdfgen.img_tools import *
+from docgen.img_tools import *
 import matplotlib.pyplot as plt
 import numpy as np
 import PIL
 from PIL import ImageChops, ImageDraw, PpmImagePlugin
-from pdfgen.utils import display
+from docgen.utils import display
 from typing import Literal, List
-from pdfgen.bbox import BBox
-from pdfgen import utils
+from docgen.bbox import BBox
+from docgen import utils
 import logging
 
 logging.basicConfig(level=logging.INFO)

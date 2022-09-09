@@ -7,8 +7,8 @@ import os
 import datetime
 import copy
 from PIL import Image
-from pdfgen.utils import *
-from pdfgen.bbox import BBox
+from docgen.utils import *
+from docgen.bbox import BBox
 
 DEFAULT_COCO_INFO = {'description': 'Synthetic Forms - Pre-alpha Release',
             'url': 'N/A',
@@ -335,7 +335,7 @@ def load_and_draw_and_display(image_path, dataset_dict=None, format="OCR"):
 
 if __name__ == '__main__':
     root = Path("/home/taylor/anaconda3/DATASET_0021")
-    root = Path(r"C:\Users\tarchibald\github\pdfgen\pdfgen\temp")
+    root = Path(r"C:\Users\tarchibald\github\docgen\docgen\temp")
 
     path = root / "OCR.json"
     coco = root / "COCO.json"

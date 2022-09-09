@@ -35,8 +35,8 @@ Reportlab is a module that is used to create PDF documents from Python.
 
 # Install
     
-    pip3 install git+ssh://git@github.com/tahlor/pdfgen --upgrade
+    pip3 install git+ssh://git@github.com/tahlor/docgen --upgrade
 
 # Rename Package
     
-    find . -type f -name "*" -exec sed -i "s@pdfgen@pdfgen2@g" {} \;
+    find . -type f -name "*" -exec sed -i "s@docgen@docgen2@g" {} \;

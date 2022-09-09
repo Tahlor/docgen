@@ -1,4 +1,4 @@
-from pdfgen.rendertext.utils import img_f
+from docgen.rendertext.utils import img_f
 import random
 import numpy as np
 

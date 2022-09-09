@@ -8,7 +8,7 @@ import os
 from typing import Literal
 from easydict import EasyDict as edict
 from reportlab.pdfbase.pdfmetrics import stringWidth
-from pdfgen.bbox import BBox
+from docgen.bbox import BBox
 folder = Path(os.path.dirname(__file__))
 
 """
@@ -211,7 +211,7 @@ def filter_to_one_row(fields):
     return fields
 
 if __name__ == '__main__':
-    from pdfgen.content.table_from_faker import TableDataFromFaker
+    from docgen.content.table_from_faker import TableDataFromFaker
     functions = ["address",
                  "relationship",
                  "job",

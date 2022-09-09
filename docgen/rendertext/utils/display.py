@@ -1,6 +1,6 @@
 import torch
 import json
-import pdfgen.rendertext.utils.img_f as cv2
+import docgen.rendertext.utils.img_f as cv2
 import numpy as np
 from pathlib import Path
 from formgen import ROOT_DIR

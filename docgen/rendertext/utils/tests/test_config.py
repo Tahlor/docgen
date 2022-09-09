@@ -1,4 +1,4 @@
-from pdfgen.rendertext.utils.config import *
+from docgen.rendertext.utils.config import *
 
 variation_dict = {"training_dataset": ["dataset1", "dataset2"],
                   "training_option": [True,False],

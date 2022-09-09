@@ -1,22 +1,22 @@
 import torch
 import json
 import random
-from pdfgen.pdf_edit import *
+from docgen.pdf_edit import *
 from PIL import Image
 from textgen.unigram_dataset import Unigrams
-from pdfgen.rendertext.render_word import RenderWordFont
+from docgen.rendertext.render_word import RenderWordFont
 from handwriting.data.saved_handwriting_dataset import SavedHandwriting
 import numpy as np
-from pdfgen import utils
-from pdfgen.utils import display
-from pdfgen.image_composition.utils import new_textbox_given_background
+from docgen import utils
+from docgen.utils import display
+from docgen.image_composition.utils import new_textbox_given_background
 from textgen.wikipedia_dataset import Wikipedia
 from handwriting.data.hw_generator import HWGenerator
 from datasets import load_dataset
 from torch.utils.data import DataLoader
-from pdfgen.utils import file_incrementer
-from pdfgen.dataset_utils import load_json, draw_boxes_sections
-from pdfgen.pdf_edit import convert_to_ocr_format
+from docgen.utils import file_incrementer
+from docgen.dataset_utils import load_json, draw_boxes_sections
+from docgen.pdf_edit import convert_to_ocr_format
 
 """ TODO
 * truncate words

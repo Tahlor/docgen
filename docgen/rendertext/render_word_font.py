@@ -1,11 +1,11 @@
-from pdfgen.rendertext.utils.filelock import FileLock, FileLockException
-from pdfgen.rendertext.utils.util import ensure_dir
+from docgen.rendertext.utils.filelock import FileLock, FileLockException
+from docgen.rendertext.utils.util import ensure_dir
 import threading
 from synthetic_text_gen import SyntheticWord
-from pdfgen.content.wiki_text import getWikiArticle, getWikiDataset
+from docgen.content.wiki_text import getWikiArticle, getWikiDataset
 import os, random, re, time
 import numpy as np
-from pdfgen.rendertext.utils import img_f
+from docgen.rendertext.utils import img_f
 import argparse
 
 # This class is used to generate the text (using synthetic_text_gen)

@@ -1,12 +1,12 @@
 from pdf2image import convert_from_path
-#from pdfgen import docx_to_pdf
-from pdfgen import localize
+#from docgen import docx_to_pdf
+from docgen import localize
 import docx
 import io
 import tempfile
-from pdfgen import docx2pdf
+from docgen import docx2pdf
 from pathlib import Path
-from pdfgen import img_tools
+from docgen import img_tools
 
 def create_a_table(heading, data, column_headers=None, output=None):
     """

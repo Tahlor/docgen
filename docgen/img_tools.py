@@ -16,7 +16,7 @@ def paste_image(backgroud_as_bytes, ):
 
 # Convert to image
 def convert_pdf_to_img_paths(pdf_temp, img_path):
-    # from pdfgen.image_deprecated import pdf2image
+    # from docgen.image_deprecated import pdf2image
     # func = pdf2image.convert
 
     func = convert_from_path

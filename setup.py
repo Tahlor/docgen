@@ -14,16 +14,16 @@ with open('requirements.txt') as f:
     requirements = f.read().splitlines()
 print(requirements)
 
-setup(name='pdfgen',
-      version='0.0.18',
-      description='pdfgen',
+setup(name='docgen',
+      version='0.0.19',
+      description='docgen',
       long_description= "" if not os.path.isfile("README.md") else read_md('README.md'),
       author='Taylor Archibald',
       author_email='taylor.archibald@byu.edu',
-      url='https://github.com/tahlor/pdfgen',
+      url='https://github.com/tahlor/docgen',
       setup_requires=['pytest-runner',],
       tests_require=['pytest','python-coveralls'],
-      packages=['pdfgen'],
+      packages=['docgen'],
       install_requires=[
           *requirements,
       ],

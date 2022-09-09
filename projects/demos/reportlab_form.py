@@ -1,11 +1,11 @@
-from pdfgen.reportlab_tools.reportlab_generator import FormGenerator, filter_to_one_row
-from pdfgen.content.table_from_faker import TableDataFromFaker
-from pdfgen.img_tools import convert_pdf_to_img_paths
+from docgen.reportlab_tools.reportlab_generator import FormGenerator, filter_to_one_row
+from docgen.content.table_from_faker import TableDataFromFaker
+from docgen.img_tools import convert_pdf_to_img_paths
 from handwriting.data.saved_handwriting_dataset import SavedHandwriting, SavedHandwritingRandomAuthor
 from PIL import Image
-from pdfgen.pdf_edit import fill_area_with_words, composite_images2
-from pdfgen.rendertext.render_word import RenderImageTextPair
-from pdfgen.bbox import BBox
+from docgen.pdf_edit import fill_area_with_words, composite_images2
+from docgen.rendertext.render_word import RenderImageTextPair
+from docgen.bbox import BBox
 
 functions = ["address",
              "relationship",

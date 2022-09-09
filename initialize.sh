@@ -34,7 +34,7 @@ rm .git -rf
 # Rename files
 #package_files=$(ls . |grep .mp4)
 
-for filename in `find . -type 'f,d' -name pdfgen`;
+for filename in `find . -type 'f,d' -name docgen`;
 do
     new_file=`echo "$filename" | sed -e "s/pdfgen/$PACKAGE_NAME/g"`
     if [ "$filename" != "$new_file" ]; then

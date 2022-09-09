@@ -1,5 +1,5 @@
 import numpy as np
-import pdfgen.rendertext.utils.img_f as img_f
+import docgen.rendertext.utils.img_f as img_f
 import timeit
 import warnings
 import random, math

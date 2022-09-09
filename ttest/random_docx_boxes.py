@@ -1,13 +1,13 @@
 from pdf2image import convert_from_path
-#from pdfgen import docx_to_pdf
-from pdfgen import localize
+#from docgen import docx_to_pdf
+from docgen import localize
 import docx
 import io
 import tempfile
 from pathlib import Path
 from docx.shared import Cm, Inches
 import random
-from pdfgen.utils import file_incrementer
+from docgen.utils import file_incrementer
 
 def create_docx(output="test.docx", heading = 'TAYLOR'):
     # Create an instance of a word document

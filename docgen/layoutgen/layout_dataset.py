@@ -1,6 +1,6 @@
 from torch.utils.data import Dataset, DataLoader, IterableDataset
-from pdfgen.degradation.degrade import degradation_function_composition
-from pdfgen.utils import handler
+from docgen.degradation.degrade import degradation_function_composition
+from docgen.utils import handler
 
 TESTING=False
 

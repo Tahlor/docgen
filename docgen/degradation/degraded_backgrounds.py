@@ -1,4 +1,4 @@
-from pdfgen.degradation
+from docgen.degradation
 # pregenerate backgrounds
 # random invert/rotate and crop
 

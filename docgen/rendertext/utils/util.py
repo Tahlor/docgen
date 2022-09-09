@@ -1,8 +1,8 @@
 import os, math
-import pdfgen.rendertext.utils.img_f as img_f
+import docgen.rendertext.utils.img_f as img_f
 import struct
 import torch
-from pdfgen.rendertext.utils import string_utils
+from docgen.rendertext.utils import string_utils
 import numpy as np
 
 def ensure_dir(path):

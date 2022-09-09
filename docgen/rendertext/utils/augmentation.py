@@ -1,4 +1,4 @@
-import pdfgen.rendertext.utils.img_f as img_f
+import docgen.rendertext.utils.img_f as img_f
 import numpy as np
 
 def tensmeyer_brightness(img, foreground=0, background=0):

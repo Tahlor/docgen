@@ -1,14 +1,14 @@
 import random
 
-from pdfgen.pdf_edit import *
+from docgen.pdf_edit import *
 from PIL import Image
 from textgen.unigram_dataset import Unigrams
-from pdfgen.rendertext.render_word import RenderWordFont
+from docgen.rendertext.render_word import RenderWordFont
 from handwriting.data.saved_handwriting_dataset import SavedHandwriting
 import numpy as np
-from pdfgen import utils
-from pdfgen.utils import display
-from pdfgen.image_composition.utils import new_textbox_given_background
+from docgen import utils
+from docgen.utils import display
+from docgen.image_composition.utils import new_textbox_given_background
 from textgen.wikipedia_dataset import Wikipedia
 from datasets import load_dataset
 

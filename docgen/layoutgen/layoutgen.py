@@ -3,13 +3,13 @@ import random
 from collections import defaultdict
 from math import ceil
 from typing import Literal
-from pdfgen.dataset_utils import ocr_dataset_to_coco
+from docgen.dataset_utils import ocr_dataset_to_coco
 from PIL import Image
 
-from pdfgen.bbox import BBox
-from pdfgen.pdf_edit import fill_area_with_words, composite_images2
-from pdfgen.utils import display
-from pdfgen.pdf_edit import convert_to_ocr_format
+from docgen.bbox import BBox
+from docgen.pdf_edit import fill_area_with_words, composite_images2
+from docgen.utils import display
+from docgen.pdf_edit import convert_to_ocr_format
 
 def flip(prob=.5):
     return random.random() < prob

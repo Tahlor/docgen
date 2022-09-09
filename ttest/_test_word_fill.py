@@ -1,12 +1,12 @@
-from pdfgen.pdf_edit import *
+from docgen.pdf_edit import *
 from PIL import Image
-from pdfgen.pdf_edit import PDF
+from docgen.pdf_edit import PDF
 from textgen.unigram_dataset import Unigrams
-from pdfgen.rendertext.render_word import RenderWordFont
+from docgen.rendertext.render_word import RenderWordFont
 from handwriting.data.saved_handwriting_dataset import SavedHandwriting
 import numpy as np
-from pdfgen import utils
-from pdfgen.utils import display
+from docgen import utils
+from docgen.utils import display
 
 PATH= r"C:\Users\tarchibald\github\handwriting\handwriting\data\datasets\synth_hw\style_298_samples_0.npy"
 PDF_FILE = r"C:\Users\tarchibald\github\docx_localization\temp\TEMPLATE.pdf"

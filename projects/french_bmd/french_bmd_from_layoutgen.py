@@ -2,16 +2,16 @@ import os
 from tqdm import tqdm
 from tqdm.contrib.concurrent import process_map
 import traceback
-from pdfgen.layoutgen.layoutgen import *
+from docgen.layoutgen.layoutgen import *
 from handwriting.data.saved_handwriting_dataset import SavedHandwriting, SavedHandwritingRandomAuthor
 from textgen.unigram_dataset import Unigrams
-from pdfgen.rendertext.render_word import RenderImageTextPair
+from docgen.rendertext.render_word import RenderImageTextPair
 from pathlib import Path
-from pdfgen.dataset_utils import load_and_draw_and_display, save_json
-from pdfgen.degradation.degrade import degradation_function_composition
-from pdfgen.utils import file_incrementer, handler
+from docgen.dataset_utils import load_and_draw_and_display, save_json
+from docgen.degradation.degrade import degradation_function_composition
+from docgen.utils import file_incrementer, handler
 import multiprocessing
-from pdfgen.layoutgen.layout_dataset import LayoutDataset
+from docgen.layoutgen.layout_dataset import LayoutDataset
 from torch.utils.data import DataLoader
 
 TESTING = False # TESTING = disables error handling

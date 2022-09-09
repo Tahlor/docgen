@@ -2,15 +2,15 @@ import random
 import sys
 
 import numpy.random
-from pdfgen import docx2pdf
-from pdfgen.content.table_from_faker import TableDataFromFaker
-from pdfgen.docx_tools.docx_tools import *
-from pdfgen.utils import *
-from pdfgen.pdf_edit import PDF
-from pdfgen.rendertext.render_word import RenderWordFont
+from docgen import docx2pdf
+from docgen.content.table_from_faker import TableDataFromFaker
+from docgen.docx_tools.docx_tools import *
+from docgen.utils import *
+from docgen.pdf_edit import PDF
+from docgen.rendertext.render_word import RenderWordFont
 from handwriting.data.saved_handwriting_dataset import SavedHandwriting
-from pdfgen.bbox import BBox
-from pdfgen.dataset_utils import coco_dataset
+from docgen.bbox import BBox
+from docgen.dataset_utils import coco_dataset
 from torch.utils.data import Dataset, DataLoader
 
 if True:
