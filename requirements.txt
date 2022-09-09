@@ -9,13 +9,12 @@ pdfminer==20191125
 pypdf2==2.4.1
 packaging==21.3
 
-git+https://github.ancestry.com/tarchibald/hwgen
-git+https://github.ancestry.com/tarchibald/textgen
-git+https://github.ancestry.com/tarchibald/Faker
-git+https://github.ancestry.com/tarchibald/docdegrade
+#git+https://github.ancestry.com/tarchibald/hwgen
+#git+https://github.ancestry.com/tarchibald/textgen
+#git+https://github.ancestry.com/tarchibald/Faker
+#git+https://github.ancestry.com/tarchibald/docdegrade
 
 git+https://github.com/tahlor/hwgen
 git+https://github.com/tahlor/textgen
 git+https://github.com/tahlor/Faker
 git+https://github.com/tahlor/docdegrade
-
