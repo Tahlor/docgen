@@ -15,7 +15,7 @@ with open('requirements.txt') as f:
 print(requirements)
 
 setup(name='docgen',
-      version='0.0.19',
+      version='0.0.20',
       description='docgen',
       long_description= "" if not os.path.isfile("README.md") else read_md('README.md'),
       author='Taylor Archibald',
