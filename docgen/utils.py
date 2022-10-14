@@ -10,9 +10,11 @@ import traceback
 from tqdm import tqdm
 import zipfile
 import urllib.request as urllib
-
-from win32com.client.gencache import is_zip
-
+import warnings
+try:
+    from win32com.client.gencache import is_zip
+except:
+    warnings.warn("Failed to import win32com")
 
 def shape(item):
     """

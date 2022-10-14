@@ -5,6 +5,7 @@ __pycache__/
 
 docgen/rendertext/data
 
+data/
 temp/
 password*
 credentials*
