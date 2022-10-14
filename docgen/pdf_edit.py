@@ -7,17 +7,10 @@ from PyPDF2 import PdfFileReader, PdfFileWriter
 from PyPDF2.generic import TextStringObject, NameObject, ContentStream
 from PyPDF2._utils import b_
 from docgen.localize import generate_localization_from_bytes, generate_localization_from_file
-from PyPDF2.generic import ArrayObject as arr
-from pathlib import Path
-from docgen.rendertext.render_word_font import RenderText
-from synthetic_text_gen import SyntheticWord
 from math import ceil
 from docgen.img_tools import *
-import matplotlib.pyplot as plt
 import numpy as np
-import PIL
 from PIL import ImageChops, ImageDraw, PpmImagePlugin
-from docgen.utils import display
 from typing import Literal, List
 from docgen.bbox import BBox
 from docgen import utils
@@ -332,15 +325,38 @@ def convert_to_ocr_format(localization, box="bbox", origin_offset=(0,0), section
     return ocr_dict_page
 
 def calculate_median(img):
-    signle = np.median(np.linalg.norm(img[:,:2], axis=1))
+    np.median(np.linalg.norm(img[:,:2], axis=1))
 
-def fill_area_with_words_skewed(word_img_pairs, bbox):
+def skew_image_and_localization(image, localization, orthogonal_bbox=True):
+    """
+
+    Args:
+        image:
+        localization:
+        orthogonal_bbox (bool): BBox is orthogonal WRT to image
+
+    Returns:
+
+    """
     pass
+
+def fill_box_with_random_lines(word_imgs,
+                               bbox,
+                               text_list: List[str],
+                               number_of_lines=(1,3),
+                               words_per_line=(1,3),
+                               **kwargs):
+    lines = random.randint(*number_of_lines)
+    for line in range(lines):
+        words = random.randint(*words_per_line)
+        img, localization = fill_area_with_words(word_imgs, bbox, text_list, max_words=words)
+        # skew would have to happen here
+
 
 def fill_area_with_words(word_imgs,
                          bbox,
                          text_list: List[str],
-                         horizontal_space_min_max=[.4,.5],
+                         horizontal_space_min_max=[.2,.5],
                          vertical_space_min_max=[.3,.4],
                          max_intraline_vertical_space_offset=1,
                          horizontal_min_to_fit=False,
@@ -355,10 +371,11 @@ def fill_area_with_words(word_imgs,
                          scale=1,
                          max_lines=None,
                          max_words=None,
-                         indent_new_paragraph_prob=.5):
+                         indent_new_paragraph_prob=.5,
+                         slope=0):
 
-    """ Return word level localization
-        TODO: Line can still be too long under skip_bad
+    """ TODO: Line can still be too long under skip_bad
+        Takes a bounding box, list of images, and a list of words and fills the bounding box with the word images.
 
     Args:
         word_imgs:
@@ -419,6 +436,11 @@ def fill_area_with_words(word_imgs,
     resize_func = resize if scale != 1 else lambda w,scale:w
 
     out_text = []
+
+    # Just use a very large BBox, user must specify word limit
+    if bbox is None:
+        bbox = BBox([0,0,100000,100000])
+        assert max_words
 
     max_line_width = int(bbox[2]-bbox[0])
     max_height = int(bbox[3]-bbox[1])
@@ -487,6 +509,10 @@ def fill_area_with_words(word_imgs,
         nonlocal x_start, x_end
         # Add next word
         offset = random.randint(-max_intraline_vertical_space_offset, max_intraline_vertical_space_offset)
+
+        # Offset from slope
+        offset += slope * x_start
+
         if word_img.shape[0] > max_height:
             warnings.warn("Word taller than maximum allowable height in box")
         current_line.append(word_img)
@@ -593,11 +619,10 @@ def fill_area_with_words(word_imgs,
             break
         intra_line_offset = list_of_y_sums[_bbox.line_number][_bbox.line_word_index]
         final_y = int(cum_height[_bbox.line_number]+intra_line_offset)
-        if bbox[0]!=0 or bbox[1] != 0:
-            _bbox.offset_origin(offset_y=final_y+bbox[1],
-                                offset_x=bbox[0])
-        else:
-            _bbox.offset_origin(offset_y=final_y)
+
+        # Adjust for final y-position & offset initial bbox location
+        _bbox.offset_origin(offset_y=final_y+bbox[1],
+                            offset_x=bbox[0])
 
     if page_:
         page = np.concatenate(page_, 0)

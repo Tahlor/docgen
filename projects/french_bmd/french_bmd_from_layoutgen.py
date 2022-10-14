@@ -76,9 +76,9 @@ def main():
     HWR_FILE = list(HWR_FILES.rglob("*.npy"))[0]
     #UNIGRAMS = r"C:\Users\tarchibald\github\textgen\textgen\datasets\unigram_freq.csv"
     UNIGRAMS = r"../../textgen/textgen/datasets/unigram_freq.csv"
-    WORKERS = multiprocessing.cpu_count() - 8
+    WORKERS = max(multiprocessing.cpu_count() - 8,2)
     #WORKERS = 0
-    LENGTH = 100000
+    NUMBER_OF_DOCUMENTS = 100
     BATCH_SIZE = 4
 
     if False:

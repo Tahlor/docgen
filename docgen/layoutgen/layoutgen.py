@@ -393,6 +393,7 @@ class LayoutGenerator:
                                                        error_handling="force",
                                                        indent_new_paragraph_prob=.2,
                                                        scale=1 if text_generator.font_size is None else doc_box.font_size / text_generator.font_size,
+                                                       slope=random.gauss(0,0.01)
                                                        **kwargs)
             composite_images2(background_image, image, doc_box.bbox_writable[0:2])
             doc_box.localization = localization

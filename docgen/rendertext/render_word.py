@@ -10,9 +10,20 @@ from cv2 import resize
 from docgen.utils import *
 from PIL import Image
 from typing import Literal
+import site
 
-FONT_DIR = r"C:\Users\tarchibald\github\brian\fslg_documents\data\fonts"
-CLEAR_FONTS = r"C:\Users\tarchibald\github\brian\fslg_documents\data\fonts\clear_fonts.csv"
+import site
+
+FONTS_PATH = Path(site.getsitepackages()[0]) / "rendertext" / "fonts"
+CLEAR_FONTS = FONTS_PATH / "clear_fonts.csv"
+
+
+def download_resources():
+    from download_resources.download import download_s3_folder
+    if not CLEAR_FONTS.exists() or not (FONTS_PATH / "fonts").exists():
+        s3_fonts = "s3://datascience-computervision-l3apps/HWR/synthetic-data/python-package-resources/fonts/"
+        download_s3_folder(s3_fonts, FONTS_PATH)
+
 
 """ 
 TODO: Specify font by resizing word image into pixel height
@@ -98,11 +109,12 @@ class WordDataset:
 class RenderWordFont(RenderWord):
     def __init__(self,
                  format: Literal['numpy', 'PIL'],
-                 font_dir=FONT_DIR,
+                 font_dir=FONTS_PATH,
                  clear_font_csv=CLEAR_FONTS,
                  word_dataset=None,
                  *args, **kwargs):
         super().__init__(*args, **kwargs)
+        download_resources()
         self.gen = SyntheticWord(font_dir, clear=clear_font_csv)
         self.word_dataset = word_dataset if not word_dataset is None else WordDataset(["ipsum", "lorem"])
         self.format = format

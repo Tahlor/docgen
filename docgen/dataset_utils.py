@@ -51,19 +51,41 @@ def ocr_dataset_to_coco(ocr_dict, data_set_name="Synthetic Forms - Pre-alpha Rel
 
     images = []
     annotations = []
+    ann_id_counter = 1
+
+    categories = {
+        "section": {'supercategory': 'section', 'id': 1, 'name': 'section'},
+        "paragraph": {'supercategory': 'paragraph', 'id': 2, 'name': 'paragraph'},
+        "line": {'supercategory': 'line', 'id': 3, 'name': 'line'},
+        "word": {'supercategory': 'word', 'id': 4, 'name': 'word'},
+    }
+
+    category_id_counter = max([item["id"] for key, item in categories.items()])
 
     def process_item(dict, img_idx, category):
+        nonlocal ann_id_counter, categories, category_id_counter
+        if not category in categories:
+            categories[category] = {
+                {'supercategory': category, 'id': category_id_counter, 'name': category},
+            }
+            category_id_counter += 1
+
+        category_id = categories[category]["id"]
+
         item = {
             "image_id": img_idx,
-            "bbox": dict["bbox"],
-            "category": f"{category}"
+            "bbox": BBox._to_XYWH(dict["bbox"]),
+            "category": f"{category}",
+            "id": ann_id_counter,
+            "category_id": category_id,
         }
+        ann_id_counter += 1
         if "text" in dict:
             item["text"] = dict["text"]
         return item
 
     for img_id, dict in ocr_dict.items():
-        image = {"id":img_id, "filename": img_id+".jpg", "height": dict["height"], "width": dict["width"]}
+        image = {"id":img_id, "file_name": img_id+".jpg", "height": dict["height"], "width": dict["width"]}
         images.append(image)
 
         for section in dict["sections"]:
@@ -83,7 +105,7 @@ def ocr_dataset_to_coco(ocr_dict, data_set_name="Synthetic Forms - Pre-alpha Rel
           "info": info,
           "images": images,
           "licences": "No license, internal work product, confidential",
-          "categories": ["section","paragraph", "line", "word"],
+          "categories": list(categories.values()),
           "annotations": annotations
     }
     return coco
@@ -140,29 +162,38 @@ def coco_dataset(dict_list, output_path):
         [{localization, image, image_path, height, width}]
     """
     annotations = []  # image_id, bbox, text, category
-    categories = []  # list of all types of fields
+    categories = {}  # list of all types of fields
     images = []  # id, filename, height, width
+    ann_id_counter = 1
+    cat_id_counter = 1
 
     for image_dict in dict_list:
         file = Path(image_dict["image_path"]).name
         id = Path(image_dict["image_path"]).stem
-        images.append({"id":id, "filename": file, "height": image_dict["height"], "width": image_dict["width"]})
+        images.append({"id":id, "file_name": file, "height": image_dict["height"], "width": image_dict["width"]})
 
         for key in image_dict["localization"].keys():
             if "localization_" in key:
                 localization_level = key.split("_")[-1]
+                if localization_level not in categories:
+                    categories[localization_level] = {"id":cat_id_counter, "name": localization_level, "supercategory": localization_level}
+                    cat_id_counter += 1
+
                 for box in image_dict["localization"][key]:
                     annotations.append({"image_id": id,
-                                        "bbox":box["bbox"],
+                                        "bbox":BBox._to_XYWH(box["bbox"]),
                                         "text":box["text"],
-                                        "category": f"{localization_level}"
+                                        "category": f"{localization_level}",
+                                        "id": ann_id_counter,
+                                        "category_id": categories[localization_level]["id"],
                     })
+                    ann_id_counter+=1
 
     coco = {
           "info": DEFAULT_COCO_INFO,
           "images": images,
           "licences": "No license, internal work product, confidential",
-          "categories": categories,
+          "categories": list(categories.values()),
           "annotations": annotations
     }
 
@@ -192,16 +223,19 @@ def draw_boxes_sections(ocr_format, background_img):
     for section in ocr_format["sections"]:
         draw_boxes_paragraph(section, background_img)
 
-def draw_boxes_sections_COCO(coco_format, idx, background_img):
+def draw_boxes_sections_COCO(coco_format, category_id=None, background_img=None):
+    if background_img is None and "file_name" in coco_format:
+        background_img = Image.open(coco_format['file_name'])
     for annotation in coco_format["annotations"]:
-        if annotation["image_id"] == idx:
-            BBox._draw_box(annotation["bbox"], background_img)
-
+        if category_id is None or annotation["category_id"] == category_id:
+            BBox._draw_box(BBox("ul", annotation["bbox"],format="XYWH"),
+                           background_img)
+    return background_img
 
 def fix(path):
     path = Path(path)
     dict = load_json(path)
-    # for i,value in dict.items():
+        # for i,value in dict.items():
     #     dict[i].update({"height": 1152, "width": 768})
     reference_dict = copy.deepcopy(dict)
     print("done copying")
@@ -220,7 +254,7 @@ def fix2(path):
     return dict
 
 
-def load_and_draw_and_display(image_path, dataset_dict=None, format="OCR"):
+def load_and_draw_and_display(image_path, dataset_dict=None, format="OCR", category_id=None):
     if dataset_dict is None:
         dataset_dict = load_json(Path(image_path).parent / "OCR.json")
     elif isinstance(dataset_dict, (str, Path)):
@@ -231,7 +265,7 @@ def load_and_draw_and_display(image_path, dataset_dict=None, format="OCR"):
     if format == "OCR":
         draw_boxes_sections(dataset_dict[idx], img)
     elif format == "COCO":
-        draw_boxes_sections_COCO(dataset_dict, idx, img)
+        draw_boxes_sections_COCO(dataset_dict["annotations"][idx], category_id, img)
 
     #display(img)
     img.show()
@@ -333,12 +367,7 @@ def load_and_draw_and_display(image_path, dataset_dict=None, format="OCR"):
 }
 """
 
-if __name__ == '__main__':
-    root = Path("/home/taylor/anaconda3/DATASET_0021")
-    root = Path(r"C:\Users\tarchibald\github\docgen\docgen\temp")
-
-    path = root / "OCR.json"
-    coco = root / "COCO.json"
+def _test():
 
     #dict = fix(path="/home/taylor/anaconda3/DATASET_0021/OCR.json")
     #delete_extra_images(path)
@@ -349,3 +378,43 @@ if __name__ == '__main__':
     if False:
         p = "/home/taylor/anaconda3/DATASET_0021/0036011.jpg"
         load_and_draw_and_display(p)
+
+def add_ids_to_json():
+    coco_dict = load_json(coco)
+    categories = {
+        "section": {'supercategory': 'section', 'id': 1, 'name': 'section'},
+        "paragraph": {'supercategory': 'paragraph', 'id': 2, 'name': 'paragraph'},
+        "line": {'supercategory': 'line', 'id': 3, 'name': 'line'},
+        "word": {'supercategory': 'word', 'id': 4, 'name': 'word'},
+    }
+
+    # cat_id_counter = max([item["id"] for key,item in categories.items()])
+    # for i, ann in enumerate(coco_dict["annotations"]):
+    #     ann["id"] = i
+    #     if ann["category"] not in categories:
+    #         cat_id_counter += 1
+    #         categories[ann["category"]] = {"supercategory":ann["category"], 'id':cat_id_counter, 'name':ann["category"]}
+    #     ann["category_id"] = categories[ann["category"]]["id"]
+    #     if "filename" in ann:
+    #         ann["file_name"] = ann.pop("filename")
+
+    # for i, img in enumerate(coco_dict["images"]):
+    #     if "filename" in img:
+    #         img["file_name"] = img.pop("filename")
+
+    # for i, ann in enumerate(coco_dict["annotations"]):
+    #     ann["bbox"] = BBox("ul", ann["bbox"]).to_XYWH()
+
+    # coco_dict["categories"] = list(categories.values())
+    save_json((coco.parent / (coco.stem + "2")).with_suffix(coco.suffix), coco_dict)
+
+
+
+if __name__ == '__main__':
+    root = Path("/home/taylor/anaconda3/DATASET_0021")
+    root = Path(r"C:\Users\tarchibald\github\docgen\docgen\temp")
+    root = Path(r"C:\Users\tarchibald\github\data\synthetic\FRENCH_BMD_LAYOUTv0.0.0.1")
+    path = root / "OCR.json"
+    coco = root / "COCO.json"
+
+    add_ids_to_json()

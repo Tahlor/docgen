@@ -7,7 +7,7 @@ def create_new_text_reportlab():
     from reportlab.pdfgen import canvas
     from PyPDF2 import PdfFileWriter, PdfFileReader
     c = canvas.Canvas('watermark.pdf')
-    c.drawImage('ttest.png', 15, 720)
+    c.drawImage('unit_tests.png', 15, 720)
     c.drawString(15, 720, "Hello World")
     c.save()
 
@@ -16,7 +16,7 @@ def create_watermark():
     from PyPDF2 import PdfFileWriter, PdfFileReader
     # Create the watermark from an image
     c = canvas.Canvas('watermark.pdf')
-    c.drawImage('ttest.png', 15, 720)
+    c.drawImage('unit_tests.png', 15, 720)
     c.drawString(15, 720, "Hello World")
     c.save()
 

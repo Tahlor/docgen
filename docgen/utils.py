@@ -1,3 +1,4 @@
+import os
 import random
 import json
 import matplotlib.pyplot as plt
@@ -6,6 +7,12 @@ import PIL
 from pathlib import Path
 from PIL import PpmImagePlugin, Image
 import traceback
+from tqdm import tqdm
+import zipfile
+import urllib.request as urllib
+
+from win32com.client.gencache import is_zip
+
 
 def shape(item):
     """
@@ -170,7 +177,10 @@ def handler(testing=False, return_on_fail=None):
     return wrapper1
 
 if __name__ == '__main__':
-    f = r"C:\Users\tarchibald\github\docx_localization\temp\french_census_0002\french_census_coco.json"
-    with Path(f).open() as ff:
-        d = json.load(ff)
-    pass
+    """
+    
+    """
+    # f = r"C:\Users\tarchibald\github\docx_localization\temp\french_census_0002\french_census_coco.json"
+    # with Path(f).open() as ff:
+    #     d = json.load(ff)
+    # pass

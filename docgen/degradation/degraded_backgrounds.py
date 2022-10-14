@@ -1,4 +1,4 @@
-from docgen.degradation
+import ocrodeg
 # pregenerate backgrounds
 # random invert/rotate and crop
 
