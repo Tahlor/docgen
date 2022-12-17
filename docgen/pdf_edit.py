@@ -372,7 +372,8 @@ def fill_area_with_words(word_imgs,
                          max_lines=None,
                          max_words=None,
                          indent_new_paragraph_prob=.5,
-                         slope=0):
+                         slope=0,
+                         slope_drift=(0,0)):
 
     """ TODO: Line can still be too long under skip_bad
         Takes a bounding box, list of images, and a list of words and fills the bounding box with the word images.
@@ -392,7 +393,15 @@ def fill_area_with_words(word_imgs,
                                           # when 1 word is too big for a line
                                           # when the lines are too tall for the box
                                           # will not continually add lines however
+        scale=1,
+        max_lines=None,
+        max_words=None,
         max_attempts (int): if doing skip_bad, will try multiple times
+        slope:
+        slope_drift:
+        TODO: rotate words to align with slope
+        TODO: option to return 8 parameter bboxes OR 4 parameter bboxes
+
     Returns:
 
     - mcmc - choose offset from previous line
@@ -449,13 +458,14 @@ def fill_area_with_words(word_imgs,
         return int(random.uniform(*horizontal_space_min_max)*height)
 
     def end_of_the_line():
-        nonlocal ys_within_line, current_line, xs_within_line, line_attempts, x_start, x_end, cum_y_pos
+        nonlocal ys_within_line, current_line, xs_within_line, line_attempts, x_start, x_end, cum_y_pos, slope
 
         # Make sure non-trivial line
         if not ys_within_line:
             return
         ys_sum = np.cumsum(ys_within_line)
         ys_sum -= np.min(ys_sum)
+
         y_height_for_current_line = max([w.shape[0] + ys_sum[i] for i, w in enumerate(current_line)])
 
         #### ALWAYS GENERATE 1 LINE EVEN IF TOO BIG ####
@@ -504,20 +514,22 @@ def fill_area_with_words(word_imgs,
             return "break"
 
         line_attempts = 0
-
+        slope += random.uniform(*slope_drift)
     def add_next_word():
         nonlocal x_start, x_end
-        # Add next word
-        offset = random.randint(-max_intraline_vertical_space_offset, max_intraline_vertical_space_offset)
 
-        # Offset from slope
-        offset += slope * x_start
+        # Use a predefined slope
+        offset_vertical = slope * x_start
+
+        # Choose random offset
+        offset_vertical += random.uniform(-max_intraline_vertical_space_offset, max_intraline_vertical_space_offset)
+        offset_vertical = int(round(offset_vertical))
 
         if word_img.shape[0] > max_height:
             warnings.warn("Word taller than maximum allowable height in box")
         current_line.append(word_img)
         xs_within_line.append(x_start)
-        ys_within_line.append(offset)
+        ys_within_line.append(offset_vertical)
         out_text.append(word)
 
         x_end = x_start + word_img.shape[1]
