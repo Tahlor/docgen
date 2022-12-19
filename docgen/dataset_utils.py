@@ -8,7 +8,10 @@ import datetime
 import copy
 from PIL import Image
 from docgen.utils import *
-from docgen.bbox import BBox
+from docgen.bbox import BBox, BBoxNGon
+import logging
+logger = logging.getLogger(__name__)
+
 
 DEFAULT_COCO_INFO = {'description': 'Synthetic Forms - Pre-alpha Release',
             'url': 'N/A',
@@ -45,6 +48,7 @@ def delete_extra_images(path):
             os.remove(file)
             #time.sleep(0.01)
 
+
 def ocr_dataset_to_coco(ocr_dict, data_set_name="Synthetic Forms - Pre-alpha Release"):
     if isinstance(ocr_dict, Path) or isinstance(ocr_dict, str):
         ocr_dict = load_json(ocr_dict)
@@ -78,7 +82,9 @@ def ocr_dataset_to_coco(ocr_dict, data_set_name="Synthetic Forms - Pre-alpha Rel
             "category": f"{category}",
             "id": ann_id_counter,
             "category_id": category_id,
+            # "segmentation":
         }
+
         ann_id_counter += 1
         if "text" in dict:
             item["text"] = dict["text"]
@@ -233,6 +239,14 @@ def draw_boxes_sections_COCO(coco_format, category_id=None, background_img=None)
     return background_img
 
 def fix(path):
+    """ Resave a JSON file with correct keys
+
+    Args:
+        path:
+
+    Returns:
+
+    """
     path = Path(path)
     dict = load_json(path)
         # for i,value in dict.items():
@@ -367,17 +381,24 @@ def load_and_draw_and_display(image_path, dataset_dict=None, format="OCR", categ
 }
 """
 
-def _test():
-
-    #dict = fix(path="/home/taylor/anaconda3/DATASET_0021/OCR.json")
-    #delete_extra_images(path)
-
-    save_json(Path(path).parent / "COCO.json", ocr_dataset_to_coco(ocr_dict=path, data_set_name="Handwritten Pages"))
+def _test(path=r"C:\Users\tarchibald\github\data\synthetic\FRENCH_BMD_LAYOUTv0.0.0.1\OCR.json"):
+    ocr_dataset_to_coco(ocr_dict=path, data_set_name="Handwritten Pages")
     #load_json(coco)
 
     if False:
         p = "/home/taylor/anaconda3/DATASET_0021/0036011.jpg"
         load_and_draw_and_display(p)
+
+
+### FIX COCO JSONs
+def fix_dict_key(coco_dict):
+    for i, img in enumerate(coco_dict["images"]):
+        if "filename" in img:
+            img["file_name"] = img.pop("filename")
+
+def fix_coords(coco_dict):
+    for i, ann in enumerate(coco_dict["annotations"]):
+        ann["bbox"] = BBox("ul", ann["bbox"]).to_XYWH()
 
 def add_ids_to_json():
     coco_dict = load_json(coco)
@@ -388,26 +409,30 @@ def add_ids_to_json():
         "word": {'supercategory': 'word', 'id': 4, 'name': 'word'},
     }
 
-    # cat_id_counter = max([item["id"] for key,item in categories.items()])
-    # for i, ann in enumerate(coco_dict["annotations"]):
-    #     ann["id"] = i
-    #     if ann["category"] not in categories:
-    #         cat_id_counter += 1
-    #         categories[ann["category"]] = {"supercategory":ann["category"], 'id':cat_id_counter, 'name':ann["category"]}
-    #     ann["category_id"] = categories[ann["category"]]["id"]
-    #     if "filename" in ann:
-    #         ann["file_name"] = ann.pop("filename")
-
-    # for i, img in enumerate(coco_dict["images"]):
-    #     if "filename" in img:
-    #         img["file_name"] = img.pop("filename")
-
-    # for i, ann in enumerate(coco_dict["annotations"]):
-    #     ann["bbox"] = BBox("ul", ann["bbox"]).to_XYWH()
+    cat_id_counter = max([item["id"] for key,item in categories.items()])
+    for i, ann in enumerate(coco_dict["annotations"]):
+        ann["id"] = i
+        if ann["category"] not in categories:
+            cat_id_counter += 1
+            categories[ann["category"]] = {"supercategory":ann["category"], 'id':cat_id_counter, 'name':ann["category"]}
+        ann["category_id"] = categories[ann["category"]]["id"]
+        if "filename" in ann:
+            ann["file_name"] = ann.pop("filename")
 
     # coco_dict["categories"] = list(categories.values())
     save_json((coco.parent / (coco.stem + "2")).with_suffix(coco.suffix), coco_dict)
 
+def split_into_categories():
+    import copy
+    coco_dict = load_json(coco)
+    for cat in coco_dict["categories"]:
+        id = cat["id"]
+        name = cat["name"]
+        logger.info(f"Working on COCO `{name}` dataset")
+        d = copy.copy(coco_dict)
+        d["annotations"] = d["annotations"].copy()
+        d["annotations"] = [item for item in d["annotations"] if item["category_id"] == id]
+        save_json((coco.parent / f"{coco.stem}_{name}").with_suffix(coco.suffix), d)
 
 
 if __name__ == '__main__':
@@ -416,5 +441,5 @@ if __name__ == '__main__':
     root = Path(r"C:\Users\tarchibald\github\data\synthetic\FRENCH_BMD_LAYOUTv0.0.0.1")
     path = root / "OCR.json"
     coco = root / "COCO.json"
-
-    add_ids_to_json()
+    split_into_categories()
+    #add_ids_to_json()

@@ -388,7 +388,7 @@ class BBoxNGon(BBox):
         """ JUST THE ORTHOGONAL BOX
         list_of_bboxes: [x1,y1,x2,y2,xx1,yy1,xx2,yy2,...]
         Returns:
-            The union of all bboxes
+            The union of the area of all bboxes
 
         """
         all_points = np.concatenate(list_of_bboxes)
@@ -397,6 +397,19 @@ class BBoxNGon(BBox):
         return np.array((np.min(xcoords), np.min(ycoords), np.max(xcoords), np.max(ycoords)))
 
     get_maximal_box = get_maximal_box_orthogonal
+
+    @staticmethod
+    def get_convex_hull(list_of_bboxes):
+        """ Convex hull
+
+        Args:
+            list_of_bboxes:
+
+        Returns:
+
+        """
+        points = np.concatenate(list_of_bboxes).reshape(-1,2)
+        return points[ConvexHull(points).vertices].ravel()
 
     @staticmethod
     def get_convex_hull(list_of_bboxes):
