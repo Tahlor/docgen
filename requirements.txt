@@ -2,10 +2,25 @@ docx2pdf==0.1.8
 pdf2image==1.16.0
 python-docx
 # conda install pdftotext -c forge
-setuptools==61.2.0
-tqdm==4.64.0
-numpy==1.21.5
-pdfminer==20191125
-pypdf2==2.4.1
-packaging==21.3
+setuptools
+tqdm
+numpy
+pdfminer
+pypdf2
+packaging
 gdown
+
+-f git+https://github.com/tahlor/hwgen@master#egg=hwgen
+hwgen
+
+-f git+https://github.com/tahlor/textgen@master#egg=textgen
+textgen
+
+-f git+https://github.com/tahlor/Faker@master#egg=Faker
+faker
+
+-f git+https://github.com/tahlor/docdegrade@master#egg=docdegrade
+docdegrade
+
+-f git+https://github.com/tahlor/download_resources@master#egg=download_resources
+download_resources

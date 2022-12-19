@@ -31,6 +31,9 @@ class BBox:
             line_word_index (int): if generated in a box, the line number
             text (str): the word (optional)
             parent_obj_bbox (x1,y1,x2,y2):
+            paragraph_index (int): if multiple paragraphs, the index of the paragraph
+            force_int (bool): if True, will force all values to be integers
+            format:Literal['XYXY', 'XYWH']="XYXY"): by default, bbox is in X1,Y1,X2,Y2 format, but can be XYWH (COCO)
         """
         #self.origin = self.set_origin(origin)
         if origin=="ll":

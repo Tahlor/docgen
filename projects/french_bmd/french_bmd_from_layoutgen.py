@@ -2,7 +2,8 @@ import os
 from tqdm import tqdm
 from tqdm.contrib.concurrent import process_map
 import traceback
-from docgen.layoutgen.layoutgen import *
+from docgen.layoutgen.layoutgen import LayoutGenerator, MarginGenerator
+#from docgen.layoutgen.layoutgen import *
 from handwriting.data.saved_handwriting_dataset import SavedHandwriting, SavedHandwritingRandomAuthor
 from textgen.unigram_dataset import Unigrams
 from docgen.rendertext.render_word import RenderImageTextPair
@@ -14,7 +15,7 @@ import multiprocessing
 from docgen.layoutgen.layout_dataset import LayoutDataset
 from torch.utils.data import DataLoader
 
-TESTING = False # TESTING = disables error handling
+TESTING = True # TESTING = disables error handling
 
 #PATH = r"C:\Users\tarchibald\github\handwriting\handwriting\data\datasets\synth_hw\style_298_samples_0.npy"
 
@@ -77,7 +78,8 @@ def main():
     #UNIGRAMS = r"C:\Users\tarchibald\github\textgen\textgen\datasets\unigram_freq.csv"
     UNIGRAMS = r"../../textgen/textgen/datasets/unigram_freq.csv"
     WORKERS = max(multiprocessing.cpu_count() - 8,2)
-    #WORKERS = 0
+    if TESTING:
+        WORKERS = 0
     NUMBER_OF_DOCUMENTS = 100
     BATCH_SIZE = 4
 
@@ -114,7 +116,7 @@ def main():
         layout_dataset = LayoutDataset(layout_generator=lg,
                                 render_text_pairs=render_text_pair,
                                 output_path=OUTPUT,
-                                lenth=LENGTH)
+                                lenth=NUMBER_OF_DOCUMENTS)
         layout_loader = DataLoader(layout_dataset,
                                    batch_size=BATCH_SIZE,
                                    collate_fn=layout_dataset.collate_fn,
