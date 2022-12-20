@@ -376,6 +376,7 @@ def fill_area_with_words(word_imgs,
                          slope_drift=(0,0)):
 
     """ TODO: Line can still be too long under skip_bad
+        TODO: Slope not reliable, warp should be a postprocessing step
         Takes a bounding box, list of images, and a list of words and fills the bounding box with the word images.
 
     Args:
