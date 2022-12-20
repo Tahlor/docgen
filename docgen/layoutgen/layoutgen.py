@@ -7,9 +7,9 @@ from docgen.dataset_utils import ocr_dataset_to_coco
 from PIL import Image
 
 from docgen.bbox import BBox
-from docgen.pdf_edit import fill_area_with_words, composite_images2
+from docgen.render_doc import fill_area_with_words, composite_images2
 from docgen.utils import display
-from docgen.pdf_edit import convert_to_ocr_format
+from docgen.render_doc import convert_to_ocr_format
 
 def flip(prob=.5):
     return random.random() < prob
