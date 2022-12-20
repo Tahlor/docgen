@@ -8,7 +8,7 @@ from handwriting.data.saved_handwriting_dataset import SavedHandwriting, SavedHa
 from textgen.unigram_dataset import Unigrams
 from docgen.rendertext.render_word import RenderImageTextPair
 from pathlib import Path
-from docgen.dataset_utils import load_and_draw_and_display, save_json
+from docgen.dataset_utils import load_and_draw_and_display, save_json, ocr_dataset_to_coco
 from docgen.degradation.degrade import degradation_function_composition
 from docgen.utils import file_incrementer, handler
 import multiprocessing

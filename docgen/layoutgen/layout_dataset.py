@@ -3,8 +3,10 @@ from docgen.degradation.degrade import degradation_function_composition
 from docgen.utils import handler
 from handwriting.data.saved_handwriting_dataset import SavedHandwriting, SavedHandwritingRandomAuthor
 from pathlib import Path
+import socket
+from torch.utils.data import Dataset, DataLoader, IterableDataset
 
-TESTING=False
+TESTING=True
 
 class LayoutDataset(Dataset):
     def __init__(self, layout_generator, render_text_pairs, output_path, lenth=100000, *args, **kwargs):
@@ -41,14 +43,18 @@ if __name__ == "__main__":
 
     HWR_FILES = Path("/home/taylor/anaconda3/datasets/HANDWRITING_WORD_DATA/")
     NUMBER_OF_DOCUMENTS=100
-    UNIGRAMS = r"../../textgen/textgen/datasets/unigram_freq.csv"
+    if socket.gethostname()  == "G1G2Q13":
+        UNIGRAMS = r"../../textgen/textgen/datasets/unigram_freq.csv"
+    else:
+        UNIGRAMS = r"/media/data/GitHub/textgen/textgen/datasets/unigram_freq.csv"
+
     DATASETS = Path("./temp")
     OUTPUT = DATASETS / "FRENCH_BMD_LAYOUTv3"
 
     lg = LayoutGenerator()
     words = Unigrams(csv_file=UNIGRAMS, newline_freq=0)
 
-    renderer = SavedHandwritingRandomAuthor(
+    renderer = SavedHandwritingRandomAuthor (
         format="PIL",
         dataset_root=HWR_FILES,
         # dataset_path=HWR_FILE,
@@ -62,3 +68,5 @@ if __name__ == "__main__":
                                    render_text_pairs=render_text_pair,
                                    output_path=OUTPUT,
                                    lenth=NUMBER_OF_DOCUMENTS)
+    for i in layout_dataset:
+        pass
