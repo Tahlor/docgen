@@ -10,7 +10,7 @@ FILE="$(basename "${SCRIPT_DIR}")"
 echo $FILE
 
 PACKAGE_NAME=${1:-$FILE}
-GITHUB_USER=${2:-tahlor}
+GITHUB_USER=${2:-tarchibald}
 TOKEN=${3:-$GITHUB_TOKEN}
 EMAIL=${4:-taylor.archibald@byu.edu}
 PRIVATE=${5:-true}
@@ -45,7 +45,7 @@ done
 # find and replace in the files
 find . -type f -name "*" -exec sed -i "s@pdfgen@${PACKAGE_NAME}@g" {} \;
 find . -type f -name "*" -exec sed -i "s|taylor.archibald@byu.edu|${EMAIL}|g" {} \;
-find . -type f -name "*" -exec sed -i "s@tahlor@${GITHUB_USER}@g" {} \;
+find . -type f -name "*" -exec sed -i "s@tarchibald@${GITHUB_USER}@g" {} \;
 find . -type f -name "*" -exec sed -i "s@version='0.0.1'
 
 echo $PACKAGE_NAME
@@ -56,13 +56,13 @@ echo $TOKEN
 
 
 # initialize new git
-curl -u $GITHUB_USER:$TOKEN https://api.github.com/user/repos -d "{\"name\":\"$SAFE_PACKAGE_NAME\", \"private\": $PRIVATE}"
+curl -u $GITHUB_USER:$TOKEN https://api.github.ancestry.com/user/repos -d "{\"name\":\"$SAFE_PACKAGE_NAME\", \"private\": $PRIVATE}"
 
 git init
 git add .
 git commit -m "first commit"
 git branch -M master
-git remote add origin git@github.com:$GITHUB_USER/${SAFE_PACKAGE_NAME}.git
+git remote add origin git@github.ancestry.com:$GITHUB_USER/${SAFE_PACKAGE_NAME}.git
 git push -u origin master
 #git push --set-upstream origin master
 
