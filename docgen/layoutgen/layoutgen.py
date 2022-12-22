@@ -7,15 +7,18 @@ from docgen.dataset_utils import ocr_dataset_to_coco
 from PIL import Image
 
 from docgen.bbox import BBox
-from docgen.pdf_edit import fill_area_with_words, composite_images2
+from docgen.render_doc import fill_area_with_words, composite_images2
 from docgen.utils import display
-from docgen.pdf_edit import convert_to_ocr_format
+from docgen.render_doc import convert_to_ocr_format
 
 def flip(prob=.5):
     return random.random() < prob
 
 class DocBox(BBox):
     """
+    An abstraction of a bounding box that can be used to represent different parts of a document.
+
+    For the French BMDs, the following hierarachal categories are used:
     Document
         Page -> Header
                 Margin
@@ -51,6 +54,8 @@ class DocBox(BBox):
             self.bbox_writable = bbox_writable
 
 class MarginGenerator:
+    """ Generate a margin box within the parent box """
+
     def __init__(self,
                  top_margin=(0.,0.1),
                  bottom_margin=(0.,0.1),
@@ -69,7 +74,16 @@ class MarginGenerator:
     def naive(self, bbox, *args, **kwargs):
         return bbox 
 
-    def gen_margin(self, width, height):
+    def gen_margin(self, width, height) -> tuple:
+        """ Generate (random) margins for a box of given width and height
+
+        Args:
+            width: width of box
+            height: width of box
+
+        Returns:
+
+        """
         top_margin = random.uniform(*self.top_margin) * height
         bottom_margin = random.uniform(*self.bottom_margin) * height
         left_margin = random.uniform(*self.left_margin) * width
@@ -123,36 +137,37 @@ def scale_font(font_size, rng):
     return round(random.uniform(*rng)*font_size)
 
 class LayoutGenerator:
+    """ Generate a layout for a document """
 
     def  __init__(self,
                   pages_per_image=(1,2),
                   pages_per_image_prob_weights=None,
-                  width=3200,
-                  height=2400,
-                  random_size_factor=2,
-                  max_page_width_factor=1.5,
+                  width:int=3200,
+                  height:int=2400,
+                  random_size_factor:float=2,
+                  max_page_width_factor:float=1.5,
                   page_margins=None,
                   paragraph_margins=None,
                   margin_margins=None,
                   page_title_margins=None,
                   paragraph_note_margins=None,
                   page_header_margins=None,
-                  paragraph_height_min_pixels=40,
-                  paragraph_height=(.05,.7),
-                  margin_notes_probability=.5,
-                  margin_blank_probability=.2,
-                  margin_notes_width=(.1,.3),
-                  stop_page_early_probability=.1,
-                  max_lines_margin_notes=5,
-                  font_size_pixels=(20,64),
-                  font_variability=(.9,1),
-                  page_title_height=(.02,.1),
+                  paragraph_height_min_pixels:int=40,
+                  paragraph_height:(float,float)=(.05,.7),
+                  margin_notes_probability:float=.5,
+                  margin_blank_probability:float=.2,
+                  margin_notes_width:(float,float)=(.1,.3),
+                  stop_page_early_probability:int=.1,
+                  max_lines_margin_notes:int=5,
+                  font_size_pixels:(int,int)=(20,64),
+                  font_variability:(float,float)=(.9,1),
+                  page_title_height:(float,float)=(.02,.1),
                   page_title_prob=.5,
-                  page_header_height=(.02, .3),
-                  page_header_prob=.1,
-                  paragraph_note_probability=.5,
-                  paragraph_note_blank_probability=.2,
-                  paragraph_note_lines=(1,3)
+                  page_header_height:(float,float)=(.02, .3),
+                  page_header_prob:float=.1,
+                  paragraph_note_probability:float=.5,
+                  paragraph_note_blank_probability:float=.2,
+                  paragraph_note_lines:(int,int)=(1,3)
                   ):
         """
 
@@ -217,7 +232,7 @@ class LayoutGenerator:
         self.page_title_height = page_title_height
         self.page_title_prob = page_title_prob
 
-    def generate_layout(self):
+    def generate_layout(self) -> DocBox:
         width = random.randint(self.width_lower, self.width_upper)
         height = random.randint(self.height_lower, self.height_lower)
         min_pages = ceil(width / (self.width * self.max_page_width_factor))
@@ -235,7 +250,7 @@ class LayoutGenerator:
 
         return layout
 
-    def generate_page(self, starting_x, page_width, page_height, parent=None):
+    def generate_page(self, starting_x:int, page_width:int, page_height:int, parent=None) -> DocBox:
         page_bbox=(starting_x, 0, starting_x+page_width, page_height)
         page_bbox_with_margins = page_bbox if self.page_margins is None else self.page_margins.generate_margin_box(page_bbox)
         #full_page = DocBox(bbox=bbox, bbox_writable=bbox_with_margins, parent=parent)
@@ -292,7 +307,7 @@ class LayoutGenerator:
             stop_early_prob = self.stop_page_early_probability
         return page
 
-    def paragraph_note_box(self, paragraph, id=None):
+    def paragraph_note_box(self, paragraph:DocBox, id=None)->DocBox:
         font_size = scale_font(self.font_size, (.9,1.1))
         height = random.uniform(*self.paragraph_note_lines) * font_size
         bbox = paragraph.bbox[0],paragraph.bbox[3],paragraph.bbox[2],paragraph.bbox[3]+height
@@ -305,7 +320,7 @@ class LayoutGenerator:
                                 )
         return paragraph_note
 
-    def margin_note_box(self, paragraph, all_margin_note, id=None):
+    def margin_note_box(self, paragraph:DocBox, all_margin_note:DocBox, id=None)->DocBox:
         # TODO: random height offset
         bbox = all_margin_note.bbox[0], paragraph.bbox[1], all_margin_note.bbox[2], paragraph.bbox[3]
         font_size = scale_font(self.font_size, (.9,1.1))
@@ -336,7 +351,7 @@ class LayoutGenerator:
                  id=id
                  )
 
-    def page_title_box(self, pg_box):
+    def page_title_box(self, pg_box: DocBox):
         font_size = scale_font(self.font_size, (1,1.3))
         height = max(pg_box.height * random.uniform(*self.page_title_height), font_size)
         bbox = pg_box.bbox_writable[0], pg_box.bbox_writable[1], pg_box.bbox_writable[2], pg_box.bbox_writable[1] + height
@@ -349,7 +364,15 @@ class LayoutGenerator:
                font_size=font_size
                )
 
-    def page_header(self, pg_box):
+    def page_header(self, pg_box: DocBox):
+        """ Given a page DocBox, return a PageHeader DocBox
+
+        Args:
+            pg_box (DocBox):  The page DocBox to add the header to
+
+        Returns:
+
+        """
         font_size = scale_font(self.font_size, (1, 1.3))
         height = max(pg_box.height * random.uniform(*self.page_title_height), font_size)
         bbox = pg_box.bbox_writable[0], pg_box.bbox_writable[1], pg_box.bbox_writable[2], pg_box.bbox_writable[
@@ -363,9 +386,18 @@ class LayoutGenerator:
                       font_size=font_size
                       )
 
-    def _draw_doc_box(self, image, doc_box):
+    def _draw_doc_box(self, doc_box, image):
+        """ Recursive call from draw_doc_boxes
+
+        Args:
+            doc_box: doc_box to draw
+            image: PIL image
+
+        Returns:
+
+        """
         for child in doc_box.children:
-            image = self._draw_doc_box(image, child)
+            image = self._draw_doc_box(child, image)
         image = BBox._draw_box(doc_box.bbox, image, "black")
         if doc_box.category in ["paragraph","margin_note","page_title","paragraph_note"]:
             image = BBox._draw_center(doc_box.bbox, image, "red")
@@ -374,10 +406,16 @@ class LayoutGenerator:
         return image
 
     def draw_doc_boxes(self, doc_box, image=None):
+        """ Recursively draw bounding boxes on image for debugging purposes
+
+            Args:
+                doc_box: DocBox object
+                image: PIL image to draw on
+        """
         size = doc_box.size
         if image is None:
             image = Image.new("L", size, 255)
-        image = self._draw_doc_box(image, doc_box)
+        image = self._draw_doc_box(doc_box, image)
         return image
 
     def _render_text(self, background_image, doc_box, text_generator, **kwargs):
@@ -393,20 +431,31 @@ class LayoutGenerator:
                                                        error_handling="force",
                                                        indent_new_paragraph_prob=.2,
                                                        scale=1 if text_generator.font_size is None else doc_box.font_size / text_generator.font_size,
-                                                       slope=random.gauss(0,0.01),
-                                                       slope_drift=(0, 0.001),
+                                                       slope=random.gauss(0,0.001),
+                                                       slope_drift=(0, 0.0001),
                                                        **kwargs)
             composite_images2(background_image, image, doc_box.bbox_writable[0:2])
             doc_box.localization = localization
 
     def render_text(self, doc_box, text_generator, **kwargs):
+        """ Recursively draw text in DocBox's in document
+
+        Args:
+            doc_box (DocBox): DocBox object defining where to draw text
+            text_generator (obj): A generator that returns (image, str) tuples
+            **kwargs:
+
+        Returns:
+
+        """
         size = doc_box.size
         image = Image.new("L", size, 255)
         self._render_text(image, doc_box, text_generator, **kwargs)
         return image
 
     def _create_ocr(self, doc_box, ocr_format_master, level, ids):
-        """ Need to add: section relationships (paragraph -> margins)
+        """ Recursive function called by create_ocr
+            Need to add: section relationships (paragraph -> margins)
                          page level
         """
         doc_box.id = level, ids[level]
@@ -427,6 +476,16 @@ class LayoutGenerator:
 
 
     def create_ocr(self, doc_box, id, filename=""):
+        """ Recursively creates a dictionary of OCR data for a document which can be converted to COCO etc.
+
+        Args:
+            doc_box:
+            id:
+            filename:
+
+        Returns:
+
+        """
         ocr_out = {"sections": [], "width": doc_box.width, "height": doc_box.height, "id":id, "filename":filename}
         ids = defaultdict(int)
         self._create_ocr(doc_box, ocr_out, level=0, ids=ids)

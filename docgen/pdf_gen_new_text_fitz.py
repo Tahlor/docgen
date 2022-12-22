@@ -1,5 +1,5 @@
 import fitz
-from pdf_edit import create_new_textbox
+from docgen.pdf_edit import create_new_textbox
 from math import ceil
 
 def add_some_textboxes_test(input_path, output_path):
