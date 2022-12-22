@@ -3,7 +3,7 @@
 git pull origin galois
 
 # Switch to the ANCESTRY branch
-git checkout ancestry/docgen
+git checkout ancestry
 
 # Merge the GITHUB branch into the ANCESTRY branch
 git rebase galois
