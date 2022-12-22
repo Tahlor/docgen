@@ -8,8 +8,8 @@ git checkout ancestry/docgen
 git rebase master
 
 # Perform the replacements on all files, excluding the .git directory
-find . -type f \( -name "*.py" -o -name "*.sh" -o -name "*.md" \) ! -path "*.git*" ! -path "*venv*" -exec sed -i "s@tahlor@tarchibald@g" {} \;
-find . -type f \( -name "*.py" -o -name "*.sh" -o -name "*.md" \) ! -path "*.git*" ! -path "*venv*" -exec sed -i "s@github.com@github.ancestry.com@g" {} \;
+find . -type f \( -name "*.py" -o -name "*.sh" -o -name "*.txt" -o -name "*.md" \) ! -path "*.git*" ! -path "*venv*" -exec sed -i "s@tahlor@tarchibald@g" {} \;
+find . -type f \( -name "*.py" -o -name "*.sh" -o -name "*.txt" -o -name "*.md" \) ! -path "*.git*" ! -path "*venv*" -exec sed -i "s@github.com@github.ancestry.com@g" {} \;
 
 # Commit the changes
 git commit -am "update"
