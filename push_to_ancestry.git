@@ -1,10 +1,11 @@
 #!/bin/bash
+git pull origin master
 
 # Switch to the ANCESTRY branch
 git checkout ancestry/docgen
 
 # Merge the GITHUB branch into the ANCESTRY branch
-git merge github/docgen
+git rebase master
 
 # Perform the replacements on all files, excluding the .git directory
 find . -type f \( -name "*.py" -o -name "*.sh" -o -name "*.md" \) ! -path "*.git*" ! -path "*venv*" -exec sed -i "s@tahlor@tarchibald@g" {} \;
@@ -15,3 +16,5 @@ git commit -am "update"
 
 # Push the changes to the ANCESTRY remote
 git push ancestry docgen
+
+git checkout master
