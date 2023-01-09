@@ -2,7 +2,7 @@ from docgen.layoutgen.layoutgen import *
 from docgen.utils import display
 
 """
-Uses layoutgen to generate French Census layouts
+Uses layoutgen to generate French BMD layouts
 
 """
 
