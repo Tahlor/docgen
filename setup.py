@@ -31,7 +31,7 @@ def get_requirements():
     return packages
 
 setup(name='docgen',
-      version='0.0.31',
+      version='0.0.32',
       description='docgen',
       long_description= "" if not os.path.isfile("README.md") else read_md('README.md'),
       author='Taylor Archibald',
