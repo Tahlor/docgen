@@ -1,7 +1,7 @@
 from torch.utils.data import Dataset, DataLoader, IterableDataset
 from docgen.degradation.degrade import degradation_function_composition
 from docgen.utils import handler
-from handwriting.data.saved_handwriting_dataset import SavedHandwriting, SavedHandwritingRandomAuthor
+from hwgen.data.saved_handwriting_dataset import SavedHandwriting, SavedHandwritingRandomAuthor
 from pathlib import Path
 import socket
 from torch.utils.data import Dataset, DataLoader, IterableDataset

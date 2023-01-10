@@ -4,7 +4,7 @@ from tqdm.contrib.concurrent import process_map
 import traceback
 from docgen.layoutgen.layoutgen import LayoutGenerator, MarginGenerator
 #from docgen.layoutgen.layoutgen import *
-from handwriting.data.saved_handwriting_dataset import SavedHandwriting, SavedHandwritingRandomAuthor
+from hwgen.data.saved_handwriting_dataset import SavedHandwriting, SavedHandwritingRandomAuthor
 from textgen.unigram_dataset import Unigrams
 from docgen.rendertext.render_word import RenderImageTextPair
 from pathlib import Path
@@ -88,7 +88,7 @@ def main():
     else:
         from datasets import load_dataset
         from textgen.wikipedia_dataset import Wikipedia, WikipediaWord
-        from handwriting.data.basic_text_dataset import VOCABULARY, ALPHA_VOCABULARY
+        from hwgen.data.basic_text_dataset import VOCABULARY, ALPHA_VOCABULARY
 
         words = WikipediaWord(
                 Wikipedia(

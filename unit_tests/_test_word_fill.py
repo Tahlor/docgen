@@ -3,7 +3,7 @@ from PIL import Image
 from docgen.pdf_edit import PDF
 from textgen.unigram_dataset import Unigrams
 from docgen.rendertext.render_word import RenderWordFont
-from handwriting.data.saved_handwriting_dataset import SavedHandwriting
+from hwgen.data.saved_handwriting_dataset import SavedHandwriting
 import numpy as np
 from docgen import utils
 from docgen.utils import display
