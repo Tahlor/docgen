@@ -4,7 +4,12 @@ from docx import Document
 from docx.enum.section import WD_ORIENTATION
 from docx.enum.table import WD_ROW_HEIGHT_RULE
 import docx
-from typing import Literal
+import sys
+
+if sys.version_info >= (3, 8):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
 from docx.shared import Inches
 import numpy as np
 from docx.oxml import table

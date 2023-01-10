@@ -2,7 +2,12 @@ from collections import defaultdict
 import random
 from collections import defaultdict
 from math import ceil
-from typing import Literal
+import sys
+
+if sys.version_info >= (3, 8):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
 from docgen.dataset_utils import ocr_dataset_to_coco
 from PIL import Image
 

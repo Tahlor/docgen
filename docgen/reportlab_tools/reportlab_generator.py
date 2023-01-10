@@ -5,7 +5,11 @@ from reportlab.lib.colors import magenta, pink, blue, green
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 from pathlib import Path
 import os
-from typing import Literal
+import sys
+if sys.version_info >= (3, 8):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
 from easydict import EasyDict as edict
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from docgen.bbox import BBox

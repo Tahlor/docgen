@@ -11,7 +11,12 @@ from math import ceil
 from docgen.img_tools import *
 import numpy as np
 from PIL import ImageChops, ImageDraw, PpmImagePlugin
-from typing import Literal, List
+import sys
+if sys.version_info >= (3, 8):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
+from typing import List
 from docgen.bbox import BBox
 from docgen import utils
 from docgen.render_doc import *

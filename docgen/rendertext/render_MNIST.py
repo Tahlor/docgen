@@ -12,7 +12,11 @@ import argparse
 from cv2 import resize
 from docgen.utils import *
 from PIL import Image
-from typing import Literal
+import sys
+if sys.version_info >= (3, 8):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
 import torchvision
 import torchvision.datasets as datasets
 from docgen.rendertext.render_word import RenderWord
@@ -22,7 +26,10 @@ import warnings
 import types
 LOCAL_ROOT = Path(os.path.dirname(__file__))
 from collections import defaultdict
-from typing import Literal
+if sys.version_info >= (3, 8):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
 
 def open_file(path):
     with open(path, "r") as f:
