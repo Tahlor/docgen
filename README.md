@@ -25,6 +25,8 @@ Or:
 ## Dependencies
 Requires:
 
+* Python 3.8+
+
 * [**hwgen**](https://github.com/tahlor/hwgen): Uses transformers to generate synthetic handwriting
   git+https://github.com/tahlor/hwgen
     
