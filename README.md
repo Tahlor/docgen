@@ -27,24 +27,24 @@ Requires:
 
 * Python 3.8+
 
-* [**hwgen**](https://github.com/tarchibald/hwgen): Uses transformers to generate synthetic handwriting
-  git+https://github.com/tarchibald/hwgen
+* [**hwgen**](https://github.com/tahlor@/hwgen): Uses transformers to generate synthetic handwriting
+  git+https://github.com/tahlor@/hwgen
     
-* [**textgen**](https://github.com/tarchibald/textgen): Package with natural language text to sample from (e.g. Wikipedia)
-  git+https://github.com/tarchibald/textgen
+* [**textgen**](https://github.com/tahlor@/textgen): Package with natural language text to sample from (e.g. Wikipedia)
+  git+https://github.com/tahlor@/textgen
 
-* [**Faker**](https://github.com/tarchibald/Faker): Package for generating fake user data (names, birthdates, addresses, etc.) for many different locales
-  git+https://github.com/tarchibald/Faker
+* [**Faker**](https://github.com/tahlor@/Faker): Package for generating fake user data (names, birthdates, addresses, etc.) for many different locales
+  git+https://github.com/tahlor@/Faker
 
-* [**docdegrade**](https://github.com/tarchibald/docdegrade): For artificially degrading synthetic documents
-  git+https://github.com/tarchibald/docdegrade
+* [**docdegrade**](https://github.com/tahlor@/docdegrade): For artificially degrading synthetic documents
+  git+https://github.com/tahlor@/docdegrade
 
-* [**download_resources**](https://github.com/tarchibald/download_resources): For downloading databases required by packages
-  git+https://github.com/tarchibald/download_resources
+* [**download_resources**](https://github.com/tahlor@/download_resources): For downloading databases required by packages
+  git+https://github.com/tahlor@/download_resources
 
 # Install
     
-    pip3 install git+ssh://git@github.com/tarchibald/docgen --upgrade
+    pip3 install git+ssh://git@github.com/tahlor@/docgen --upgrade
 
 # Usage
 

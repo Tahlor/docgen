@@ -10,6 +10,7 @@ replace=$2
 undo () {
   # find dir -name '*.xml' -exec bash -c 't=$(stat -c %y "$0"); sed -i -e "s/text1/text2/g" "$0"; touch -d "$t" "$0"' {} \;  
   find . -type f \( -name "*.py" -o -name "*.sh" -o -name "*.txt" -o -name "*.md" \) ! -path "*.git*" ! -path "*venv*" -exec bash -c 't=$(stat -c %y "$0"); sed -i -e "s|tarchibald@|tahlor@|g" "$0";  touch -d "$t" "$0"' {} \;
+  find . -type f \( -name "*.py" -o -name "*.sh" -o -name "*.txt" -o -name "*.md" \) ! -path "*.git*" ! -path "*venv*" -exec bash -c 't=$(stat -c %y "$0"); sed -i -e "s|.com/tarchibald|.com/tahlor@|g" "$0";  touch -d "$t" "$0"' {} \;
   find . -type f \( -name "*.py" -o -name "*.sh" -o -name "*.txt" -o -name "*.md" \) ! -path "*.git*" ! -path "*venv*" -exec bash -c 't=$(stat -c %y "$0"); sed -i -e "s@github.ancestry.com@github.com@g" "$0";  touch -d "$t" "$0"' {} \;
   sed -i 's/@ancestry/@master/g' requirements.txt
 }
@@ -28,6 +29,7 @@ push_ancestry () {
 
   # preserve times
   find . -type f \( -name "*.py" -o -name "*.sh" -o -name "*.txt" -o -name "*.md" \) ! -path "*.git*" ! -path "*venv*" -exec bash -c 't=$(stat -c %y "$0"); sed -i -e "s|tahlor@|tarchibald@|g" "$0";  touch -d "$t" "$0"' {} \;
+  find . -type f \( -name "*.py" -o -name "*.sh" -o -name "*.txt" -o -name "*.md" \) ! -path "*.git*" ! -path "*venv*" -exec bash -c 't=$(stat -c %y "$0"); sed -i -e "s|.com/tahlor|.com/tarchibald@|g" "$0";  touch -d "$t" "$0"' {} \;
   find . -type f \( -name "*.py" -o -name "*.sh" -o -name "*.txt" -o -name "*.md" \) ! -path "*.git*" ! -path "*venv*" -exec bash -c 't=$(stat -c %y "$0"); sed -i -e "s@github.com@github.ancestry.com@g" "$0";  touch -d "$t" "$0"' {} \;
 
 
