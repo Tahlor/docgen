@@ -9,7 +9,11 @@ import argparse
 from cv2 import resize
 from docgen.utils import *
 from PIL import Image
-from typing import Literal
+import sys
+if sys.version_info >= (3, 8):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
 import site
 
 import site

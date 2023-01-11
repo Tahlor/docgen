@@ -5,13 +5,13 @@ from docgen.pdf_edit import *
 from PIL import Image
 from textgen.unigram_dataset import Unigrams
 from docgen.rendertext.render_word import RenderWordFont
-from handwriting.data.saved_handwriting_dataset import SavedHandwriting
+from hwgen.data.saved_handwriting_dataset import SavedHandwriting
 import numpy as np
 from docgen import utils
 from docgen.utils import display
 from docgen.image_composition.utils import new_textbox_given_background
 from textgen.wikipedia_dataset import Wikipedia
-from handwriting.data.hw_generator import HWGenerator
+from hwgen.data.hw_generator import HWGenerator
 from datasets import load_dataset
 from torch.utils.data import DataLoader
 from docgen.utils import file_incrementer
@@ -35,7 +35,7 @@ FREQ = 5000
 
 def main():
     global IDX
-    from handwriting.data.basic_text_dataset import VOCABULARY
+    from hwgen.data.basic_text_dataset import VOCABULARY
     print(f"Vocab: {VOCABULARY}")
     basic_text_dataset = Wikipedia(
         dataset=load_dataset("wikipedia", "20220301.en")["train"],

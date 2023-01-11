@@ -11,7 +11,12 @@ from math import ceil
 from docgen.img_tools import *
 import numpy as np
 from PIL import ImageChops, ImageDraw, PpmImagePlugin
-from typing import Literal, List
+import sys
+if sys.version_info >= (3, 8):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
+from typing import List, Tuple
 from docgen.bbox import BBox
 from docgen import utils
 import logging
@@ -506,7 +511,7 @@ def fill_area_with_words(word_imgs,
         return np.array([]), []
 
 def resize_image_to_bbox(img:Image.Image,
-                         bbox:tuple[float, ...],
+                         bbox:Tuple[float, ...],
                          resize_method:Literal["fit","height","none"]="fit"):
     resample=Image.BICUBIC
     new_size_x, new_size_y = img.size

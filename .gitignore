@@ -4,7 +4,6 @@ __pycache__/
 *$py.class
 
 docgen/rendertext/data
-
 data/
 temp/
 password*
@@ -18,6 +17,7 @@ credentials*
 
 # Distribution / packaging
 .Python
+venv/
 env/
 build/
 develop-eggs/

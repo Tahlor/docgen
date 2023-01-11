@@ -1,4 +1,8 @@
-from typing import Literal
+import sys
+if sys.version_info >= (3, 8):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
 from PIL import ImageDraw, Image
 from cv2 import rectangle as np_rectangle
 import numpy as np
@@ -426,6 +430,3 @@ class BBoxNGon(BBox):
         """
         points = np.concatenate(list_of_bboxes).reshape(-1,2)
         return points[ConvexHull(points).vertices].ravel()
-
-
-from torch.utils.data import Dataset

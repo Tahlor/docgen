@@ -8,7 +8,7 @@ from docgen.docx_tools.docx_tools import *
 from docgen.utils import *
 from docgen.pdf_edit import PDF
 from docgen.rendertext.render_word import RenderWordFont
-from handwriting.data.saved_handwriting_dataset import SavedHandwriting
+from hwgen.data.saved_handwriting_dataset import SavedHandwriting
 from docgen.bbox import BBox
 from docgen.dataset_utils import coco_dataset
 from torch.utils.data import Dataset, DataLoader

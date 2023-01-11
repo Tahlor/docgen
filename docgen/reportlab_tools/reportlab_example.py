@@ -3,7 +3,12 @@ from reportlab.pdfbase import pdfform
 from reportlab.lib.colors import magenta, pink, blue, green
 from pathlib import Path
 import os
-from typing import Literal
+import sys
+
+if sys.version_info >= (3, 8):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
 
 folder = Path(os.path.dirname(__file__))
 

@@ -4,7 +4,7 @@ from docgen.pdf_edit import *
 from PIL import Image
 from textgen.unigram_dataset import Unigrams
 from docgen.rendertext.render_word import RenderWordFont
-from handwriting.data.saved_handwriting_dataset import SavedHandwriting
+from hwgen.data.saved_handwriting_dataset import SavedHandwriting
 import numpy as np
 from docgen import utils
 from docgen.utils import display
@@ -25,7 +25,7 @@ def main():
                                     conversion=lambda image: np.uint8(image * 255)
                                     )
     else:
-        from handwriting.data.basic_text_dataset import VOCABULARY
+        from hwgen.data.basic_text_dataset import VOCABULARY
         basic_text_dataset = Wikipedia(
             dataset=load_dataset("wikipedia", "20220301.en")["train"],
             vocabulary=set(VOCABULARY),  # set(self.model.netconverter.dict.keys())

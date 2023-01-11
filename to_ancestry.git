@@ -1,0 +1,47 @@
+#!/bin/bash
+
+find_replace () {
+find=$1
+replace=$2
+  find . -type f \( -name "*.py" -o -name "*.sh" -o -name "*.txt" -o -name "*.md" \) ! -path "*.git*" ! -path "*venv*" -exec sed -i "s|$findtarchibald@|tahlor@|g" {} \;
+
+}
+
+undo () {
+  # find dir -name '*.xml' -exec bash -c 't=$(stat -c %y "$0"); sed -i -e "s/text1/text2/g" "$0"; touch -d "$t" "$0"' {} \;  
+  find . -type f \( -name "*.py" -o -name "*.sh" -o -name "*.txt" -o -name "*.md" \) ! -path "*.git*" ! -path "*venv*" -exec bash -c 't=$(stat -c %y "$0"); sed -i -e "s|tarchibald@|tahlor@|g" "$0";  touch -d "$t" "$0"' {} \;
+  find . -type f \( -name "*.py" -o -name "*.sh" -o -name "*.txt" -o -name "*.md" \) ! -path "*.git*" ! -path "*venv*" -exec bash -c 't=$(stat -c %y "$0"); sed -i -e "s|.com/tarchibald|.com/tahlor@|g" "$0";  touch -d "$t" "$0"' {} \;
+  find . -type f \( -name "*.py" -o -name "*.sh" -o -name "*.txt" -o -name "*.md" \) ! -path "*.git*" ! -path "*venv*" -exec bash -c 't=$(stat -c %y "$0"); sed -i -e "s@github.ancestry.com@github.com@g" "$0";  touch -d "$t" "$0"' {} \;
+  sed -i 's/@ancestry/@master/g' requirements.txt
+}
+
+push_ancestry () {
+  path=${1:-.}
+  branch=${2:-master}
+
+  git pull origin master
+  git push origin master
+
+  git branch ancestry
+  git checkout ancestry
+
+  git checkout $branch .
+
+  # preserve times
+  find . -type f \( -name "*.py" -o -name "*.sh" -o -name "*.txt" -o -name "*.md" \) ! -path "*.git*" ! -path "*venv*" -exec bash -c 't=$(stat -c %y "$0"); sed -i -e "s|tahlor@|tarchibald@|g" "$0";  touch -d "$t" "$0"' {} \;
+  find . -type f \( -name "*.py" -o -name "*.sh" -o -name "*.txt" -o -name "*.md" \) ! -path "*.git*" ! -path "*venv*" -exec bash -c 't=$(stat -c %y "$0"); sed -i -e "s|.com/tahlor|.com/tarchibald@|g" "$0";  touch -d "$t" "$0"' {} \;
+  find . -type f \( -name "*.py" -o -name "*.sh" -o -name "*.txt" -o -name "*.md" \) ! -path "*.git*" ! -path "*venv*" -exec bash -c 't=$(stat -c %y "$0"); sed -i -e "s@github.com@github.ancestry.com@g" "$0";  touch -d "$t" "$0"' {} \;
+
+
+  #find . -type f \( -name "*.py" -o -name "*.sh" -o -name "*.txt" -o -name "*.md" \) ! -path "*.git*" ! -path "*venv*" -exec sed -i "s|tahlor@|tarchibald@|g" {} \;
+  #find . -type f \( -name "*.py" -o -name "*.sh" -o -name "*.txt" -o -name "*.md" \) ! -path "*.git*" ! -path "*venv*" -exec sed -i "s@github.com@github.ancestry.com@g" {} \;
+  sed -i 's/@master/@ancestry/g' requirements.txt
+
+  git commit --amend --no-edit
+
+  git push ancestry ancestry
+  git checkout master
+
+}
+
+push_ancestry $1 $2
