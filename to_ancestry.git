@@ -21,11 +21,10 @@ push_ancestry () {
   git pull origin master
   git push origin master
 
-  git checkout -b ancestry
-  git branch --set-upstream-to=ancestry ancestry
+  git branch ancestry
+  git checkout ancestry
 
   git checkout $branch .
-  git checkout -b ancestry
 
   # preserve times
   find . -type f \( -name "*.py" -o -name "*.sh" -o -name "*.txt" -o -name "*.md" \) ! -path "*.git*" ! -path "*venv*" -exec bash -c 't=$(stat -c %y "$0"); sed -i -e "s|tahlor@|tarchibald@|g" "$0";  touch -d "$t" "$0"' {} \;
