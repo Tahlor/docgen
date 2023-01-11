@@ -8,9 +8,9 @@ import numpy as np
 from docgen import utils
 from docgen.utils import display
 
-PATH= r"C:\Users\tarchibald\github\handwriting\handwriting\data\datasets\synth_hw\style_298_samples_0.npy"
-PDF_FILE = r"C:\Users\tarchibald\github\docx_localization\temp\TEMPLATE.pdf"
-UNIGRAMS = r"C:\Users\tarchibald\github\textgen\textgen\datasets\unigram_freq.csv"
+PATH= r"C:\Users\tahlor\github\handwriting\handwriting\data\datasets\synth_hw\style_298_samples_0.npy"
+PDF_FILE = r"C:\Users\tahlor\github\docx_localization\temp\TEMPLATE.pdf"
+UNIGRAMS = r"C:\Users\tahlor\github\textgen\textgen\datasets\unigram_freq.csv"
 
 def create_renderer():
     words = Unigrams(csv_file=UNIGRAMS)

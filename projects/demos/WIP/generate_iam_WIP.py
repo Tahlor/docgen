@@ -12,9 +12,9 @@ from docgen.image_composition.utils import new_textbox_given_background
 from textgen.wikipedia_dataset import Wikipedia
 from datasets import load_dataset
 
-PATH= r"C:\Users\tarchibald\github\handwriting\handwriting\data\datasets\synth_hw\style_298_samples_0.npy"
-PDF_FILE = r"C:\Users\tarchibald\github\docx_localization\temp\TEMPLATE.pdf"
-UNIGRAMS = r"C:\Users\tarchibald\github\textgen\textgen\datasets\unigram_freq.csv"
+PATH= r"C:\Users\tahlor\github\handwriting\handwriting\data\datasets\synth_hw\style_298_samples_0.npy"
+PDF_FILE = r"C:\Users\tahlor\github\docx_localization\temp\TEMPLATE.pdf"
+UNIGRAMS = r"C:\Users\tahlor\github\textgen\textgen\datasets\unigram_freq.csv"
 TESTING=False
 def main():
     if TESTING:

@@ -6,13 +6,13 @@ import numpy as np
 from docgen import utils
 from docgen.utils import display as disp
 
-PATH= r"C:\Users\tarchibald\github\handwriting\handwriting\data\datasets\synth_hw\style_298_samples_0.npy"
-PDF_FILE = r"C:\Users\tarchibald\github\docx_localization\temp\TEMPLATE.pdf"
-PDF_FILE = r"C:\Users\tarchibald\Downloads\EXAMPLES\french_census_0000.pdf"
+PATH= r"C:\Users\tahlor\github\handwriting\handwriting\data\datasets\synth_hw\style_298_samples_0.npy"
+PDF_FILE = r"C:\Users\tahlor\github\docx_localization\temp\TEMPLATE.pdf"
+PDF_FILE = r"C:\Users\tahlor\Downloads\EXAMPLES\french_census_0000.pdf"
 
-#PDF_FILE = r"C:\Users\tarchibald\github\docx_localization\temp\example.pdf"
+#PDF_FILE = r"C:\Users\tahlor\github\docx_localization\temp\example.pdf"
 
-UNIGRAMS = r"C:\Users\tarchibald\github\textgen\textgen\datasets\unigram_freq.csv"
+UNIGRAMS = r"C:\Users\tahlor\github\textgen\textgen\datasets\unigram_freq.csv"
 
 """ 
 COMPOSITE IMAGES: Paste word images -- take max of background/paste image, i.e. don't paste over gridlines
@@ -81,7 +81,7 @@ def main():
         images = pdf.replace_text_with_images(PDF_FILE, words, resize_words="height_only")
 
     utils.display(images[0])
-    images[0][0].save(r"C:\Users\tarchibald\Downloads\EXAMPLES\example.png")
+    images[0][0].save(r"C:\Users\tahlor\Downloads\EXAMPLES\example.png")
     pass
 
 if __name__ == '__main__':

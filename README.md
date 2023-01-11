@@ -27,36 +27,36 @@ Requires:
 
 * Python 3.8+
 
-* [**hwgen**](https://github.ancestry.com/tarchibald/hwgen): Uses transformers to generate synthetic handwriting
-  git+https://github.ancestry.com/tarchibald/hwgen
+* [**hwgen**](https://github.com/tahlor/hwgen): Uses transformers to generate synthetic handwriting
+  git+https://github.com/tahlor/hwgen
     
-* [**textgen**](https://github.ancestry.com/tarchibald/textgen): Package with natural language text to sample from (e.g. Wikipedia)
-  git+https://github.ancestry.com/tarchibald/textgen
+* [**textgen**](https://github.com/tahlor/textgen): Package with natural language text to sample from (e.g. Wikipedia)
+  git+https://github.com/tahlor/textgen
 
-* [**Faker**](https://github.ancestry.com/tarchibald/Faker): Package for generating fake user data (names, birthdates, addresses, etc.) for many different locales
-  git+https://github.ancestry.com/tarchibald/Faker
+* [**Faker**](https://github.com/tahlor/Faker): Package for generating fake user data (names, birthdates, addresses, etc.) for many different locales
+  git+https://github.com/tahlor/Faker
 
-* [**docdegrade**](https://github.ancestry.com/tarchibald/docdegrade): For artificially degrading synthetic documents
-  git+https://github.ancestry.com/tarchibald/docdegrade
+* [**docdegrade**](https://github.com/tahlor/docdegrade): For artificially degrading synthetic documents
+  git+https://github.com/tahlor/docdegrade
 
-* [**download_resources**](https://github.ancestry.com/tarchibald/download_resources): For downloading databases required by packages
-  git+https://github.ancestry.com/tarchibald/download_resources
+* [**download_resources**](https://github.com/tahlor/download_resources): For downloading databases required by packages
+  git+https://github.com/tahlor/download_resources
 
 # Install
     
-    pip3 install git+ssh://git@github.ancestry.com/tarchibald/docgen --upgrade
+    pip3 install git+ssh://git@github.com/tahlor/docgen --upgrade
 
 # Usage
 
 Example projects for `french_bmd`, `census`, etc. can be found under `docgen/projects`.
 
 # Submodules
-## [**content**](https://github.ancestry.com/Tahlor/docgen/tree/master/docgen/content)
+## [**content**](https://github.com/Tahlor/docgen/tree/master/docgen/content)
 
 Pulls data from Faker to generate fake tabular data.
 
 
-## [**docx2pdf**](https://github.ancestry.com/Tahlor/docgen/tree/master/docgen/docx2pdf)
+## [**docx2pdf**](https://github.com/Tahlor/docgen/tree/master/docgen/docx2pdf)
 Docx can be created programmatically from Python, and then converted into a PDF with localization information preserved.
 
 docx2pdf include in this module is based on the publicly available module, with small chanages to accommodate Linux / LibreOffice. 
@@ -64,14 +64,14 @@ docx2pdf include in this module is based on the publicly available module, with 
 The most important function is `fill_area_with_words`, which takes a bounding box, list of images, and a list of words and 
 fills the bounding box with the word images.
 
-## [**layoutgen**](https://github.ancestry.com/Tahlor/docgen/tree/master/docgen/layoutgen)
+## [**layoutgen**](https://github.com/Tahlor/docgen/tree/master/docgen/layoutgen)
 
 LayoutGen is pure Python to create something that resembles the French BMD documents (handwritten header, paragraphs, margins).
 
-## [**rendertext**](https://github.ancestry.com/Tahlor/docgen/tree/master/docgen/rendertext)
+## [**rendertext**](https://github.com/Tahlor/docgen/tree/master/docgen/rendertext)
 rendertext is a module that renders OCR fonts as images.
 
-## [**reportlab_tools**](https://github.ancestry.com/Tahlor/docgen/tree/master/docgen/reportlab_tools)
+## [**reportlab_tools**](https://github.com/Tahlor/docgen/tree/master/docgen/reportlab_tools)
 
 Reportlab is a module that is used to create PDF documents from Python.
 
@@ -79,5 +79,5 @@ Reportlab is a module that is used to create PDF documents from Python.
 
 # Rename Package 
     find . -type f -name "*" -exec sed -i "s@docgen@docgen2@g" {} \;
-    find . -type f -name "*" -exec sed -i "s@tarchibald@tarchibald@g" {} \;
-    find . -type f -name "*" -exec sed -i "s@github.ancestry.com@github.ancestry.com@g" {} \;
+    find . -type f -name "*" -exec sed -i "s@tahlor@tahlor@g" {} \;
+    find . -type f -name "*" -exec sed -i "s@github.com@github.com@g" {} \;
