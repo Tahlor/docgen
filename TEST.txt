@@ -1,4 +1,4 @@
-git+https://github.com/tahlor/hwgen@master
-git+https://github.com/tahlor/textgen@master
-git+https://github.com/tahlor/Faker@master
-git+https://github.com/tahlor/docdegrade@master
+git+https://github.com/tarchibald/hwgen@master
+git+https://github.com/tarchibald/textgen@master
+git+https://github.com/tarchibald/Faker@master
+git+https://github.com/tarchibald/docdegrade@master

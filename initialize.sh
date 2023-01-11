@@ -10,7 +10,7 @@ FILE="$(basename "${SCRIPT_DIR}")"
 echo $FILE
 
 PACKAGE_NAME=${1:-$FILE}
-GITHUB_USER=${2:-tahlor}
+GITHUB_USER=${2:-tarchibald}
 TOKEN=${3:-$GITHUB_TOKEN}
 EMAIL=${4:-taylor.archibald@byu.edu}
 PRIVATE=${5:-true}
