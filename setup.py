@@ -31,6 +31,7 @@ def get_requirements(path="requirements.txt"):
                 package = package.replace('@', '==').replace('.git', '')
             if package.startswith('-r'):
                 # recursive requirements
+<<<<<<< HEAD
                 packages.extend(get_requirements(package.split(' ')[1]))
             elif package.startswith('-e'):
                 # editable requirements
@@ -39,6 +40,16 @@ def get_requirements(path="requirements.txt"):
                 continue
             if "@" in package: # look for local copy
                 pre, post = package.split("@")
+=======
+                packages.extend(get_requirements(package.split(' ',1)[1]))
+            elif package.startswith('-e'):
+                # editable requirements
+                _, package = package.split(' ',1)[1]
+            elif package.startswith('--'):
+                continue
+            if "@" in package: # look for local copy
+                pre, post = package.split("@",1)
+>>>>>>> fbb0971896afb73dd831bb54099242e1c66f6295
                 local_path = "../" + pre.strip()
                 if os.path.exists(local_path):
                     warnings.warn(f"Using local version of {pre} ({local_path})")
@@ -61,7 +72,7 @@ setup(name='docgen',
       long_description= "" if not os.path.isfile("README.md") else read_md('README.md'),
       author='Taylor Archibald',
       author_email='taylor.archibald@byu.edu',
-      url='https://github.com/tahlor/docgen',
+      url='https://github.ancestry.com/tarchibald/docgen',
       setup_requires=['pytest-runner',],
       tests_require=['pytest','python-coveralls'],
       packages=['docgen'],
