@@ -10,7 +10,7 @@ FILE="$(basename "${SCRIPT_DIR}")"
 echo $FILE
 
 PACKAGE_NAME=${1:-$FILE}
-GITHUB_USER=${2:-tahlor}
+GITHUB_USER=${2:-tarchibald}
 TOKEN=${3:-$GITHUB_TOKEN}
 EMAIL=${4:-taylor.archibald@byu.edu}
 PRIVATE=${5:-true}
@@ -45,7 +45,7 @@ done
 # find and replace in the files
 find . -type f -name "*" -exec sed -i "s@pdfgen@${PACKAGE_NAME}@g" {} \;
 find . -type f -name "*" -exec sed -i "s|taylor.archibald@byu.edu|${EMAIL}|g" {} \;
-find . -type f -name "*" -exec sed -i "s@tahlor@${GITHUB_USER}@g" {} \;
+find . -type f -name "*" -exec sed -i "s@tarchibald@${GITHUB_USER}@g" {} \;
 find . -type f -name "*" -exec sed -i "s@version='0.0.1'
 
 echo $PACKAGE_NAME

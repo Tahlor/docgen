@@ -381,7 +381,7 @@ def load_and_draw_and_display(image_path, dataset_dict=None, format="OCR", categ
 }
 """
 
-def _test(path=r"C:\Users\tahlor\github\data\synthetic\FRENCH_BMD_LAYOUTv0.0.0.1\OCR.json"):
+def _test(path=r"C:\Users\tarchibald\github\data\synthetic\FRENCH_BMD_LAYOUTv0.0.0.1\OCR.json"):
     ocr_dataset_to_coco(ocr_dict=path, data_set_name="Handwritten Pages")
     #load_json(coco)
 
@@ -437,8 +437,8 @@ def split_into_categories():
 
 if __name__ == '__main__':
     root = Path("/home/taylor/anaconda3/DATASET_0021")
-    root = Path(r"C:\Users\tahlor\github\docgen\docgen\temp")
-    root = Path(r"C:\Users\tahlor\github\data\synthetic\FRENCH_BMD_LAYOUTv0.0.0.1")
+    root = Path(r"C:\Users\tarchibald\github\docgen\docgen\temp")
+    root = Path(r"C:\Users\tarchibald\github\data\synthetic\FRENCH_BMD_LAYOUTv0.0.0.1")
     path = root / "OCR.json"
     coco = root / "COCO.json"
     split_into_categories()

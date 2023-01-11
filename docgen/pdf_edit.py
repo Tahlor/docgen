@@ -25,8 +25,8 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("root")
 
-FONT_DIR = r"C:\Users\tahlor\github\brian\fslg_documents\data\fonts\fonts"
-CLEAR_FONTS = r"C:\Users\tahlor\github\brian\fslg_documents\data\fonts\clear_fonts.csv"
+FONT_DIR = r"C:\Users\tarchibald\github\brian\fslg_documents\data\fonts\fonts"
+CLEAR_FONTS = r"C:\Users\tarchibald\github\brian\fslg_documents\data\fonts\clear_fonts.csv"
 
 
 def delete_all_content(input_bytes_io,

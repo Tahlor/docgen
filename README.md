@@ -27,24 +27,24 @@ Requires:
 
 * Python 3.8+
 
-* [**hwgen**](https://github.ancestry.com/tahlor/hwgen): Uses transformers to generate synthetic handwriting
-  git+https://github.ancestry.com/tahlor/hwgen
+* [**hwgen**](https://github.ancestry.com/tarchibald/hwgen): Uses transformers to generate synthetic handwriting
+  git+https://github.ancestry.com/tarchibald/hwgen
     
-* [**textgen**](https://github.ancestry.com/tahlor/textgen): Package with natural language text to sample from (e.g. Wikipedia)
-  git+https://github.ancestry.com/tahlor/textgen
+* [**textgen**](https://github.ancestry.com/tarchibald/textgen): Package with natural language text to sample from (e.g. Wikipedia)
+  git+https://github.ancestry.com/tarchibald/textgen
 
-* [**Faker**](https://github.ancestry.com/tahlor/Faker): Package for generating fake user data (names, birthdates, addresses, etc.) for many different locales
-  git+https://github.ancestry.com/tahlor/Faker
+* [**Faker**](https://github.ancestry.com/tarchibald/Faker): Package for generating fake user data (names, birthdates, addresses, etc.) for many different locales
+  git+https://github.ancestry.com/tarchibald/Faker
 
-* [**docdegrade**](https://github.ancestry.com/tahlor/docdegrade): For artificially degrading synthetic documents
-  git+https://github.ancestry.com/tahlor/docdegrade
+* [**docdegrade**](https://github.ancestry.com/tarchibald/docdegrade): For artificially degrading synthetic documents
+  git+https://github.ancestry.com/tarchibald/docdegrade
 
-* [**download_resources**](https://github.ancestry.com/tahlor/download_resources): For downloading databases required by packages
-  git+https://github.ancestry.com/tahlor/download_resources
+* [**download_resources**](https://github.ancestry.com/tarchibald/download_resources): For downloading databases required by packages
+  git+https://github.ancestry.com/tarchibald/download_resources
 
 # Install
     
-    pip3 install git+ssh://git@github.ancestry.com/tahlor/docgen --upgrade
+    pip3 install git+ssh://git@github.ancestry.com/tarchibald/docgen --upgrade
 
 # Usage
 
@@ -79,5 +79,5 @@ Reportlab is a module that is used to create PDF documents from Python.
 
 # Rename Package 
     find . -type f -name "*" -exec sed -i "s@docgen@docgen2@g" {} \;
-    find . -type f -name "*" -exec sed -i "s@tahlor@tahlor@g" {} \;
+    find . -type f -name "*" -exec sed -i "s@tarchibald@tarchibald@g" {} \;
     find . -type f -name "*" -exec sed -i "s@github.ancestry.com@github.ancestry.com@g" {} \;

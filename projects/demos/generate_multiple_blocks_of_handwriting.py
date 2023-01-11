@@ -25,9 +25,9 @@ from docgen.pdf_edit import convert_to_ocr_format
 
 """
 
-PATH= r"C:\Users\tahlor\github\handwriting\handwriting\data\datasets\synth_hw\style_298_samples_0.npy"
-PDF_FILE = r"C:\Users\tahlor\github\docx_localization\temp\TEMPLATE.pdf"
-UNIGRAMS = r"C:\Users\tahlor\github\textgen\textgen\datasets\unigram_freq.csv"
+PATH= r"C:\Users\tarchibald\github\handwriting\handwriting\data\datasets\synth_hw\style_298_samples_0.npy"
+PDF_FILE = r"C:\Users\tarchibald\github\docx_localization\temp\TEMPLATE.pdf"
+UNIGRAMS = r"C:\Users\tarchibald\github\textgen\textgen\datasets\unigram_freq.csv"
 TESTING=False
 BATCH_SIZE = 12
 RESUME = False
