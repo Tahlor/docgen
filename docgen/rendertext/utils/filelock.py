@@ -1,4 +1,4 @@
-#from https://github.com/dmfrey/FileLock
+#from https://github.ancestry.com/dmfrey/FileLock
 #Copyright (c) 2009, Evan Fosmark
 #All rights reserved.
 #BSD-3-Clause License

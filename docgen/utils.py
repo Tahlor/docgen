@@ -182,7 +182,7 @@ if __name__ == '__main__':
     """
     
     """
-    # f = r"C:\Users\tarchibald\github\docx_localization\temp\french_census_0002\french_census_coco.json"
+    # f = r"C:\Users\tahlor\github\docx_localization\temp\french_census_0002\french_census_coco.json"
     # with Path(f).open() as ff:
     #     d = json.load(ff)
     # pass

@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 
 TESTING = True # TESTING = disables error handling
 
-#PATH = r"C:\Users\tarchibald\github\handwriting\handwriting\data\datasets\synth_hw\style_298_samples_0.npy"
+#PATH = r"C:\Users\tahlor\github\handwriting\handwriting\data\datasets\synth_hw\style_298_samples_0.npy"
 
 @handler(testing=TESTING, return_on_fail=(None, None))
 def make_one_image(i):
@@ -75,7 +75,7 @@ def main():
     COCO_PATH = OUTPUT / "COCO.json"
     HWR_FILES = Path("/home/taylor/anaconda3/datasets/HANDWRITING_WORD_DATA/")
     HWR_FILE = list(HWR_FILES.rglob("*.npy"))[0]
-    #UNIGRAMS = r"C:\Users\tarchibald\github\textgen\textgen\datasets\unigram_freq.csv"
+    #UNIGRAMS = r"C:\Users\tahlor\github\textgen\textgen\datasets\unigram_freq.csv"
     UNIGRAMS = r"../../textgen/textgen/datasets/unigram_freq.csv"
     WORKERS = max(multiprocessing.cpu_count() - 8,2)
     if TESTING:

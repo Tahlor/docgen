@@ -56,13 +56,13 @@ echo $TOKEN
 
 
 # initialize new git
-curl -u $GITHUB_USER:$TOKEN https://api.github.com/user/repos -d "{\"name\":\"$SAFE_PACKAGE_NAME\", \"private\": $PRIVATE}"
+curl -u $GITHUB_USER:$TOKEN https://api.github.ancestry.com/user/repos -d "{\"name\":\"$SAFE_PACKAGE_NAME\", \"private\": $PRIVATE}"
 
 git init
 git add .
 git commit -m "first commit"
 git branch -M master
-git remote add origin git@github.com:$GITHUB_USER/${SAFE_PACKAGE_NAME}.git
+git remote add origin git@github.ancestry.com:$GITHUB_USER/${SAFE_PACKAGE_NAME}.git
 git push -u origin master
 #git push --set-upstream origin master
 

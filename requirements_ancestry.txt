@@ -1,5 +1,5 @@
-git+ssh://git@github.com/tahlor/hwgen@master#egg=hwgen
-git+ssh://git@github.com/tahlor/textgen@master#egg=textgen
-git+ssh://git@github.com/tahlor/Faker@master#egg=Faker
-git+ssh://git@github.com/tahlor/docdegrade@master#egg=docdegrade
-git+ssh://git@github.com/tahlor/download_resources@master#egg=download_resources
+git+ssh://git@github.ancestry.com/tahlor/hwgen@master#egg=hwgen
+git+ssh://git@github.ancestry.com/tahlor/textgen@master#egg=textgen
+git+ssh://git@github.ancestry.com/tahlor/Faker@master#egg=Faker
+git+ssh://git@github.ancestry.com/tahlor/docdegrade@master#egg=docdegrade
+git+ssh://git@github.ancestry.com/tahlor/download_resources@master#egg=download_resources

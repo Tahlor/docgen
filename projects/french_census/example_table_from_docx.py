@@ -82,7 +82,7 @@ def main(root):
         pdf_temp = Path(f"./temp/{root}.pdf")
         img_path = f"./temp/{root}" + "{}.jpg"
 
-        pdf_temp = r"C:\Users\tarchibald\Downloads\EXAMPLES\french_census_0000.pdf"
+        pdf_temp = r"C:\Users\tahlor\Downloads\EXAMPLES\french_census_0000.pdf"
 
     if False:
         success = create_a_table(heading, data, column_headers, docx_temp)

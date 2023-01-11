@@ -1,5 +1,5 @@
 from docgen.dataset_utils import *
-OCR = r"C:\Users\tarchibald\github\data\synthetic\FRENCH_BMD_LAYOUTv0.0.0.1\OCR.json"
+OCR = r"C:\Users\tahlor\github\data\synthetic\FRENCH_BMD_LAYOUTv0.0.0.1\OCR.json"
 
 def ocr_to_coco():
     path=OCR

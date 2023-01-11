@@ -15,7 +15,7 @@ if os.path.exists('DIR'):
         cache_path = f.readline().strip()
 else:
     #cache_path = '../data/wiki_cache' #/Data6/davis/data_cache
-    cache_path = r"C:\Users\tarchibald\github\brian\fslg_documents\data\wiki_cache\\"
+    cache_path = r"C:\Users\tahlor\github\brian\fslg_documents\data\wiki_cache\\"
     ensure_dir(cache_path)
 
 #if 'myVar' in locals():

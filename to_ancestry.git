@@ -1,8 +1,12 @@
 #!/bin/bash
 
+<<<<<<< Updated upstream
 ### TO DO: update requirement file to install from right branch??
 
 git pull origin galois
+=======
+git push --set-upstream origin galois
+>>>>>>> Stashed changes
 
 # Switch to the ANCESTRY branch
 git checkout ancestry

@@ -40,7 +40,7 @@ generator = TableDataFromFaker(functions=functions,
 one_row = filter_to_one_row(list(generator.gen_content(1))[0])
 pdf_path = './temp/simple_form.pdf'
 img = './temp/simple_form.png'
-HWR_SAVED_DATASET_PATH = r"C:\Users\tarchibald\github\handwriting\handwriting\data\datasets\synth_hw"
+HWR_SAVED_DATASET_PATH = r"C:\Users\tahlor\github\handwriting\handwriting\data\datasets\synth_hw"
 
 localization = fg.create_new_form(zip(generator.header_names + generator.extra_headers, one_row), form_name=pdf_path)
 convert_pdf_to_img_paths(pdf_path, img)
