@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import os
 from setuptools import setup
+import warnings
 
 try:
     from pypandoc import convert
@@ -9,29 +10,53 @@ except ImportError:
     print("warning: pypandoc module not found, could not convert Markdown to RST")
     read_md = lambda f: open(f, 'r').read()
 
-def get_requirements():
+def get_requirements(path="requirements.txt"):
     """
     Return requirements as list.
 
     package1==1.0.3
     package2==0.0.5
     """
-    with open('requirements.txt') as f:
+    with open(path) as f:
         packages = []
         for line in f:
-            line = line.strip()
+            package = line.strip()
+
             # let's also ignore empty lines and comments
-            if not line or line.startswith('#'):
+            if not package or package.startswith('#'):
                 continue
-            if 'https://' in line:
-                tail = line.rsplit('/', 1)[1]
-                tail = tail.split('#')[0]
-                line = tail.replace('@', '==').replace('.git', '')
-            packages.append(line)
+            if 'https://' in package:
+                tail = package.rsplit('/', 1)[1]
+                tail = package.split('#')[0]
+                package = package.replace('@', '==').replace('.git', '')
+            if package.startswith('-r'):
+                # recursive requirements
+                packages.extend(get_requirements(package.split(' ',1)[1]))
+            elif package.startswith('-e'):
+                # editable requirements
+                _, package = package.split(' ',1)[1]
+            elif package.startswith('--'):
+                continue
+            if "@" in package: # look for local copy
+                pre, post = package.split("@",1)
+                local_path = "../" + pre.strip()
+                if os.path.exists(local_path):
+                    warnings.warn(f"Using local version of {pre} ({local_path})")
+                    package = local_path
+            if package.startswith('.') or package.startswith('/'):
+                package_name = os.path.basename(package)
+                package = f"{package_name} @ file://localhost" + os.path.abspath(package)
+
+            if "file://." in package: # this won't work with pip -r
+                pre, url = package.split("file://")
+                url = os.path.abspath(url)
+                package = pre + "file://localhost" + url
+            packages.append(package)
+    print(f"PACKAGES: {packages}")
     return packages
 
 setup(name='docgen',
-      version='0.0.36',
+      version='0.0.37',
       description='docgen',
       long_description= "" if not os.path.isfile("README.md") else read_md('README.md'),
       author='Taylor Archibald',

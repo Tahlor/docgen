@@ -1,5 +1,7 @@
 #!/bin/bash
 
+### TO DO: update requirement file to install from right branch??
+
 git pull origin galois
 
 # Switch to the ANCESTRY branch
