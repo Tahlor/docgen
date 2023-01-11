@@ -11,6 +11,10 @@ packaging
 gdown
 typing_extensions
 opencv-python
+scikit-image
+editdistance
+synthetic_text_gen @ git+https://github.com/herobd/synthetic_text_gen
+ocrodeg @ git+https://github.com/NVlabs/ocrodeg
 
 # IF REPO IS PUBLIC
 #hwgen @ https://github.ancestry.com/tarchibald@/hwgen/archive/master.zip
@@ -19,8 +23,9 @@ opencv-python
 #-e ../hwgen
 
 # As of now, now it will check if ../hwgen exists and pip install from there, BUT NOT with -e
-hwgen @ git+ssh://git@github.ancestry.com/tarchibald@/hwgen@ancestry#egg=hwgen
-textgen @ git+ssh://git@github.ancestry.com/tarchibald@/textgen@ancestry#egg=textgen
-Faker @ git+ssh://git@github.ancestry.com/tarchibald@/Faker@ancestry#egg=Faker
-docdegrade @ git+ssh://git@github.ancestry.com/tarchibald@/docdegrade@ancestry#egg=docdegrade
-download_resources @ git+ssh://git@github.ancestry.com/tarchibald@/download_resources@ancestry#egg=download_resources
+hwgen @ git+ssh://git@github.ancestry.com/tarchibald/hwgen@ancestry#egg=hwgen
+textgen @ git+ssh://git@github.ancestry.com/tarchibald/textgen@ancestry#egg=textgen
+Faker @ git+ssh://git@github.ancestry.com/tarchibald/Faker@ancestry#egg=Faker
+#Faker @ git+ssh://git@github.com/tahlor/Faker@master#egg=Faker
+#docdegrade @ git+ssh://git@github.ancestry.com/tarchibald/docdegrade@ancestry#egg=docdegrade
+download_resources @ git+ssh://git@github.ancestry.com/tarchibald/download_resources@ancestry#egg=download_resources
