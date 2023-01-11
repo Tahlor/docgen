@@ -12,6 +12,13 @@ gdown
 typing_extensions
 opencv-python
 
+# IF REPO IS PUBLIC
+#hwgen @ https://github.com/tahlor/hwgen/archive/master.zip
+
+# IF REPO IS LOCAL
+#-e ../hwgen
+
+# As of now, now it will check if ../hwgen exists and pip install from there, BUT NOT with -e
 hwgen @ git+ssh://git@github.com/tahlor/hwgen@master#egg=hwgen
 textgen @ git+ssh://git@github.com/tahlor/textgen@master#egg=textgen
 Faker @ git+ssh://git@github.com/tahlor/Faker@master#egg=Faker
