@@ -13,30 +13,19 @@ typing_extensions
 opencv-python
 scikit-image
 editdistance
-synthetic_text_gen @ git+https://github.com/herobd/synthetic_text_gen
+#git+https://github.com/herobd/synthetic_text_gen@master
+synthetictextgen @ https://github.com/tahlor/synthetic_text_gen/archive/galois.zip
 ocrodeg @ git+https://github.com/NVlabs/ocrodeg
 
 # IF REPO IS PUBLIC
-<<<<<<< HEAD
 #hwgen @ https://github.com/tahlor/hwgen/archive/master.zip
-=======
-#hwgen @ https://github.com/tahlor@/hwgen/archive/master.zip
->>>>>>> master
 
 # IF REPO IS LOCAL
 #-e ../hwgen
 
-# As of now, now it will check if ../hwgen exists and pip install from there, BUT NOT with -e
-<<<<<<< HEAD
+synthetictextgen @ https://github.com/tahlor/synthetic_text_gen/archive/galois.zip
 hwgen @ git+ssh://git@github.com/tahlor/hwgen@galois#egg=hwgen
 textgen @ git+ssh://git@github.com/tahlor/textgen@galois#egg=textgen
 Faker @ git+ssh://git@github.com/tahlor/Faker@galois#egg=Faker
 docdegrade @ git+ssh://git@github.com/tahlor/docdegrade@galois#egg=docdegrade
 download_resources @ git+ssh://git@github.com/tahlor/download_resources@galois#egg=download_resources
-=======
-hwgen @ git+ssh://git@github.com/tahlor@/hwgen@galois#egg=hwgen
-textgen @ git+ssh://git@github.com/tahlor@/textgen@galois#egg=textgen
-Faker @ git+ssh://git@github.com/tahlor@/Faker@galois#egg=Faker
-docdegrade @ git+ssh://git@github.com/tahlor@/docdegrade@galois#egg=docdegrade
-download_resources @ git+ssh://git@github.com/tahlor@/download_resources@galois#egg=download_resources
->>>>>>> master
