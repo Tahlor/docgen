@@ -11,6 +11,7 @@ credentials*
 *credentials*
 *.swp
 *deprecated/
+projects/*/*_output_*
 
 # C extensions
 *.so
