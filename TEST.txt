@@ -1,4 +1,0 @@
-git+https://github.ancestry.com/tarchibald/hwgen@master
-git+https://github.ancestry.com/tarchibald/textgen@master
-git+https://github.ancestry.com/tarchibald/Faker@master
-git+https://github.ancestry.com/tarchibald/docdegrade@master

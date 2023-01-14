@@ -2,6 +2,10 @@
 import os
 from setuptools import setup
 import warnings
+import argparse
+
+# https://stackoverflow.com/questions/18725137/how-to-obtain-arguments-passed-to-setup-py-from-pip-with-install-option
+
 
 try:
     from pypandoc import convert
@@ -9,6 +13,12 @@ try:
 except ImportError:
     print("warning: pypandoc module not found, could not convert Markdown to RST")
     read_md = lambda f: open(f, 'r').read()
+
+
+parser = argparse.ArgumentParser(add_help=False)
+parser.add_argument("--local", action="store_true", help="use local file")
+args, unknown = parser.parse_known_args()
+print(args)
 
 def get_requirements(path="requirements.txt"):
     """
@@ -31,25 +41,14 @@ def get_requirements(path="requirements.txt"):
                 package = package.replace('@', '==').replace('.git', '')
             if package.startswith('-r'):
                 # recursive requirements
-<<<<<<< HEAD
-                packages.extend(get_requirements(package.split(' ')[1]))
-            elif package.startswith('-e'):
-                # editable requirements
-                package = " ".join(package.split(' ')[1:])
-            elif package.startswith('--'):
-                continue
-            if "@" in package: # look for local copy
-                pre, post = package.split("@")
-=======
                 packages.extend(get_requirements(package.split(' ',1)[1]))
             elif package.startswith('-e'):
                 # editable requirements
                 _, package = package.split(' ',1)[1]
             elif package.startswith('--'):
                 continue
-            if "@" in package: # look for local copy
+            if "@" in package and args.local: # look for local copy
                 pre, post = package.split("@",1)
->>>>>>> fbb0971896afb73dd831bb54099242e1c66f6295
                 local_path = "../" + pre.strip()
                 if os.path.exists(local_path):
                     warnings.warn(f"Using local version of {pre} ({local_path})")
@@ -67,12 +66,12 @@ def get_requirements(path="requirements.txt"):
     return packages
 
 setup(name='docgen',
-      version='0.0.37',
+      version='0.0.50',
       description='docgen',
       long_description= "" if not os.path.isfile("README.md") else read_md('README.md'),
       author='Taylor Archibald',
       author_email='taylor.archibald@byu.edu',
-      url='https://github.ancestry.com/tarchibald/docgen',
+      url='https://github.com/tahlor/docgen',
       setup_requires=['pytest-runner',],
       tests_require=['pytest','python-coveralls'],
       packages=['docgen'],
