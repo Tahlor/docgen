@@ -11,6 +11,10 @@ packaging
 gdown
 typing_extensions
 opencv-python
+scikit-image
+editdistance
+synthetic_text_gen @ git+https://github.com/herobd/synthetic_text_gen
+ocrodeg @ git+https://github.com/NVlabs/ocrodeg
 
 # IF REPO IS PUBLIC
 #hwgen @ https://github.ancestry.com/tarchibald@/hwgen/archive/master.zip

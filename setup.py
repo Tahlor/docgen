@@ -2,6 +2,10 @@
 import os
 from setuptools import setup
 import warnings
+import argparse
+
+# https://stackoverflow.com/questions/18725137/how-to-obtain-arguments-passed-to-setup-py-from-pip-with-install-option
+
 
 try:
     from pypandoc import convert
@@ -9,6 +13,12 @@ try:
 except ImportError:
     print("warning: pypandoc module not found, could not convert Markdown to RST")
     read_md = lambda f: open(f, 'r').read()
+
+
+parser = argparse.ArgumentParser(add_help=False)
+parser.add_argument("--local", action="store_true", help="use local file")
+args, unknown = parser.parse_known_args()
+print(args)
 
 def get_requirements(path="requirements.txt"):
     """
@@ -37,7 +47,7 @@ def get_requirements(path="requirements.txt"):
                 _, package = package.split(' ',1)[1]
             elif package.startswith('--'):
                 continue
-            if "@" in package: # look for local copy
+            if "@" in package and args.local: # look for local copy
                 pre, post = package.split("@",1)
                 local_path = "../" + pre.strip()
                 if os.path.exists(local_path):
@@ -56,7 +66,7 @@ def get_requirements(path="requirements.txt"):
     return packages
 
 setup(name='docgen',
-      version='0.0.46',
+      version='0.0.49',
       description='docgen',
       long_description= "" if not os.path.isfile("README.md") else read_md('README.md'),
       author='Taylor Archibald',
