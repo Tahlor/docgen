@@ -14,10 +14,39 @@ from docgen.utils import file_incrementer, handler
 import multiprocessing
 from docgen.layoutgen.layout_dataset import LayoutDataset
 from torch.utils.data import DataLoader
+import site
 
 TESTING = True # TESTING = disables error handling
 
-#PATH = r"C:\Users\tarchibald\github\handwriting\handwriting\data\datasets\synth_hw\style_298_samples_0.npy"
+RESOURCES = Path(site.getsitepackages()[0]) / "docgen/resources"
+ROOT = Path(__file__).parent.absolute()
+
+def parser():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", type=str, default=None)
+    parser.add_argument("--ocr_path", type=str, default=None)
+    parser.add_argument("--coco_path", type=str, default=None)
+    parser.add_argument("--hwr_files", type=str, default="sample")
+    parser.add_argument("--unigrams", type=str, default=None)
+    parser.add_argument("--overwrite", type=bool, default=False)
+    parser.add_argument("--batch_size", type=int, default=4)
+    parser.add_argument("--count", type=int, default=100)
+    parser.add_argument("--wikipedia", action="store_true")
+
+    args = parser.parse_args()
+
+    if args.output is None:
+        args.output = ROOT / "french_bmd_output"
+    if not args.overwrite and args.output.exists():
+        args.output = file_incrementer(args.output, create_dir=True)
+    elif not args.output.exists():
+        args.output.mkdir(parents=True, exist_ok=True)
+    if not args.ocr_path:
+        args.ocr_path = args.output / "OCR.json"
+    if not args.coco_path:
+        args.coco_path = args.output / "COCO.json"
+    return args
 
 @handler(testing=TESTING, return_on_fail=(None, None))
 def make_one_image(i):
@@ -35,8 +64,9 @@ def draw_layout(layout, image):
     image = lg.draw_doc_boxes(layout, image)
     image.show()
 
-def main():
-    global OUTPUT, render_text_pair, lg
+
+def main(opts):
+    global render_text_pair, lg
     page_margins = MarginGenerator()
     page_header_margins = MarginGenerator(top_margin=(-.02, .02),
                                           bottom_margin=(-.02, .02),
@@ -67,25 +97,11 @@ def main():
                          pages_per_image=(1, 3)
                          )
 
-    DATASETS = Path("/home/taylor/anaconda3/datasets/")
-    OUTPUT = DATASETS / "FRENCH_BMD_LAYOUTv2"
-    OUTPUT = file_incrementer(OUTPUT, create_dir=True)
-    OUTPUT.mkdir(exist_ok=True, parents=True)
-    OCR_PATH = OUTPUT / "OCR.json"
-    COCO_PATH = OUTPUT / "COCO.json"
-    HWR_FILES = Path("/home/taylor/anaconda3/datasets/HANDWRITING_WORD_DATA/")
-    HWR_FILE = list(HWR_FILES.rglob("*.npy"))[0]
-    #UNIGRAMS = r"C:\Users\tarchibald\github\textgen\textgen\datasets\unigram_freq.csv"
-    UNIGRAMS = r"../../textgen/textgen/datasets/unigram_freq.csv"
     WORKERS = max(multiprocessing.cpu_count() - 8,2)
     if TESTING:
         WORKERS = 0
-    NUMBER_OF_DOCUMENTS = 100
-    BATCH_SIZE = 4
 
-    if False:
-        words = Unigrams(csv_file=UNIGRAMS, newline_freq=0)
-    else:
+    if opts.wikipedia:
         from datasets import load_dataset
         from textgen.wikipedia_dataset import Wikipedia, WikipediaWord
         from hwgen.data.basic_text_dataset import VOCABULARY, ALPHA_VOCABULARY
@@ -101,11 +117,13 @@ def main():
             ),
             process_fn=lambda x:x.lower()
         )
+    else:
+        words = Unigrams(csv_file=opts.unigrams, newline_freq=0)
 
     def create_dataset():
         renderer = SavedHandwritingRandomAuthor(
             format="PIL",
-            dataset_root=HWR_FILES,
+            dataset_root=opts.hwr_files,
             #dataset_path=HWR_FILE,
             random_ok=True,
             conversion=None,  # lambda image: np.uint8(image*255)
@@ -115,10 +133,10 @@ def main():
         render_text_pair = RenderImageTextPair(renderer, words)
         layout_dataset = LayoutDataset(layout_generator=lg,
                                 render_text_pairs=render_text_pair,
-                                output_path=OUTPUT,
-                                lenth=NUMBER_OF_DOCUMENTS)
+                                output_path=opts.output,
+                                lenth=opts.count)
         layout_loader = DataLoader(layout_dataset,
-                                   batch_size=BATCH_SIZE,
+                                   batch_size=opts.batch_size,
                                    collate_fn=layout_dataset.collate_fn,
                                    num_workers=WORKERS)
         return layout_loader
@@ -130,16 +148,17 @@ def main():
         for name,data in batch:
             ocr_dataset[name] = data
 
-    save_json(OCR_PATH, ocr_dataset)
+    save_json(opts.ocr_path, ocr_dataset)
     coco = ocr_dataset_to_coco(ocr_dataset, "French BMD Layout - v0.0.0.3 pre-Alpha")
-    save_json(COCO_PATH, coco)
+    save_json(opts.coco_path, coco)
 
     ## TEST LAST IMAGE - OCR AND COCO DATASET + BBOXS
     name, d = next(iter(ocr_dataset.items()))
     save_path = OUTPUT / f"{name}.jpg"
-    load_and_draw_and_display(save_path, OCR_PATH)
-    load_and_draw_and_display(save_path, COCO_PATH, format="COCO")
+    load_and_draw_and_display(save_path, opts.ocr_path)
+    load_and_draw_and_display(save_path, opts.coco_path, format="COCO")
 
 
 if __name__ == "__main__":
-    main()
+    opts = parser()
+    main(opts)
