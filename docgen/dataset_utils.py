@@ -1,3 +1,5 @@
+import inspect
+import matplotlib.pyplot as plt
 from tqdm import tqdm
 import time
 import numpy as np
@@ -10,6 +12,12 @@ from PIL import Image
 from docgen.utils import *
 from docgen.bbox import BBox, BBoxNGon
 import logging
+import sys
+if sys.version_info >= (3, 8):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
+
 logger = logging.getLogger(__name__)
 
 
@@ -21,14 +29,37 @@ DEFAULT_COCO_INFO = {'description': 'Synthetic Forms - Pre-alpha Release',
             'date_created': datetime.datetime.now().strftime("%D")}
 
 
+class JSONEncoder(json.JSONEncoder):
+
+    def default(self, obj):
+        if hasattr(obj, "toJSON"):
+            return super().encode(obj.toJSON())
+        # elif hasattr(obj, "__dict__"):
+        #     d = dict(
+        #         (key, value)
+        #         for key, value in inspect.getmembers(obj)
+        #         if not key.startswith("__")
+        #         and not inspect.isabstract(value)
+        #         and not inspect.isbuiltin(value)
+        #         and not inspect.isfunction(value)
+        #         and not inspect.isgenerator(value)
+        #         and not inspect.isgeneratorfunction(value)
+        #         and not inspect.ismethod(value)
+        #         and not inspect.ismethoddescriptor(value)
+        #         and not inspect.isroutine(value)
+        #     )
+        #     return super().encode(d)
+        return super().encode(obj)
+
 def load_json(path):
     with Path(path).open() as ff:
         ocr = json.load(ff)
     return ocr
 
 def save_json(path, arr):
+    # use JSONEncoder to save BBox object
     with Path(path).open("w") as ff:
-        json.dump(arr, ff)
+        json.dump(arr, ff, cls=JSONEncoder)
 
 def numpy_to_json(path):
     arr = np.load(path, allow_pickle=True)
@@ -49,7 +80,34 @@ def delete_extra_images(path):
             #time.sleep(0.01)
 
 
-def ocr_dataset_to_coco(ocr_dict, data_set_name="Synthetic Forms - Pre-alpha Release"):
+def ocr_dataset_to_coco(ocr_dict,
+                        data_set_name="Synthetic Forms - Pre-alpha Release",
+                        bbox_format_input:Literal['XYXY', 'XYWH']="XYXY",
+                        use_fine_grained_paragraph_categories:bool=True,
+                        exclude_cats=None):
+    """
+
+    Args:
+        ocr_dict:
+        data_set_name:
+        bbox_format_input:
+        use_fine_grained_paragraph_categories (bool): instead of outputting broad "paragraph" category,
+                                will output "paragraph","margin_note","page_title","paragraph_note", etc.
+
+    Returns:
+
+    """
+    to_list = lambda x: x.tolist() if isinstance(x, np.ndarray) else x
+
+    if bbox_format_input.upper() == "XYXY":
+        to_xyxy = lambda x: x
+        to_xywh = lambda x: BBox._get_XYWH(x)
+    elif bbox_format_input.upper() == "XYWH":
+        to_xyxy = lambda x: BBox._get_XYXY(x)
+        to_xywh = lambda x: x
+    else:
+        raise Exception("bbox_format_input must be 'XYXY' or 'XYWH'")
+
     if isinstance(ocr_dict, Path) or isinstance(ocr_dict, str):
         ocr_dict = load_json(ocr_dict)
 
@@ -63,46 +121,85 @@ def ocr_dataset_to_coco(ocr_dict, data_set_name="Synthetic Forms - Pre-alpha Rel
         "line": {'supercategory': 'line', 'id': 3, 'name': 'line'},
         "word": {'supercategory': 'word', 'id': 4, 'name': 'word'},
     }
+    hierarchy = ["section", "paragraph", "line", "word"]
 
     category_id_counter = max([item["id"] for key, item in categories.items()])
 
-    def process_item(dict, img_idx, category):
+    def process_item(ocr_dict, img_idx, category, segmentation=[]):
         nonlocal ann_id_counter, categories, category_id_counter
+
+        # add new categories as found
         if not category in categories:
-            categories[category] = {
-                {'supercategory': category, 'id': category_id_counter, 'name': category},
-            }
+            categories[category] = {'supercategory': category, 'id': category_id_counter, 'name': category}
             category_id_counter += 1
 
         category_id = categories[category]["id"]
+        bbox = to_xywh(ocr_dict["bbox"])
 
         item = {
             "image_id": img_idx,
-            "bbox": BBox._to_XYWH(dict["bbox"]),
+            "bbox": to_list(bbox),
             "category": f"{category}",
             "id": ann_id_counter,
             "category_id": category_id,
-            # "segmentation":
+            "segmentation": to_list(segmentation),
         }
 
         ann_id_counter += 1
-        if "text" in dict:
-            item["text"] = dict["text"]
+        if "text" in ocr_dict:
+            item["text"] = ocr_dict["text"]
         return item
 
-    for img_id, dict in ocr_dict.items():
-        image = {"id":img_id, "file_name": img_id+".jpg", "height": dict["height"], "width": dict["width"]}
+    def nested(img_id, dict, keyword):
+        level = hierarchy.index(keyword)
+        segmentation_list = []
+        items = dict[keyword+"s"] # NOTE: the OCR dataset is hierarchal, uses a list of paragraphs
+        category = keyword
+
+        if use_fine_grained_paragraph_categories and "category" in dict:
+            category = dict["category"]
+
+        if items:
+            for item in items:
+                if level < len(hierarchy) - 1:
+                    child_seg, child_seg_list = nested(img_id, item, hierarchy[level+1])
+                else:
+                    child_seg = child_seg_list = [BBox.box_4pt(to_xyxy(item["bbox"]))]
+
+
+                annotation = process_item(item, img_id, category=category, segmentation=child_seg_list)
+
+                # Including every word massively inflates the COCO dataset size
+                if not (exclude_cats and category in exclude_cats):
+                    annotations.append(annotation)
+
+                if not child_seg is None:
+                    segmentation_list.append(to_list(child_seg))
+
+            segmentation = BBoxNGon.get_convex_hull(segmentation_list)
+        else:
+            segmentation = None # dict["bbox"]
+        return segmentation, segmentation_list
+
+    # Loop through each image/document and associated OCR information
+    for img_id, sub_dict in ocr_dict.items():
+        image = {"id":img_id, "file_name": img_id+".jpg", "height": sub_dict["height"], "width": sub_dict["width"]}
         images.append(image)
 
-        for section in dict["sections"]:
-            for paragraph in section["paragraphs"]:
-                for line in paragraph["lines"]:
-                    for word in line["words"]:
-                        annotations.append(process_item(word, img_id, "word"))
-                    annotations.append(process_item(line, img_id, "line"))
-                annotations.append(process_item(paragraph, img_id, "paragraph"))
-            category = section["category"] if "category" in section.keys() else "section"
-            annotations.append(process_item(section, img_id, category))
+        # for section in dict["sections"]:
+        #     for paragraph in section["paragraphs"]:
+        #         for line in paragraph["lines"]:
+        #             seg_words = []
+        #             for word in line["words"]:
+        #                 annotations.append(process_item(word, img_id, "word"))
+        #                 seg_words.append(word["bbox"])
+        #             seg_lines.append(BBoxNGon.get_convex_hull(seg_words))
+        #
+        #             annotations.append(process_item(line, img_id, "line"))
+        #         annotations.append(process_item(paragraph, img_id, "paragraph"))
+        #     category = section["category"] if "category" in section.keys() else "section"
+        #     annotations.append(process_item(section, img_id, category))
+        nested(img_id, sub_dict, hierarchy[0])
 
     info = DEFAULT_COCO_INFO.copy()
     info["description"] = data_set_name
@@ -187,7 +284,7 @@ def coco_dataset(dict_list, output_path):
 
                 for box in image_dict["localization"][key]:
                     annotations.append({"image_id": id,
-                                        "bbox":BBox._to_XYWH(box["bbox"]),
+                                        "bbox":BBox._get_XYWH(box["bbox"]),
                                         "text":box["text"],
                                         "category": f"{localization_level}",
                                         "id": ann_id_counter,
@@ -218,25 +315,92 @@ def change_key_recursive(reference_dict, my_dict, old_key, new_key):
             change_key_recursive(ref_val, my_dict[i], old_key, new_key)
 
 def draw_boxes_paragraph(ocr_format, background_img, origin=[0,0]):
-    for paragraph in ocr_format["paragraphs"]:
-        for line in paragraph["lines"]:
-            for word in line["words"]:
-                BBox._draw_box(BBox._offset_origin(word["bbox"], *origin), background_img)
-            BBox._draw_box(BBox._offset_origin(line["bbox"], *origin), background_img)
-        BBox._draw_box(BBox._offset_origin(paragraph["bbox"], *origin), background_img)
+    if ocr_format["paragraphs"]:
+        for paragraph in ocr_format["paragraphs"]:
+            for line in paragraph["lines"]:
+                for word in line["words"]:
+                    BBox._draw_box(BBox._offset_origin(word["bbox"], *origin), background_img)
+                BBox._draw_box(BBox._offset_origin(line["bbox"], *origin), background_img)
+            BBox._draw_box(BBox._offset_origin(paragraph["bbox"], *origin), background_img)
+    return background_img
 
 def draw_boxes_sections(ocr_format, background_img):
     for section in ocr_format["sections"]:
         draw_boxes_paragraph(section, background_img)
-
-def draw_boxes_sections_COCO(coco_format, category_id=None, background_img=None):
-    if background_img is None and "file_name" in coco_format:
-        background_img = Image.open(coco_format['file_name'])
-    for annotation in coco_format["annotations"]:
-        if category_id is None or annotation["category_id"] == category_id:
-            BBox._draw_box(BBox("ul", annotation["bbox"],format="XYWH"),
-                           background_img)
     return background_img
+
+
+colors = {"paragraph": "red",
+          "line": "green",
+          "word": "blue",
+          "paragraph_note": "yellow",
+          "page_title": "orange",
+          "page": "purple",
+          "section": "pink",
+          "margin_note": "gray",}
+
+# Just so we can visualize the box, in case it overlaps
+enlarge_box_by_pixels = {"page_title":2,
+                         "paragraph_note":2,
+                            "margin_note":2}
+
+
+def draw_boxes_sections_COCO(coco_format,
+                             category_id=None,
+                             background_img=None,
+                             draw_boxes=True,
+                             draw_segmentations=False,
+                             image_root=".",
+                             image_id="0000000"):
+    """
+
+    Args:
+        coco_format:
+        category_id (int / str): 4 OR "paragraph"
+        background_img:
+        draw_boxes:
+        draw_segmentations:
+        image_root:
+        image_id:
+
+    Returns:
+
+    """
+    # Allow string category_id
+    if isinstance(category_id, str):
+        category_id = {k['name']:k["id"] for k in coco_format["categories"]}[category_id]
+
+    if background_img is None:
+        images = {img["id"]:img for img in coco_format["images"]}
+        if "file_name" in images[image_id]:
+            filename = images[image_id]["file_name"]
+            background_img = Image.open(Path(image_root) / filename)
+
+            if background_img.mode == "L":
+                background_img = background_img.convert("RGB")
+
+    if image_id is None:
+        img = next(iter(coco_format["images"]))
+        image_id = img["id"]
+        background_img = Image.new("RGB", (img['width'], img['height']), color="white")
+
+
+    for annotation in coco_format["annotations"]:
+        if image_id == annotation["image_id"]:
+            if category_id is None or annotation["category_id"] == category_id:
+                color = colors[annotation["category"]] if annotation["category"] in colors else "random"
+                if draw_boxes:
+                    bbox = BBox("ul", annotation["bbox"], format="XYWH")
+                    if annotation["category"] in enlarge_box_by_pixels:
+                        bbox.enlarge_box(enlarge_box_by_pixels[annotation["category"]])
+                    bbox.draw_box(background_img, color=color)
+                if draw_segmentations:
+                    for segment in annotation["segmentation"]:
+                        BBox.draw_segmentation(segment, background_img, color=color)
+    return background_img
+
+
+#def draw_segmentation
 
 def fix(path):
     """ Resave a JSON file with correct keys
@@ -268,7 +432,25 @@ def fix2(path):
     return dict
 
 
-def load_and_draw_and_display(image_path, dataset_dict=None, format="OCR", category_id=None):
+def load_and_draw_and_display(image_path,
+                              dataset_dict=None,
+                              format:Literal['OCR', 'COCO']="OCR",
+                              category_id=None,
+                              draw_segmentations=False,
+                              draw_boxes=True,
+                              save_path=None,):
+    """ Will load a COCO/OCR format and display the image with the bounding boxes
+
+    Args:
+        image_path: path to image
+        dataset_dict (dict): COCO/OCR format for the entire dataset, img_id will be extracted from image_path
+        format: OCR/COCO
+        category_id (str): paragraphs, lines, etc.
+                           LayoutGen: "paragraph","margin_note","page_title","paragraph_note"
+
+    Returns:
+
+    """
     if dataset_dict is None:
         dataset_dict = load_json(Path(image_path).parent / "OCR.json")
     elif isinstance(dataset_dict, (str, Path)):
@@ -276,14 +458,28 @@ def load_and_draw_and_display(image_path, dataset_dict=None, format="OCR", categ
 
     idx = Path(image_path).stem
     img = Image.open(image_path)
+
+    # Allow for color boxes
+    if img.mode == "L":
+        img = img.convert("RGB")
+
     if format == "OCR":
-        draw_boxes_sections(dataset_dict[idx], img)
+        out = draw_boxes_sections(dataset_dict[idx], img)
     elif format == "COCO":
-        draw_boxes_sections_COCO(dataset_dict["annotations"][idx], category_id, img)
+        out = draw_boxes_sections_COCO(dataset_dict,
+                                       category_id,
+                                       background_img=img,
+                                       image_id=idx,
+                                       draw_boxes=draw_boxes,
+                                       draw_segmentations=draw_segmentations,
+                                       )
+    else:
+        raise ValueError(f"format {format} not supported")
 
     #display(img)
-    img.show()
-
+    out.show()
+    if save_path is not None:
+        out.save(save_path)
 
 """ OCR DATASET
 {
@@ -398,9 +594,9 @@ def fix_dict_key(coco_dict):
 
 def fix_coords(coco_dict):
     for i, ann in enumerate(coco_dict["annotations"]):
-        ann["bbox"] = BBox("ul", ann["bbox"]).to_XYWH()
+        ann["bbox"] = BBox("ul", ann["bbox"]).get_XYWH()
 
-def add_ids_to_json():
+def add_ids_to_json(coco):
     coco_dict = load_json(coco)
     categories = {
         "section": {'supercategory': 'section', 'id': 1, 'name': 'section'},
@@ -422,7 +618,7 @@ def add_ids_to_json():
     # coco_dict["categories"] = list(categories.values())
     save_json((coco.parent / (coco.stem + "2")).with_suffix(coco.suffix), coco_dict)
 
-def split_into_categories():
+def split_into_categories(coco):
     import copy
     coco_dict = load_json(coco)
     for cat in coco_dict["categories"]:
@@ -435,11 +631,21 @@ def split_into_categories():
         save_json((coco.parent / f"{coco.stem}_{name}").with_suffix(coco.suffix), d)
 
 
-if __name__ == '__main__':
+def test_coco():
+    path = r'C:\Users\tarchibald\github\docgen/projects/french_bmd/french_bmd_output_0002/ocr.pkl'
+    coco = ocr_dataset_to_coco(ocr_dict=path, data_set_name="french_bmd")
+    p = draw_boxes_sections_COCO(coco, category_id="paragraph", draw_boxes=False, draw_segmentations=True, image_root=Path(path).parent)
+    p.show()
+    pass
+
+def test():
     root = Path("/home/taylor/anaconda3/DATASET_0021")
     root = Path(r"C:\Users\tarchibald\github\docgen\docgen\temp")
     root = Path(r"C:\Users\tarchibald\github\data\synthetic\FRENCH_BMD_LAYOUTv0.0.0.1")
     path = root / "OCR.json"
     coco = root / "COCO.json"
-    split_into_categories()
+    split_into_categories(coco)
     #add_ids_to_json()
+
+if __name__ == '__main__':
+    test_coco()

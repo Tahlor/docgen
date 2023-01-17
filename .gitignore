@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+french_bmd/french_bmd_output*
+
+
 docgen/rendertext/data
 data/
 temp/

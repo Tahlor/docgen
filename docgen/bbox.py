@@ -15,70 +15,141 @@ try:
 except:
     warnings.warn("Install scipy to enable calculation of ConvexHull for maximal BBox")
 
+ravel = lambda sublist: sublist.ravel() if isinstance(sublist, np.ndarray) else sublist
+
 class BBox:
     def __init__(self,
                  origin: Literal['ul', 'll'],
                  bbox,
-                 line_number=None,
+                 line_index=None,
                  line_word_index=None,
                  text=None,
                  parent_obj_bbox=None,
                  paragraph_index=None,
                  force_int=True,
+                 img=None,
                  format:Literal['XYXY', 'XYWH']="XYXY"):
         """
-
+        Store BBox as TUPLE to prevent accidental modification
+        
         Args:
             origin: ul = upper left, ll = lower left; lower left not IMPLEMENTED
             bbox: ALWAYS x1,y1,x2,y2; assume origin is top left, x1,y1 is top left and smaller than x2,y2
-            line_number (int): if generated in a box, the index of the word within the line
+            line_index (int): if generated in a box, the index of the word within the line
             line_word_index (int): if generated in a box, the line number
             text (str): the word (optional)
             parent_obj_bbox (x1,y1,x2,y2):
             paragraph_index (int): if multiple paragraphs, the index of the paragraph
             force_int (bool): if True, will force all values to be integers
-            format:Literal['XYXY', 'XYWH']="XYXY"): by default, bbox is in X1,Y1,X2,Y2 format, but can be XYWH (COCO)
+            format:Literal['XYXY', 'XYWH']="XYXY"): by default, bbox is in X1,Y1,X2,Y2 format;
+                            ALL INTERNAL OPERATIONS WORK ON XYXY
+                            You can input/output to XYWH (COCO)
         """
         #self.origin = self.set_origin(origin)
+        self.format = format
         if origin=="ll":
             raise NotImplementedError
-
-        if isinstance(bbox, tuple):
-            self.bbox = list(bbox)
-        elif isinstance(bbox, list):
-            self.bbox = bbox
-        elif isinstance(bbox, np.ndarray):
-            self.bbox = bbox.tolist()
-        else:
-            raise NotImplementedError("Unexpected type for BBox")
-        if format == "XYWH":
-            self.bbox[2] += self.bbox[0]
-            self.bbox[3] += self.bbox[1]
-
         self.force_int = self._force_int if force_int else lambda *x:x
-        self.line_number = line_number
+        self.img = img
+
+        # BBox is always stored as XYXY, update if format is XYWH
+        self.update_bbox(bbox, self.format)
+        self.line_number = line_index
         self.line_word_index = line_word_index
         self.text = text
         self.parent_bbox = parent_obj_bbox
         self.paragraph_index = paragraph_index
 
+    def update_bbox(self, bbox, format:Literal['XYXY', 'XYWH']="XYXY"):
+        if isinstance(bbox, tuple):
+            self._bbox = bbox # list(bbox)
+        elif isinstance(bbox, list):
+            self._bbox = tuple(bbox)
+        elif isinstance(bbox, np.ndarray):
+            self._bbox = bbox.tolist()
+        elif isinstance(bbox, BBox):
+            self._bbox = bbox.get_bbox()
+        else:
+            raise NotImplementedError("Unexpected type for BBox")
+        if format == "XYWH":
+            self._bbox = tuple(self._XYWH_to_XYXY(self._bbox))
+
+        self._bbox = self.force_int(self._bbox)
+
+    def expand_rightward(self, pixels):
+        self._bbox = self.force_int((self._bbox[0], self._bbox[1], self._bbox[2]+pixels, self._bbox[3]))
+        return self.bbox
+
+    def expand_downward(self, pixels):
+        self._bbox = self.force_int((self._bbox[0], self._bbox[1], self._bbox[2], self._bbox[3]+pixels))
+        return self.bbox
+
     @staticmethod
-    def _to_XYWH(box):
+    def _XYWH_to_XYXY(bbox):
+        return bbox[0], bbox[1], bbox[0]+bbox[2], bbox[1]+bbox[3]
+
+    @staticmethod
+    def _get_XYWH(box):
         return box[0], box[1], BBox._get_width(box), BBox._get_height(box)
 
-    def to_XYWH(self):
-        return self._to_XYWH(self.bbox)
+    def get_XYWH(self):
+        return self._get_XYWH(self._bbox)
+
+    @staticmethod
+    def _get_XYXY(box):
+        return box[0], box[1], box[0] + box[2], box[1] + box[3]
+
+    def get_XYXY(self):
+        """ Returns the bbox in XYXY format - ALL internal operations are done in XYXY format"""
+        return self._bbox
+
+    def get_bbox(self):
+        if self.format == "XYWH":
+            return self.get_XYWH()
+        else:
+            return self._bbox
+
+    @property
+    def bbox(self):
+        return self.get_bbox()
+
+    @property
+    def bbox_xyxy(self):
+        return self._bbox
 
     @staticmethod
     def _force_int(bbox):
         if isinstance(bbox,BBox):
-            bbox.bbox = BBox._force_int(bbox.bbox)
-            return bbox.bbox
+            bbox._bbox = BBox._force_int(bbox._bbox)
+            return bbox._bbox
         else:
-            return [int(x) for x in bbox]
+            return tuple(int(x) for x in bbox)
+
+    @staticmethod
+    def _enlarge(bbox, pixels, format:Literal['XYXY', 'XYWH']="XYXY"):
+        if format == "XYWH":
+            bbox = BBox._XYWH_to_XYXY(bbox)
+        bbox = bbox[0]-pixels, bbox[1]-pixels, bbox[2]+pixels, bbox[3]+pixels
+        if format == "XYWH":
+            bbox = BBox._get_XYWH(bbox)
+        return bbox
+    def enlarge_box(self, pixels):
+        """ Enlarge the box by the number of pixels in each direction
+            This is useful for drawing boxes around text
+        Args:
+            pixels:
+
+        Returns:
+
+        """
+        self._bbox = self.force_int(self._enlarge(self._bbox, pixels, format="XYXY"))
+        return self.bbox
 
     def change_origin(self, origin: Literal['ul', 'll'], height):
-        """ If the self.parent_bbox is defined, user can use it to compute height.
+        """ Change from UL (upper-left) to LL (lower-left) or LL to UL coordinate origin
+            Must know the height of the coordinate-plane naturally
+
+            If the self.parent_bbox is defined, user can use it to compute height.
             Not automatic, since it's not clear what origin was used to define the parent_bbox.
             Obviously won't adjust the parent bbox, since it would need the height of its parent.
 
@@ -94,7 +165,7 @@ class BBox:
             self.invert_y_axis(height)
 
             # Swap y-coords; only works on boxes
-            self.bbox = [self.bbox[0],self.bbox[3],self.bbox[2],self.bbox[1]]
+            self._bbox = self._bbox[0],self._bbox[3],self._bbox[2],self._bbox[1]
 
     def invert_y_axis(self, height=None):
         """ This only inverts the y scale
@@ -106,53 +177,53 @@ class BBox:
 
         """
         height = self.height if height is None else height
-        self.bbox = self.force_int([self.bbox[0], height-self.bbox[1], self.bbox[2], height-self.bbox[3]])
-        return self.bbox
+        self._bbox = self.force_int((self._bbox[0], height-self._bbox[1], self._bbox[2], height-self._bbox[3]))
+        return self._bbox
 
     @staticmethod
     def _swap_bbox_axes(bbox):
         return bbox[1], bbox[0], bbox[3], bbox[2],
 
     def swap_bbox_axes(self):
-        return self._swap_bbox_axes(self.bbox)
+        return self._swap_bbox_axes(self._bbox)
 
     def offset_origin(self, offset_x=0, offset_y=0):
-        self.bbox = self.force_int(
-            self._offset_origin(self.bbox, offset_x=offset_x, offset_y=offset_y)
+        self._bbox = self.force_int(
+            self._offset_origin(self._bbox, offset_x=offset_x, offset_y=offset_y)
         )
         return self
 
     @staticmethod
     def _offset_origin(bbox, offset_x=0, offset_y=0):
-        new_bbox = bbox.copy()
+        new_bbox = list(bbox).copy()
         new_bbox[0], new_bbox[2] = new_bbox[0] + offset_x, new_bbox[2] + offset_x
         new_bbox[1], new_bbox[3] = new_bbox[1] + offset_y, new_bbox[3] + offset_y
         return new_bbox
 
     def get_dim(self):
-        return self._get_dim(self.bbox)
+        return self._get_dim(self._bbox)
 
     def __getitem__(self, idx):
-        return self.bbox[idx]
+        return self._bbox[idx]
 
     def __len__(self):
-        return len(self.bbox)
+        return len(self._bbox)
 
     @property
     def x1(self):
-        return self.bbox[0]
+        return self._bbox[0]
 
     @property
     def y1(self):
-        return self.bbox[1]
+        return self._bbox[1]
 
     @property
     def x2(self):
-        return self.bbox[2]
+        return self._bbox[2]
 
     @property
     def y2(self):
-        return self.bbox[3]
+        return self._bbox[3]
 
     @staticmethod
     def _get_dim(bbox):
@@ -172,11 +243,11 @@ class BBox:
 
     @property
     def height(self):
-        return self._get_height(self.bbox)
+        return self._get_height(self._bbox)
 
     @property
     def width(self):
-        return self._get_width(self.bbox)
+        return self._get_width(self._bbox)
 
     @staticmethod
     def draw_box_numpy(bbox, img, color="red", thickness=None, fill=None):
@@ -194,11 +265,59 @@ class BBox:
         img1.rectangle(bbox, outline=color, fill=fill)
         return img
 
-    def draw_box(self, img, color="red"):
-        BBox._draw_box(self.bbox, img, color)
+    @staticmethod
+    def draw_segmentation_numpy(segmentation, img, *args, **kwargs):
+        img = Image.fromarray(img)
+        img = BBox.draw_segmentation_pil(segmentation, img, *args, **kwargs)
+        return np.array(img)
 
     @staticmethod
-    def _draw_box(bbox, img, color="red"):
+    def draw_segmentation(segmentation, img, buffer=5, *args, **kwargs):
+        """
+        Args:
+            seg: List of points, x1,y1,x2,y2,...
+            img:
+            color:
+
+        Returns:
+
+        """
+
+        seg2d = np.array(segmentation).reshape(-1, 2)
+        if seg2d.shape[0] > 2: # add an end point to close polygon if more than 2 points
+            seg2d = np.concatenate([seg2d, seg2d[0:1]], axis=0)
+
+        if isinstance(img, np.ndarray):
+            img = BBox.draw_segmentation_numpy(seg2d, img, *args, **kwargs)
+        else:
+            if img is None:
+                background_size = (np.max(seg2d, axis=0) + buffer).astype(int).to_list()
+                img = Image.new("RGB", background_size, color="white")
+            img = BBox.draw_segmentation_pil(seg2d, img, *args, **kwargs)
+
+        return img
+    @staticmethod
+    def draw_segmentation_pil(seg2d, img, color="green", *args, **kwargs):
+        if color=="random":
+            color = tuple(np.random.randint(0, 255, 3).tolist())
+
+        xy = seg2d.reshape(-1).tolist()
+
+        if len(xy)<=4: # segmentations should always be in XYXY format; if len=4, then it's just x1,y1,x2,y2, so draw a box
+            BBox._draw_box(xy[:4], img, color, *args, **kwargs)
+        else:
+            img1 = ImageDraw.Draw(img)
+            img1.polygon(xy, outline=color, *args, **kwargs)
+        return img
+
+    def draw_box(self, img, color="red"):
+        BBox._draw_box(self._bbox, img, color)
+
+    @staticmethod
+    def _draw_box(bbox, img, color="red", *args, **kwargs):
+        if color=="random":
+            color = tuple(np.random.randint(0, 255, 3).tolist())
+
         if isinstance(img, np.ndarray):
             return BBox.draw_box_numpy(bbox, img, color)
         elif isinstance(img, (Image.Image, ImageDraw.ImageDraw)):
@@ -227,6 +346,10 @@ class BBox:
             return BBox.bbox_norm(bbox, image.shape[1], image.shape[0])
         else:
             raise NotImplementedError
+
+    @staticmethod
+    def box_4pt(bbox):
+        return [bbox[0], bbox[1], bbox[2], bbox[1], bbox[2], bbox[3], bbox[0], bbox[3]]
 
     @staticmethod
     def img_and_pos_to_bbox(img, pos):
@@ -268,7 +391,17 @@ class BBox:
         return self.bbox[i]
 
     def __repr__(self):
+        return self.bbox.__repr__()
+
+    def __str__(self):
         return str(self.bbox)
+
+    # def __getstate__(self):
+    #     return self.bbox
+    # THIS WILL BREAK PICKLING
+
+    def toJSON(self):
+        return self.bbox
 
     @staticmethod
     def get_maximal_box(list_of_bboxes):
@@ -285,17 +418,31 @@ class BBox:
         int(np.max(boxes[:, 2])),
         int(np.max(boxes[:, 3]))]
 
+    @staticmethod
+    def _top_left_format(bbox):
+        return min(bbox[0], bbox[2]),min(bbox[1], bbox[3]),max(bbox[0], bbox[2]), max(bbox[1], bbox[3])
+
+    @staticmethod
+    def _top_left_format_vector(bbox_array):
+        bbox_array = np.random.randint(0,10, [10,4])
+        bbox_array = np.array(bbox_array).reshape(-1,4)
+        output_array = np.zeros_like(bbox_array)
+        output_array[:,[0,2]] = np.min(bbox_array[:,[0,2]], axis=1)
+        output_array[:,[1,3]] = np.max(bbox_array[:,[1,3]], axis=1)
+        return output_array
+
+
 class BBoxNGon(BBox):
     def __init__(self,
                  origin: Literal['ul', 'll'],
                  bbox,
-                 line_number=None,
+                 line_index=None,
                  line_word_index=None,
                  text=None,
                  parent_obj_bbox=None,
                  paragraph_index=None,
                  force_int=True,
-                 format="XYXY"):
+                 ):
         """
 
         Args:
@@ -304,21 +451,22 @@ class BBoxNGon(BBox):
         Returns:
 
         """
-        super().__init__(origin, bbox, line_number, line_word_index, text, parent_obj_bbox, paragraph_index, force_int)
-        self.bbox = np.asarray(bbox)
+        super().__init__(origin, bbox, line_index, line_word_index, text, parent_obj_bbox, paragraph_index, force_int)
+        self.format = "XYXY"
+        self._bbox = np.asarray(bbox)
 
         # even number of points
-        assert self.bbox.size % 2 == 0
+        assert self._bbox.size % 2 == 0
 
     def y_coords(self):
-        return self.bbox[1::2]
+        return self._bbox[1::2]
 
     @staticmethod
     def _y_coords(bbox_array):
         return bbox_array[1::2]
 
     def x_coords(self):
-        return self.bbox[::2]
+        return self._bbox[::2]
 
     @staticmethod
     def _x_coords(bbox_array):
@@ -326,10 +474,10 @@ class BBoxNGon(BBox):
 
     def invert_y_axis(self, height=None):
         height = self.height if height is None else height
-        coords = self.bbox.reshape(-1, 2)
+        coords = self._bbox.reshape(-1, 2)
         coords[:,1] = height - coords[:,1]
-        self.bbox = coords.ravel()
-        return self.bbox
+        self._bbox = coords.ravel()
+        return self._bbox
 
     @staticmethod
     def _swap_bbox_axes(bbox):
@@ -343,10 +491,10 @@ class BBoxNGon(BBox):
         return bboxarray
 
     def __getitem__(self, idx):
-        return self.bbox[idx]
+        return self._bbox[idx]
 
     def __len__(self):
-        return len(self.bbox)
+        return len(self._bbox)
 
     @staticmethod
     def _get_dim(bbox):
@@ -368,11 +516,11 @@ class BBoxNGon(BBox):
 
     @property
     def height(self):
-        return self._get_height(self.bbox)
+        return self._get_height(self._bbox)
 
     @property
     def width(self):
-        return self._get_width(self.bbox)
+        return self._get_width(self._bbox)
 
     @staticmethod
     def draw_box_numpy(bbox, img, color="red", thickness=None, fill=None):
@@ -405,28 +553,115 @@ class BBoxNGon(BBox):
 
     get_maximal_box = get_maximal_box_orthogonal
 
-    @staticmethod
-    def get_convex_hull(list_of_bboxes):
-        """ Convex hull
-
-        Args:
-            list_of_bboxes:
-
-        Returns:
-
-        """
-        points = np.concatenate(list_of_bboxes).reshape(-1,2)
-        return points[ConvexHull(points).vertices].ravel()
 
     @staticmethod
     def get_convex_hull(list_of_bboxes):
         """ Convex hull
 
         Args:
-            list_of_bboxes:
+            list_of_bboxes: supposed to be a list of 4-tuples/list
 
         Returns:
 
         """
-        points = np.concatenate(list_of_bboxes).reshape(-1,2)
-        return points[ConvexHull(points).vertices].ravel()
+        points = np.array(flatten(list_of_bboxes)).reshape(-1,2)
+        if len(points)>2:
+            return points[ConvexHull(points).vertices].ravel()
+        else:
+            return points.ravel()
+
+        # x = points[ConvexHull(points).vertices].reshape([-1,2])
+        # plt.scatter(x[:,0],x[:,1]); plt.show()
+
+    @staticmethod
+    def concave_hull(bbox_xyxy_list):
+        """ Returns the polygon of the bbox
+        Get polygon from a list of XYXY bbox coordinates
+            Assumes boxes are added from left to right
+
+
+        Args:
+            bbox:
+            all_points:
+
+        Returns:
+
+        """
+        coords = np.array(flatten(bbox_xyxy_list)).reshape(-1, 2)
+        centroid = np.mean(coords, axis=0)
+        sorted_coords = coords[np.argsort(np.arctan2(coords[:, 1] - centroid[1], coords[:, 0] - centroid[0])), :]
+        return sorted_coords
+
+def flatten(mylist):
+    """Flatten a list of lists OR arrays
+
+    Args:
+        mylist:
+
+    Returns:
+
+    """
+    return [item for sublist in mylist for item in ravel(sublist)]
+
+
+def flatten2(list_of_bboxes):
+    """ DEPRECATED
+
+    Args:
+        list_of_bboxes:
+
+    Returns:
+
+    """
+    if isinstance(list_of_bboxes, np.ndarray):
+        points = list_of_bboxes.ravel()
+    elif isinstance(list_of_bboxes, list):
+        if isinstance(list_of_bboxes[0], list): # flatten nested list
+            points = np.array([item for sublist in list_of_bboxes for item in sublist])
+        elif not isinstance(list_of_bboxes[0], np.ndarray): # list of ints
+             points = np.array(list_of_bboxes).ravel()
+        else:
+            # List of ndarrays
+            try:
+                points = np.concatenate(list_of_bboxes)
+            except:
+                points = np.array([item for sublist in list_of_bboxes for item in ravel(sublist)])
+    else:
+        raise Exception("Unknown list type")
+    return points
+
+def flatten_test():
+    # test flatten with list of lists and list of arrays
+    a = [[1,2,3],[4,5]]
+    b = [np.array([1,2]),np.array([3,4,5,6])]
+    c = [[1,2,3,4],np.array([5,6])]
+    d = [np.array([[1,2],[3,4]]),np.array([5,6]),[7,8,9]]
+    e = [np.random.rand(100,5),np.random.rand(500).tolist()]
+
+    for example in [a, b, c, d]:
+        x = flatten(example)
+        y = flatten2(example)
+        assert np.all(x == y)
+        print(x, y)
+
+    # time which function is faster
+    import timeit
+    print(timeit.timeit("flatten(a); flatten(b); flatten(c); flatten(d); flatten(e)", setup="from __main__ import flatten, a,b,c,d,e", number=10000))
+    print(timeit.timeit("flatten2(a); flatten2(b); flatten2(c); flatten2(d); flatten2(e)", setup="from __main__ import flatten2, a,b,c,d,e", number=10000))
+
+def concave_hull_test():
+    import matplotlib.pyplot as plt
+
+    # 8 points defining rectangle from 0,0 to 10,10
+    flattened_bbox_list_of_clockwise_points = [0, 0, 5, 0, 10, 0, 10, 5, 10, 10, 5, 10, 0, 10, 0, 5]
+    shuffled = np.array(flattened_bbox_list_of_clockwise_points).reshape(-1, 2)
+    np.random.shuffle(shuffled)
+
+    m = BBoxNGon.concave_hull(shuffled)
+    plt.plot(m[:, 0], m[:, 1])
+    plt.plot(shuffled[:, 0], shuffled[:, 1])
+    plt.show()
+
+
+if __name__=='__main__':
+    concave_hull_test()

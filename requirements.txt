@@ -30,3 +30,4 @@ textgen @ git+ssh://git@github.ancestry.com/tarchibald/textgen@master#egg=textge
 Faker @ git+ssh://git@github.ancestry.com/tarchibald/Faker@master#egg=Faker
 docdegrade @ git+ssh://git@github.ancestry.com/tarchibald/docdegrade@master#egg=docdegrade
 download_resources @ git+ssh://git@github.ancestry.com/tarchibald/download_resources@master#egg=download_resources
+

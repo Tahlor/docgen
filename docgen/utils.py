@@ -15,37 +15,46 @@ try:
     from win32com.client.gencache import is_zip
 except:
     warnings.warn("Failed to import win32com")
+from hwgen.data.utils import display, shape, ndim, show, shape
 
-def shape(item):
-    """
-    Args:
-        item:
-    Returns:
-        x, y
-    """
-    if isinstance(item, np.ndarray):
-        return item.shape[1],item.shape[0]
-    elif isinstance(item, PpmImagePlugin.PpmImageFile) or isinstance(item, Image.Image):
-        return item.size
+# def shape(item):
+#     """
+#     Args:
+#         item:
+#     Returns:
+#         x, y
+#     """
+#     if isinstance(item, np.ndarray):
+#         return item.shape[1],item.shape[0]
+#     elif isinstance(item, PpmImagePlugin.PpmImageFile) or isinstance(item, Image.Image):
+#         return item.size
 
-def ndim(item):
-    return len(shape(item))
-
-def channels(item):
-    if isinstance(item, np.ndarray):
-        if ndim(item)==2:
-            return 1
-        elif ndim(item)==3:
-            return item.shape[-1]
-        else:
-            raise Exception
-    elif isinstance(item, PpmImagePlugin.PpmImageFile):
-        if item.mode == "L":
-            return 1
-        elif item.mode == "RGB":
-            return 3
-        else:
-            raise Exception
+# def ndim(item):
+#     return len(shape(item))
+#
+# def channels(item):
+#     if isinstance(item, np.ndarray):
+#         if ndim(item)==2:
+#             return 1
+#         elif ndim(item)==3:
+#             return item.shape[-1]
+#         else:
+#             raise Exception
+#     elif isinstance(item, PpmImagePlugin.PpmImageFile):
+#         if item.mode == "L":
+#             return 1
+#         elif item.mode == "RGB":
+#             return 3
+#         else:
+#             raise Exception
+# def display(img, cmap="gray"):
+#     if isinstance(img,list):
+#         img = img[0]
+#     fig, ax = plt.subplots(figsize=(10, 10))
+#     if channels(img)==3:
+#         cmap = None
+#     ax.imshow(img, cmap=cmap)
+#     plt.show()
 
 def _resize(im, nR=None, nC=None, square=True):
     """ no interpolation, don't use
@@ -77,18 +86,6 @@ def _resize(im, nR=None, nC=None, square=True):
     return [[ im[int(nR0 * r / nR)][int(nC0 * c / nC)] for c in range(nC)] for r in range(nR)]
 
 
-def display(img, cmap="gray"):
-    # if isinstance(img, PpmImagePlugin.PpmImageFile) or isinstance(img, Image.Image):
-    #     img.show()
-    # else:
-    #
-    if isinstance(img,list):
-        img = img[0]
-    fig, ax = plt.subplots(figsize=(10, 10))
-    if channels(img)==3:
-        cmap = None
-    ax.imshow(img, cmap=cmap)
-    plt.show()
 
 
 def flip(prob=.5):
