@@ -9,6 +9,7 @@ from pip._internal import main
 # BUT it won't install it with the `pip install -e ` command.
 # https://stackoverflow.com/questions/18725137/how-to-obtain-arguments-passed-to-setup-py-from-pip-with-install-option
 
+#print(find_packages())
 
 try:
     from pypandoc import convert
@@ -83,7 +84,7 @@ def get_requirements(path="requirements.txt"):
     return packages
 
 setup(name='docgen',
-      version='0.0.54',
+      version='0.0.55',
       description='docgen',
       long_description= "" if not os.path.isfile("README.md") else read_md('README.md'),
       author='Taylor Archibald',
