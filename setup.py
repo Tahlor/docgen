@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import os
-from setuptools import setup #, develop
+from setuptools import setup, find_packages #, develop
 import warnings
 import argparse
 from pip._internal import main
@@ -83,7 +83,7 @@ def get_requirements(path="requirements.txt"):
     return packages
 
 setup(name='docgen',
-      version='0.0.53',
+      version='0.0.54',
       description='docgen',
       long_description= "" if not os.path.isfile("README.md") else read_md('README.md'),
       author='Taylor Archibald',
@@ -91,7 +91,7 @@ setup(name='docgen',
       url='https://github.com/tahlor/docgen',
       setup_requires=['pytest-runner',],
       tests_require=['pytest','python-coveralls'],
-      packages=['docgen'],
+      packages=[*find_packages()],
       install_requires=[
           get_requirements(),
       ],
