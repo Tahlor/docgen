@@ -24,7 +24,7 @@ ocrodeg @ git+https://github.com/NVlabs/ocrodeg
 # IF REPO IS LOCAL
 #-e ../hwgen
 
-synthetictextgen @ git+https://github.com/tahlor/synthetic_text_gen@galois#egg=synthetictextgen
+synthetictextgen @ git+ssh://git@github.com/tahlor/synthetic_text_gen@galois#egg=synthetictextgen
 hwgen @ git+ssh://git@github.com/tahlor/hwgen@galois#egg=hwgen
 textgen @ git+ssh://git@github.com/tahlor/textgen@galois#egg=textgen
 Faker @ git+ssh://git@github.com/tahlor/Faker@galois#egg=Faker
