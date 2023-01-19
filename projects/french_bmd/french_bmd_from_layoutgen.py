@@ -27,7 +27,8 @@ def parser():
     parser.add_argument("--output", type=str, default=None)
     parser.add_argument("--ocr_path", type=str, default=None)
     parser.add_argument("--coco_path", type=str, default=None)
-    parser.add_argument("--hwr_files", type=str, default="sample")
+    parser.add_argument("--hwr_files", type=str, default="sample", help="sample, eng_latest, or path to folder with npy\
+                                                                    files of pregenerated handwriting, 1 per author style")
     parser.add_argument("--unigrams", type=str, default=None)
     parser.add_argument("--overwrite", type=bool, default=False)
     parser.add_argument("--batch_size", type=int, default=4)

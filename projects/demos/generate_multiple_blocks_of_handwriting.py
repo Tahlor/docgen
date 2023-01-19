@@ -5,7 +5,7 @@ from docgen.pdf_edit import *
 from PIL import Image
 from textgen.unigram_dataset import Unigrams
 from docgen.rendertext.render_word import RenderWordFont
-from hwgen.data.saved_handwriting_dataset import SavedHandwriting
+from hwgen.data.saved_handwriting_dataset import SavedHandwriting, SavedHandwritingRandomAuthor
 import numpy as np
 from docgen import utils
 from docgen.utils import display
@@ -17,48 +17,121 @@ from torch.utils.data import DataLoader
 from docgen.utils import file_incrementer
 from docgen.dataset_utils import load_json, draw_boxes_sections
 from docgen.pdf_edit import convert_to_ocr_format
+import argparse
+from pathlib import Path
+import shlex
 
 """ TODO
 * truncate words
 * bad lining up
 * last line cutoff
-
 """
 
-PATH= r"C:\Users\tarchibald\github\handwriting\handwriting\data\datasets\synth_hw\style_298_samples_0.npy"
-PDF_FILE = r"C:\Users\tarchibald\github\docx_localization\temp\TEMPLATE.pdf"
-UNIGRAMS = r"C:\Users\tarchibald\github\textgen\textgen\datasets\unigram_freq.csv"
-TESTING=False
-BATCH_SIZE = 12
-RESUME = False
-FREQ = 5000
+ROOT = Path(__file__).parent.absolute()
 
-def main():
+def create_parser():
+    global OUTPUT_DICT, OUTPUT_OCR_JSON
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--saved_handwriting_data",
+                        action="store", const="sample", nargs="?",
+                        help="Path to saved handwriting, 'sample' or 'eng_latest' to pull from S3")
+    parser.add_argument("--saved_handwriting_model",
+                        action="store", const="IAM", nargs="?",
+                        help="Path to HWR model, OR 'CVL' or 'IAM'",
+                        )
+    parser.add_argument("--unigrams", action="store_const", const=True,
+                        help="Path to unigram frequency file, if 'true' it will be downloaded from S3")
+    parser.add_argument("--wikipedia", action="store", const="20220301.en", nargs="?",
+                        help="20220301.en, 20220301.fr, etc.")
+    parser.add_argument("--testing", action="store_true", help="Flag for testing mode")
+    parser.add_argument("--batch_size", default=12, type=int, help="Batch size for processing")
+    parser.add_argument("--resume", action="store_const", const=-1, help="Resuming from previous process")
+    parser.add_argument("--freq", default=5000, type=int, help="Frequency of processing")
+    parser.add_argument("--output_folder", default=ROOT / "output", help="Path to output directory")
+    parser.add_argument("--output_json", default=None, help="Path to output directory")
+    parser.add_argument("--incrementer", default=True, help="Increment output folder")
+    return parser
+
+def process_args(args):
+    global OUTPUT_DICT
+    print(args)
+    args.output_folder = Path(args.output_folder)
+    args.last_idx = 0
+    if args.saved_handwriting_model is None and args.saved_handwriting_data is None:
+        raise ValueError("Must specify either saved handwriting model or saved handwriting data")
+    if args.unigrams is None and args.wikipedia is None:
+        warnings.warn("No text dataset specified, will try to use unigrams CSV resource (pulled from S3)")
+    if args.output_json is None:
+        args.output_json = args.output_folder / "output.json"
+
+    if args.resume:
+        OUTPUT_DICT = load_json(args.output_json)
+
+        if args.resume == -1:
+            args.last_idx = max(int(x) for x in OUTPUT_DICT) + 1
+        if args.incrementer:
+            warnings.warn("Incrementer is on, but resuming from previous process")
+            args.output_folder = file_incrementer(args.output_folder)
+    else:
+        if args.incrementer:
+            args.output_folder = file_incrementer(args.output_folder)
+
+        OUTPUT_DICT = {}
+
+
+    return args
+
+
+def main(args=None):
     global IDX
     from hwgen.data.basic_text_dataset import VOCABULARY
+    parser = create_parser()
+    if args is None:
+        args = parser.parse_args()
+    else:
+        args = parser.parse_args(shlex.split(args))
+    args = process_args(args)
+    IDX = args.last_idx
     print(f"Vocab: {VOCABULARY}")
-    basic_text_dataset = Wikipedia(
-        dataset=load_dataset("wikipedia", "20220301.en")["train"],
-        vocabulary=set(VOCABULARY),  # set(self.model.netconverter.dict.keys())
-        exclude_chars="0123456789()+*;#:!/",
-        min_sentence_length=60,
-        max_sentence_length=64
-    )
-    renderer = HWGenerator(next_text_dataset=basic_text_dataset,
-                           batch_size=BATCH_SIZE,
+
+    if args.wikipedia is not None:
+        basic_text_dataset = Wikipedia(
+            dataset=load_dataset("wikipedia", args.wikipedia)["train"],
+            vocabulary=set(VOCABULARY),  # set(self.model.netconverter.dict.keys())
+            exclude_chars="0123456789()+*;#:!/",
+            min_sentence_length=60,
+            max_sentence_length=64
+        )
+    elif args.unigrams is not None:
+        basic_text_dataset = Unigrams(
+            csv_file=args.unigrams,
+        )
+
+    if args.saved_handwriting_model is not None:
+        renderer = HWGenerator(next_text_dataset=basic_text_dataset,
+                           batch_size=args.batch_size,
                            model="CVL")
+    elif args.saved_handwriting_data is not None:
+        renderer = SavedHandwritingRandomAuthor(
+            format="PIL",
+            dataset_root=args.saved_handwriting_data,
+            random_ok=True,
+            conversion=None,  # lambda image: np.uint8(image*255)
+            font_size=32
+        )
+
 
     dataloader = DataLoader(basic_text_dataset,
-                            batch_size=BATCH_SIZE,
+                            batch_size=args.batch_size,
                             collate_fn=basic_text_dataset.collate_fn)
     remainder = 1000
     for i, d in enumerate(dataloader):
         process_batch(d, renderer)
-        ii = i * BATCH_SIZE
-        if remainder > ii % FREQ:
-            with OUTPUT_OCR_JSON.open("w") as ff:
+        ii = i * args.batch_size
+        if remainder > ii % args.freq:
+            with args.output_json.open("w") as ff:
                 json.dump(OUTPUT_DICT, ff)
-        remainder = ii % FREQ
+        remainder = ii % args.freq
 
 def try_try_again(func):
     def try_again(*args,**kwargs):
@@ -81,8 +154,7 @@ def try_try_again(func):
 
 @try_try_again
 def process_batch(d, renderer):
-    global IDX
-    global OUTPUT_DICT
+    global OUTPUT_DICT, IDX, OUTPUT_PATH
 
     def new_paragraph(shp, offset=None, random_sample=False):
         if not random_sample:
@@ -157,24 +229,18 @@ def process_batch(d, renderer):
 
 
 if __name__ == "__main__":
-    root = Path("./temp/IAM")
-    root = Path("/home/taylor/anaconda3/DATASET/")
-    RESUME = False
-    if RESUME:
-        OUTPUT_PATH = root = Path("/home/taylor/anaconda3/DATASET/")
-        OUTPUT_OCR_JSON = OUTPUT_PATH / "OCR.json"
-        OUTPUT_DICT = load_json(OUTPUT_OCR_JSON)
-        IDX = max(int(x) for x in OUTPUT_DICT)+1
-        print(f"STARTING AT {IDX}")
-
-    else:
-        OUTPUT_PATH = file_incrementer(root, create_dir=True)
-        OUTPUT_OCR_JSON = OUTPUT_PATH / "OCR.json"
-        OUTPUT_DICT = {}
-        IDX = 0
-
+    output = ROOT / "output"
+    command = f"""
+    --output_folder {output}
+    --batch_size 16 
+    --freq 5000 
+    --saved_handwriting_model
+    --wikipedia
+    """
+    # --unigrams
+    # --saved_handwriting_data sample
     for i in range(0,1):
-        background_img, ocr_format = main()
+        background_img, ocr_format = main(command)
 
 
 # truncate words
