@@ -1,0 +1,53 @@
+page_template: {}
+page_title_template:
+    top_margin: null
+    bottom_margin: null
+    left_margin: null
+    right_margin: null
+    lines_rng: [1, 1]
+    font_scale_factor_rng: [1.0, 1.4]
+    height_as_percent_of_page_rng: null
+    min_height_pixels: 40
+    probability_existence: .5
+page_header_template:
+  top_margin: [-0.02, 0.02]
+  bottom_margin: [-0.02, 0.02]
+  left_margin: [-0.02, 0.5]
+  right_margin: [-0.02, 0.5]
+  lines_rng: [ 1, 2 ]
+  font_scale_factor_rng: [ .85, 1.3 ]
+  height_as_percent_of_page_rng: [ .02, .3 ]
+  min_height_pixels: 40
+  probability_existence: 0.1
+paragraph_template:
+  top_margin: [-0.05, 0.05]
+  bottom_margin: [-0.05, 0.05]
+  left_margin: [-0.05, 0.02]
+  right_margin: [-0.05, 0.02]
+  lines_rng: [4, 20]
+  font_scale_factor_rng: [.85, 1.15]
+  height_as_percent_of_page_rng: [.05,.7]
+  min_height_pixels: 40
+margin_notes_template:
+  top_margin: [-0.1, 0.2]
+  bottom_margin: [-0.05, 0.3]
+  left_margin: [-0.05, 0.1]
+  right_margin: [-0.08, 0.1]
+  lines_rng: [ 1, 5 ]
+  font_scale_factor_rng: null
+  min_height_pixels: 40
+  probability_existence: 0.5
+  probability_blank: 0.2
+paragraph_note_template:
+  top_margin: [-0.05, 0.2]
+  bottom_margin: [-0.05, 0.2]
+  left_margin: [-0.05, 0.2]
+  right_margin: [-0.05, 0.2]
+  lines_rng: [ 1, 2 ]
+  font_scale_factor_rng: [ .85, 1.3 ]
+  height_as_percent_of_page_rng: null
+  min_height_pixels: 40
+  probability_existence: 0.5
+  probability_blank: 0.2
+
+pages_per_image: [1, 2]

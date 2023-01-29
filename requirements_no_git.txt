@@ -1,0 +1,14 @@
+docx2pdf==0.1.8
+scikit-image
+packaging
+opencv-python
+python-docx
+setuptools
+typing_extensions
+tqdm
+pdfminer
+pdf2image==1.16.0
+gdown
+editdistance
+numpy
+pypdf2

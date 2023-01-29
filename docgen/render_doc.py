@@ -71,7 +71,7 @@ def composite_images2(background, paste, pos):
     """
     if isinstance(pos, BBox):
         pos = pos.bbox[:2]
-
+    pos = [int(p) for p in pos]
     phrase_img = merge_img(background, paste, pos)
     background.paste(phrase_img, pos)
     return background
@@ -132,6 +132,19 @@ def estimate_space(word_imgs, vertical_space, horizontal_space):
 
 
 def convert_to_ocr_format(localization, box="bbox", origin_offset=(0,0), section=0):
+    """ A localization is a list of BBox objects, which contain the pararaph, line, and word indices
+        This function converts this list of BBox objects to a format to a OCR-like format
+        {"paragraphs:[{lines:[{words:[...], "bbox":[bbox_for_all_lines]}, "bbox":[bbox_for_all_paragraphs]}
+
+    Args:
+        localization:
+        box:
+        origin_offset:
+        section:
+
+    Returns:
+
+    """
 
     def start_next_line(line=None):
         nonlocal current_line_num
@@ -219,29 +232,32 @@ def fill_area_with_words(word_imgs,
                          text_list: List[str],
                          horizontal_space_min_max=[.2,.5],
                          vertical_space_min_max=[.3,.4],
-                         max_intraline_vertical_space_offset=1,
+                         max_vertical_offset_between_words=1,
                          horizontal_min_to_fit=False,
                          vertical_min_to_fit=False,
-                         error_handling: Literal['force',
+                         limit_vertical_offset_to_stay_in_box_on_last_line=True,
+                         follow_previous_line_slope=False,
+                         prevent_line_overlap_from_vertical_drift=True,
+                         error_handling: Literal['ignore',
                                                  'skip_bad',
                                                  "expand",
-                                                 "force_hard",
-                                                 "skip_bad_hard",
-                         ]="skip_bad",
+                         ]="ignore",
+                         force_crop=True,
                          max_attempts=3,
                          scale=1,
                          max_lines=None,
                          max_words=None,
                          indent_new_paragraph_prob=.5,
                          slope=0,
-                         slope_drift=(0,0)):
+                         slope_drift=(0,0), ):
 
     """ TODO: Line can still be too long under skip_bad
         TODO: Slope not reliable, warp should be a postprocessing step
                     Since succeeding lines should have the same slope as the previous
                     Also can't hvae massive white space between lines
         Takes a bounding box, list of images, and a list of words and fills the bounding box with the word images.
-
+        x1,y1 is the top left corner of the box
+        x2,y2 is the bottom right corner of the box
     Args:
         word_imgs:
         bbox (x1,y1,x2,y2):
@@ -252,7 +268,7 @@ def fill_area_with_words(word_imgs,
         TODO: vertical_min_to_fit (bool): use minimum vertical space if it probably won't fit
         TODO: vertical_drift: how much vertical space can change between words
         error_handling (str): skip_bad - skip this word/line and move to next one; set max_attempts to give up
-                              force - paste word, even if it execeeds the boundary of the box
+                              ignore - paste AT LEAST 1 word in the line, even if it exceeds the boundary of the box, crop later
                               expand - make canvas bigger (line wider, box taller, etc.)
                                           # when 1 word is too big for a line
                                           # when the lines are too tall for the box
@@ -283,28 +299,31 @@ def fill_area_with_words(word_imgs,
     if max_words is None:
         max_words = len(word_text_list)
 
+    # A function that determines the bottom of the line
+    abs_y2_func_prev_line = lambda x: np.interp(x, [0, max_line_width], [0, 0])
+
     word_attempts = 0
     line_attempts = 0
     paragraph_number = -1
 
     text = ""
-    localization = []
+    bbox_list = []
     page_lines = []
     current_line = []
-    cum_y_pos = 0
+    cum_y1_pos = 0 # start at 0, increase as we add lines
 
     # Ys attributes of lines at box level
-    y_start_lines = [0]
+    line_height_list = [0]
     vertical_line_spaces = [0]
     starting_height_with_vertical_space = [0]
 
     # Xs,Ys within a line
-    list_of_y_sums = []
-    ys_within_line = []
-    xs_within_line = []
-    localization = []
+    cumulative_height_list = []
+    y1s_within_line = []
+    x1s_within_line = []
+    bbox_list = []
 
-    x_start = x_end = 0
+    x1_start = x_end = 0
     rescale_func = lambda img: np.array(img) / 255.0 if np.max(np.array(word_imgs[0][0]))>1 else lambda img:img
     resize_func = resize if scale != 1 else lambda w,scale:w
 
@@ -322,15 +341,21 @@ def fill_area_with_words(word_imgs,
         return int(random.uniform(*horizontal_space_min_max)*height)
 
     def end_of_the_line():
-        nonlocal ys_within_line, current_line, xs_within_line, line_attempts, x_start, x_end, cum_y_pos, slope
+        nonlocal abs_y2_func_prev_line, y1s_within_line, current_line, x1s_within_line, line_attempts, x1_start, x_end, cum_y1_pos, slope
 
         # Make sure non-trivial line
-        if not ys_within_line:
+        if not y1s_within_line:
             return
-        ys_sum = np.cumsum(ys_within_line)
-        ys_sum -= np.min(ys_sum)
+        # Line can drift up/down, shift so min=0 offset
+        y1s_cum_offset = np.cumsum(y1s_within_line)
+        y1s_cum_offset -= np.min(y1s_cum_offset)
 
-        y_height_for_current_line = max([w.shape[0] + ys_sum[i] for i, w in enumerate(current_line)])
+        y2s_within_line = [w.shape[0] + y1s_cum_offset[i] for i, w in enumerate(current_line)]
+        y_height_for_current_line = max(y2s_within_line)
+
+        # Add to list of functions to estimate the bottom of the line; YOU MUST COPY THEM FIRST
+        # _xs, _ys = x1s_within_line.copy(), y2s_within_line.copy()
+        abs_y2_func_prev_line = lambda x,x1s=x1s_within_line,y2s=y2s_within_line,cum_y1=cum_y1_pos: np.interp(x, x1s, y2s) + cum_y1
 
         #### ALWAYS GENERATE 1 LINE EVEN IF TOO BIG ####
         # Make sure first line is not too tall!!!
@@ -346,10 +371,10 @@ def fill_area_with_words(word_imgs,
         #         logger.debug(f"Too tall on line {len(page_lines)}")
         #         return "break"  # no reason to generate more lines, just end
 
-        y_start_lines.append(y_height_for_current_line)
+        line_height_list.append(y_height_for_current_line)
         line_tensor = np.ones([y_height_for_current_line, x_end], dtype=np.float32)
         for i, _word in enumerate(current_line):
-            line_tensor[ys_sum[i]:ys_sum[i] + _word.shape[0], xs_within_line[i]:xs_within_line[i] + _word.shape[1]] = _word
+            line_tensor[y1s_cum_offset[i]:y1s_cum_offset[i] + _word.shape[0], x1s_within_line[i]:x1s_within_line[i] + _word.shape[1]] = _word
 
         # Naively concatenate spaces and words; instead, we define array and replace it to handle vertical space
         # page_lines.append(np.concatenate(current_line, 1))
@@ -357,50 +382,71 @@ def fill_area_with_words(word_imgs,
 
         current_line = []
 
-        list_of_y_sums.append(ys_sum)
-        xs_within_line, ys_within_line = [], []
-        x_start = 0
+        cumulative_height_list.append(y1s_cum_offset)
+
+        x1s_within_line, y1s_within_line, y2s_within_line = [], [], []
+        x1_start = 0
         # Ys
-        y_start_lines.append(y_height_for_current_line)
+        line_height_list.append(y_height_for_current_line)
         vert_space = int(random.uniform(*vertical_space_min_max))
         starting_height_with_vertical_space.append(vert_space + y_height_for_current_line)
         vertical_line_spaces.append(vert_space)
 
-        cum_y_pos += starting_height_with_vertical_space[-1]
+        cum_y1_pos += starting_height_with_vertical_space[-1]
         # If the next line puts us over the limit
         # if starting_height_with_vertical_space[-1] > max_height:
         # Doesn't account for vertical offsets; as long as these are small, shouldn't matter;
             # Since image size is enforced with skip_bad/force, these would just be cropped slightly
 
-        if cum_y_pos + word_img.shape[0] > max_height or end_of_page:
+        if cum_y1_pos + word_img.shape[0] > max_height or end_of_page:
             # out of space for new line, end it!
             # if it was the last word, don't worry about it
-            return "break"
+            return "end_of_page"
 
         line_attempts = 0
         slope += random.uniform(*slope_drift)
-    def add_next_word():
-        nonlocal x_start, x_end
+    def add_next_word_bbox():
+        nonlocal x1_start, x_end
 
-        # Use a predefined slope
-        offset_vertical = slope * x_start
+        if not follow_previous_line_slope:
+            # Use a predefined slope
+            offset_vertical = slope * x1_start
+        else:
+            # Use the previous line's slope
+            offset_vertical = abs_y2_func_prev_line(x1_start) - cum_y1_pos
 
         # Choose random offset
-        offset_vertical += random.uniform(-max_intraline_vertical_space_offset, max_intraline_vertical_space_offset)
+        offset_vertical += random.uniform(-max_vertical_offset_between_words, max_vertical_offset_between_words)
         offset_vertical = int(round(offset_vertical))
 
         if word_img.shape[0] > max_height:
             warnings.warn("Word taller than maximum allowable height in box")
+            offset_vertical = 0
+        else:
+            override_vertical_overlap = override_end_of_box = False
+            if limit_vertical_offset_to_stay_in_box_on_last_line:
+                if word_img.shape[0] + offset_vertical + cum_y1_pos > max_height:
+                    offset_vertical = max(0, max_height - word_img.shape[0] - cum_y1_pos)
+                    override_vertical_overlap = True
+            if prevent_line_overlap_from_vertical_drift:
+                # get the minimum y1 without overlapping previous line
+                min_y1 = abs_y2_func_prev_line(x1_start)
+                if offset_vertical + cum_y1_pos < min_y1:
+                    offset_vertical = int(round(min_y1 - cum_y1_pos))
+                    override_end_of_box = True
+            if override_end_of_box and override_vertical_overlap:
+                return False
+
         current_line.append(word_img)
-        xs_within_line.append(x_start)
-        ys_within_line.append(offset_vertical)
+        x1s_within_line.append(x1_start)
+        y1s_within_line.append(offset_vertical)
         out_text.append(word)
 
-        x_end = x_start + word_img.shape[1]
+        x_end = x1_start + word_img.shape[1]
 
-        localization.append( # Y-positions to be calcuated/updated at the end
+        bbox_list.append( # Y-positions to be calcuated/updated at the end
             BBox("ul",
-                 [x_start,0,x_end, word_img.shape[0]],
+                 [x1_start,0,x_end, word_img.shape[0]],
                  line_number=len(page_lines),
                  line_word_index=len(current_line)-1,  # word was just added
                  text=out_text[-1],
@@ -410,13 +456,14 @@ def fill_area_with_words(word_imgs,
 
         # x_start for new word - must be after localization
         horizontal_space = random_horizontal_space(word_img.shape[0])
-        x_start = x_end + horizontal_space
+        x1_start = x_end + horizontal_space
+        return True
 
     def new_paragraph(word_img):
-        nonlocal x_start, paragraph_number
+        nonlocal x1_start, paragraph_number
         if utils.flip(indent_new_paragraph_prob):
             horizontal_space = random_horizontal_space(word_img.shape[0]) * random.randint(0,6)
-            x_start += min(horizontal_space, int(max_line_width/4))
+            x1_start += min(horizontal_space, int(max_line_width/4))
         paragraph_number += 1
 
     """
@@ -437,7 +484,7 @@ def fill_area_with_words(word_imgs,
         word_img = resize_func(rescale_func(word_img), scale)
 
         # First paragraph
-        if len(page_lines)==x_start==0:
+        if len(page_lines)==x1_start==0:
             new_paragraph(word_img)
 
         last_word = ii+1 >= max_words
@@ -454,59 +501,65 @@ def fill_area_with_words(word_imgs,
 
         word_attempts = 0
 
-        end_of_line = x_start + word_img.shape[1] > max_line_width
+        # Check Line/Page End Conditions
+        end_of_line = x1_start + word_img.shape[1] > max_line_width
         end_of_page = (max_lines and len(page_lines) >= max_lines)
 
-        result = ""
+        end_of_page = ""
         if end_of_line: # Don't add next word if it would make the line too long
-            result = end_of_the_line()
+            end_of_page = end_of_the_line()
         elif out_text and out_text[-1] and out_text[-1][-1] == "\n":
-            result = end_of_the_line()
+            end_of_page = end_of_the_line()
             new_paragraph(word_img)
 
-        if result == "break":
+        if end_of_page == "end_of_page":
             break
-        elif result == "continue":
-            continue
-        add_next_word()
+
+        success = add_next_word_bbox()
+        if not success:
+            break
 
     end_of_the_line()
 
     # if line is too long, max width equals that line, part of the "expand" paradigm
+    # this should only happen if a single word is too long for a line
+    # this could expand off of the page
     if error_handling=="expand":
-        max_line_width = int(max(max_line_width, *[line.shape[1] for line in page_lines]))
-
+        actual_max_line_width = int(max(max_line_width, *[line.shape[1] for line in page_lines]))
+        if actual_max_line_width > max_line_width:
+            max_line_width = actual_max_line_width
+            bbox.expand_rightward(actual_max_line_width-max_line_width)
     cum_height = np.cumsum(starting_height_with_vertical_space)
 
     # Put lines together
-    page_ = []
+    page_img = []
     for i, line in enumerate(page_lines):
         vertical_line_space = np.ones([vertical_line_spaces[i], max_line_width])
-        if error_handling == "force" and line.shape[1] > max_line_width:
+        if error_handling == "ignore" and line.shape[1] > max_line_width:
             line = line[:,:max_line_width]
         right_pad_ = np.ones([line.shape[0], max_line_width - line.shape[1]])
-        page_.append(np.concatenate([line, right_pad_], 1))
-        page_.append(vertical_line_space)
+        page_img.append(np.concatenate([line, right_pad_], 1))
+        page_img.append(vertical_line_space)
 
     # Update the Y-positions in the localization, now that lines are spaced etc.
-    for ii, _bbox in enumerate(localization):
+    for ii, _bbox in enumerate(bbox_list):
         if _bbox.line_number >= len(page_lines): # words were added, but line was ulitmately excluded
-            localization = localization[:ii] # truncate lines not added
+            bbox_list = bbox_list[:ii] # truncate lines not added
             break
-        intra_line_offset = list_of_y_sums[_bbox.line_number][_bbox.line_word_index]
+        intra_line_offset = cumulative_height_list[_bbox.line_number][_bbox.line_word_index]
         final_y = int(cum_height[_bbox.line_number]+intra_line_offset)
 
         # Adjust for final y-position & offset initial bbox location
         _bbox.offset_origin(offset_y=final_y+bbox[1],
                             offset_x=bbox[0])
 
-    if page_:
-        page = np.concatenate(page_, 0)
+    if page_img:
+        page = np.concatenate(page_img, 0)
 
-        if "hard" in error_handling:
+        if force_crop:
             page = page[:max_height,:max_line_width]
 
-        return page * 255, localization
+        return page * 255, bbox_list
     else:
         return np.array([]), []
 

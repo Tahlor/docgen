@@ -9,24 +9,36 @@ from torch.utils.data import Dataset, DataLoader, IterableDataset
 TESTING=True
 
 class LayoutDataset(Dataset):
-    def __init__(self, layout_generator, render_text_pairs, output_path, lenth=100000, *args, **kwargs):
+    """ Generates layouts with handwriting
+        Reason for using a Dataset is to use the multiprocessing DataLoader
+    """
+    def __init__(self, layout_generator,
+                 render_text_pairs,
+                 output_path,
+                 length=100000,
+                 degradation_function=None,
+                 *args,
+                 **kwargs):
         super().__init__(*args, **kwargs)
         self.layout_generator = layout_generator
         self.render_text_pairs = render_text_pairs
         self.output_path = output_path
-        self.lenth = lenth
+        self.length = length
+        self.degradation_function = degradation_function
 
     def make_one_image(self, i):
         name = f"{i:07.0f}"
         layout = self.layout_generator.generate_layout()
         image = self.layout_generator.render_text(layout, self.render_text_pairs)
         save_path = self.output_path / f"{name}.jpg"
-        image = degradation_function_composition(image)
+        if self.degradation_function:
+            image = self.degradation_function(image)
         image.save(save_path)
-        return name, self.layout_generator.create_ocr(layout, id=i, filename=name)
+        ocr = self.layout_generator.create_ocr(layout, id=i, filename=name)
+        return name, ocr
 
     def __len__(self):
-        return self.lenth
+        return self.length
 
     @handler(testing=TESTING, return_on_fail=(None, None))
     def __getitem__(self, i):
@@ -41,18 +53,14 @@ if __name__ == "__main__":
     from docgen.rendertext.render_word import RenderImageTextPair
     from docgen.layoutgen.layoutgen import LayoutGenerator
 
-    HWR_FILES = Path("/home/taylor/anaconda3/datasets/HANDWRITING_WORD_DATA/")
+    HWR_FILES = None # folder with handwriting .npy files
+    UNIGRAMS_PATH = None # folder with unigrams.csv file
     NUMBER_OF_DOCUMENTS=100
-    if socket.gethostname()  == "G1G2Q13":
-        UNIGRAMS = r"../../textgen/textgen/datasets/unigram_freq.csv"
-    else:
-        UNIGRAMS = r"/media/data/GitHub/textgen/textgen/datasets/unigram_freq.csv"
-
     DATASETS = Path("./temp")
     OUTPUT = DATASETS / "FRENCH_BMD_LAYOUTv3"
 
     lg = LayoutGenerator()
-    words = Unigrams(csv_file=UNIGRAMS, newline_freq=0)
+    words = Unigrams(csv_file=UNIGRAMS_PATH, newline_freq=0)
 
     renderer = SavedHandwritingRandomAuthor (
         format="PIL",
@@ -67,6 +75,6 @@ if __name__ == "__main__":
     layout_dataset = LayoutDataset(layout_generator=lg,
                                    render_text_pairs=render_text_pair,
                                    output_path=OUTPUT,
-                                   lenth=NUMBER_OF_DOCUMENTS)
+                                   length=NUMBER_OF_DOCUMENTS)
     for i in layout_dataset:
         pass

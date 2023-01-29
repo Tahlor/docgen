@@ -30,3 +30,4 @@ textgen @ git+ssh://git@github.com/tahlor/textgen@galois#egg=textgen
 Faker @ git+ssh://git@github.com/tahlor/Faker@galois#egg=Faker
 docdegrade @ git+ssh://git@github.com/tahlor/docdegrade@galois#egg=docdegrade
 download_resources @ git+ssh://git@github.com/tahlor/download_resources@galois#egg=download_resources
+

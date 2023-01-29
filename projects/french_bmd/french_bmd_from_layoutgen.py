@@ -1,8 +1,22 @@
+TESTING = True # TESTING = disables error handling
+
+if TESTING:
+    # set seed
+    seed = 1
+    import random
+    import numpy as np
+    import torch
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
 import os
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
+from config.parse_config import parse_config, DEFAULT_CONFIG
 from tqdm import tqdm
 from tqdm.contrib.concurrent import process_map
 import traceback
-from docgen.layoutgen.layoutgen import LayoutGenerator, MarginGenerator
+from docgen.layoutgen.layoutgen import LayoutGenerator, SectionTemplate
 #from docgen.layoutgen.layoutgen import *
 from hwgen.data.saved_handwriting_dataset import SavedHandwriting, SavedHandwritingRandomAuthor
 from textgen.unigram_dataset import Unigrams
@@ -16,7 +30,6 @@ from docgen.layoutgen.layout_dataset import LayoutDataset
 from torch.utils.data import DataLoader
 import site
 
-TESTING = True # TESTING = disables error handling
 
 RESOURCES = Path(site.getsitepackages()[0]) / "docgen/resources"
 ROOT = Path(__file__).parent.absolute()
@@ -24,6 +37,7 @@ ROOT = Path(__file__).parent.absolute()
 def parser():
     import argparse
     parser = argparse.ArgumentParser()
+    parser.add_argument("--config", type=str, default=DEFAULT_CONFIG)
     parser.add_argument("--output", type=str, default=None)
     parser.add_argument("--ocr_path", type=str, default=None)
     parser.add_argument("--coco_path", type=str, default=None)
@@ -31,9 +45,10 @@ def parser():
                                                                     files of pregenerated handwriting, 1 per author style")
     parser.add_argument("--unigrams", type=str, default=None)
     parser.add_argument("--overwrite", type=bool, default=False)
-    parser.add_argument("--batch_size", type=int, default=4)
+    parser.add_argument("--batch_size", type=int, default=4, help="Number of images to generate at once, will use parallel processing")
     parser.add_argument("--count", type=int, default=100)
     parser.add_argument("--wikipedia", action="store_true")
+    parser.add_argument("--degradation", action="store_true")
 
     args = parser.parse_args()
 
@@ -47,18 +62,18 @@ def parser():
         args.ocr_path = args.output / "OCR.json"
     if not args.coco_path:
         args.coco_path = args.output / "COCO.json"
-    return args
+    if args.degradation:
+        args.degradation_function = degradation_function_composition
+    else:
+        args.degradation_function = None
+    if TESTING:
+        args.batch_size = 2
+        args.count = 2
 
-@handler(testing=TESTING, return_on_fail=(None, None))
-def make_one_image(i):
-    global lg, OUTPUT
-    name = f"{i:07.0f}"
-    layout = lg.generate_layout()
-    image = lg.render_text(layout, render_text_pair)
-    save_path = OUTPUT / f"{name}.jpg"
-    image = degradation_function_composition(image)
-    image.save(save_path)
-    return name, lg.create_ocr(layout, id=i, filename=name)
+    args.batch_size = 6
+    args.count = 30
+
+    return args
 
 
 def draw_layout(layout, image):
@@ -68,34 +83,26 @@ def draw_layout(layout, image):
 
 def main(opts):
     global render_text_pair, lg
-    page_margins = MarginGenerator()
-    page_header_margins = MarginGenerator(top_margin=(-.02, .02),
-                                          bottom_margin=(-.02, .02),
-                                          left_margin=(-.02, .5),
-                                          right_margin=(-.02, .5))
-    paragraph_margins = MarginGenerator(top_margin=(-.05, .05),
-                                        bottom_margin=(-.05, .05),
-                                        left_margin=(-.05, .02),
-                                        right_margin=(-.05, .02))
-    margin_margins = MarginGenerator(top_margin=(-.1, .2),
-                                     bottom_margin=(-.05, .3),
-                                     left_margin=(-.05, .1),
-                                     right_margin=(-.08, .1))
 
-    paragraph_note_margins = MarginGenerator(top_margin=(-.05, .2),
-                                             bottom_margin=(-.05, .2),
-                                             left_margin=(-.05, .2),
-                                             right_margin=(-.05, .2))
+    # Read the YAML file and parse the parameters
+    config_dict = parse_config(opts.config)
 
-    lg = LayoutGenerator(paragraph_margins=paragraph_margins,
-                         page_margins=page_margins,
-                         margin_margins=margin_margins,
-                         page_header_margins=page_header_margins,
-                         paragraph_note_margins=paragraph_note_margins,
-                         margin_notes_probability=.5,
-                         page_header_prob=.5,
-                         paragraph_note_probability=.5,
-                         pages_per_image=(1, 3)
+    # Create a MarginGenerator object for each set of margins
+    page_template = SectionTemplate(**config_dict["page_template"])
+    page_title_template = SectionTemplate(**config_dict["page_title_template"])
+    page_header_template = SectionTemplate(**config_dict["page_header_template"])
+    paragraph_template = SectionTemplate(**config_dict["paragraph_template"])
+    margin_notes_template = SectionTemplate(**config_dict["margin_notes_template"])
+    paragraph_note_template = SectionTemplate(**config_dict["paragraph_note_template"])
+
+    # Create a LayoutGenerator object with the parsed parameters
+    lg = LayoutGenerator(paragraph_template=paragraph_template,
+                         page_template=page_template,
+                         page_title_template=page_title_template,
+                         margin_notes_template=margin_notes_template,
+                         page_header_template=page_header_template,
+                         paragraph_note_template=paragraph_note_template,
+                         pages_per_image=config_dict["pages_per_image"]
                          )
 
     WORKERS = max(multiprocessing.cpu_count() - 8,2)
@@ -105,9 +112,9 @@ def main(opts):
     if opts.wikipedia:
         from datasets import load_dataset
         from textgen.wikipedia_dataset import Wikipedia, WikipediaWord
-        from hwgen.data.basic_text_dataset import VOCABULARY, ALPHA_VOCABULARY
+        from textgen.basic_text_encoded_dataset import VOCABULARY, ALPHA_VOCABULARY
 
-        words = WikipediaWord(
+        words_dataset = WikipediaWord(
                 Wikipedia(
                 dataset=load_dataset("wikipedia", "20220301.en")["train"],
                 vocabulary=set(ALPHA_VOCABULARY),  # set(self.model.netconverter.dict.keys())
@@ -119,7 +126,7 @@ def main(opts):
             process_fn=lambda x:x.lower()
         )
     else:
-        words = Unigrams(csv_file=opts.unigrams, newline_freq=0)
+        words_dataset = Unigrams(csv_file=opts.unigrams, newline_freq=0)
 
     def create_dataset():
         renderer = SavedHandwritingRandomAuthor(
@@ -131,11 +138,13 @@ def main(opts):
             font_size=32
         )
 
-        render_text_pair = RenderImageTextPair(renderer, words)
+        render_text_pair = RenderImageTextPair(renderer, words_dataset)
         layout_dataset = LayoutDataset(layout_generator=lg,
-                                render_text_pairs=render_text_pair,
-                                output_path=opts.output,
-                                lenth=opts.count)
+                                       render_text_pairs=render_text_pair,
+                                       output_path=opts.output,
+                                       length=opts.count,
+                                       degradation_function=opts.degradation_function
+                                       )
         layout_loader = DataLoader(layout_dataset,
                                    batch_size=opts.batch_size,
                                    collate_fn=layout_dataset.collate_fn,
@@ -145,6 +154,7 @@ def main(opts):
     layout_loader = create_dataset()
     ocr_dataset = {}
 
+    # Generate documents
     for batch in tqdm(layout_loader):
         for name,data in batch:
             ocr_dataset[name] = data
@@ -155,9 +165,15 @@ def main(opts):
 
     ## TEST LAST IMAGE - OCR AND COCO DATASET + BBOXS
     name, d = next(iter(ocr_dataset.items()))
-    save_path = OUTPUT / f"{name}.jpg"
-    load_and_draw_and_display(save_path, opts.ocr_path)
-    load_and_draw_and_display(save_path, opts.coco_path, format="COCO")
+    image_path = opts.output / f"{name}.jpg"
+    load_and_draw_and_display(image_path, opts.ocr_path)
+
+    coco_seg = (image_path.parent / (image_path.stem+"_with_seg")).with_suffix(image_path.suffix)
+    coco_box = (image_path.parent / (image_path.stem+"_with_boxes")).with_suffix(image_path.suffix)
+
+    load_and_draw_and_display(image_path, opts.coco_path, format="COCO", draw_boxes=True, draw_segmentations=False
+                              , save_path=coco_box)
+    load_and_draw_and_display(image_path, opts.coco_path, format="COCO", draw_boxes=False, draw_segmentations=True, save_path=coco_seg)
 
 
 if __name__ == "__main__":
