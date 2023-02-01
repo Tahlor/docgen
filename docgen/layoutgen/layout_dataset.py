@@ -14,7 +14,6 @@ class LayoutDataset(Dataset):
     """
     def __init__(self, layout_generator,
                  render_text_pairs,
-                 output_path,
                  length=100000,
                  degradation_function=None,
                  *args,
@@ -22,27 +21,27 @@ class LayoutDataset(Dataset):
         super().__init__(*args, **kwargs)
         self.layout_generator = layout_generator
         self.render_text_pairs = render_text_pairs
-        self.output_path = output_path
         self.length = length
         self.degradation_function = degradation_function
 
-    def make_one_image(self, i):
-        name = f"{i:07.0f}"
-        layout = self.layout_generator.generate_layout()
-        image = self.layout_generator.render_text(layout, self.render_text_pairs)
-        save_path = self.output_path / f"{name}.jpg"
-        if self.degradation_function:
-            image = self.degradation_function(image)
-        image.save(save_path)
-        ocr = self.layout_generator.create_ocr(layout, id=i, filename=name)
-        return name, ocr
+    # def make_one_image(self, i):
+    #     name = f"{i:07.0f}"
+    #     layout = self.layout_generator.generate_layout()
+    #     image = self.layout_generator.render_text(layout, self.render_text_pairs)
+    #     save_path = self.output_path / f"{name}.jpg"
+    #     if self.degradation_function:
+    #         image = self.degradation_function(image)
+    #     image.save(save_path)
+    #     ocr = self.layout_generator.create_ocr(layout, id=i, filename=name)
+    #     return name, ocr
 
     def __len__(self):
         return self.length
 
     @handler(testing=TESTING, return_on_fail=(None, None))
     def __getitem__(self, i):
-        return self.make_one_image(i)
+        name, ocr, image = self.layout_generator.make_one_image(i)
+        return name, ocr, image
 
     @staticmethod
     def collate_fn(batch):
@@ -74,7 +73,7 @@ if __name__ == "__main__":
     render_text_pair = RenderImageTextPair(renderer, words)
     layout_dataset = LayoutDataset(layout_generator=lg,
                                    render_text_pairs=render_text_pair,
-                                   output_path=OUTPUT,
+                                   #output_path=OUTPUT,
                                    length=NUMBER_OF_DOCUMENTS)
     for i in layout_dataset:
         pass

@@ -21,12 +21,13 @@ class BBox:
     def __init__(self,
                  origin: Literal['ul', 'll'],
                  bbox,
-                 line_number=None,
+                 line_index=None,
                  line_word_index=None,
                  text=None,
                  parent_obj_bbox=None,
                  paragraph_index=None,
                  force_int=True,
+                 img=None,
                  format:Literal['XYXY', 'XYWH']="XYXY"):
         """
         Store BBox as TUPLE to prevent accidental modification
@@ -34,7 +35,7 @@ class BBox:
         Args:
             origin: ul = upper left, ll = lower left; lower left not IMPLEMENTED
             bbox: ALWAYS x1,y1,x2,y2; assume origin is top left, x1,y1 is top left and smaller than x2,y2
-            line_number (int): if generated in a box, the index of the word within the line
+            line_index (int): if generated in a box, the index of the word within the line
             line_word_index (int): if generated in a box, the line number
             text (str): the word (optional)
             parent_obj_bbox (x1,y1,x2,y2):
@@ -49,9 +50,9 @@ class BBox:
         if origin=="ll":
             raise NotImplementedError
         self.force_int = self._force_int if force_int else lambda *x:x
-
+        self.img = img
         self.update_bbox(bbox, self.format)
-        self.line_number = line_number
+        self.line_number = line_index
         self.line_word_index = line_word_index
         self.text = text
         self.parent_bbox = parent_obj_bbox
@@ -72,7 +73,11 @@ class BBox:
         self._bbox = self.force_int(self._bbox)
 
     def expand_rightward(self, pixels):
-        self._bbox = self.force_int(self._bbox[0], self._bbox[1], self._bbox[2]+pixels, self._bbox[3])
+        self._bbox = self.force_int((self._bbox[0], self._bbox[1], self._bbox[2]+pixels, self._bbox[3]))
+        return self.bbox
+
+    def expand_downward(self, pixels):
+        self._bbox = self.force_int((self._bbox[0], self._bbox[1], self._bbox[2], self._bbox[3]+pixels))
         return self.bbox
     @staticmethod
     def _XYWH_to_XYXY(bbox):
@@ -416,7 +421,7 @@ class BBoxNGon(BBox):
     def __init__(self,
                  origin: Literal['ul', 'll'],
                  bbox,
-                 line_number=None,
+                 line_index=None,
                  line_word_index=None,
                  text=None,
                  parent_obj_bbox=None,
@@ -431,7 +436,7 @@ class BBoxNGon(BBox):
         Returns:
 
         """
-        super().__init__(origin, bbox, line_number, line_word_index, text, parent_obj_bbox, paragraph_index, force_int)
+        super().__init__(origin, bbox, line_index, line_word_index, text, parent_obj_bbox, paragraph_index, force_int)
         self.format = "XYXY"
         self._bbox = np.asarray(bbox)
 

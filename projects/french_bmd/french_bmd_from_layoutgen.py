@@ -2,7 +2,7 @@ TESTING = True # TESTING = disables error handling
 
 if TESTING:
     # set seed
-    seed = 1
+    seed = 3
     import random
     import numpy as np
     import torch
@@ -70,8 +70,8 @@ def parser():
         args.batch_size = 2
         args.count = 2
 
-    args.batch_size = 6
-    args.count = 30
+    args.batch_size = 5
+    args.count = 15
 
     return args
 
@@ -95,15 +95,6 @@ def main(opts):
     margin_notes_template = SectionTemplate(**config_dict["margin_notes_template"])
     paragraph_note_template = SectionTemplate(**config_dict["paragraph_note_template"])
 
-    # Create a LayoutGenerator object with the parsed parameters
-    lg = LayoutGenerator(paragraph_template=paragraph_template,
-                         page_template=page_template,
-                         page_title_template=page_title_template,
-                         margin_notes_template=margin_notes_template,
-                         page_header_template=page_header_template,
-                         paragraph_note_template=paragraph_note_template,
-                         pages_per_image=config_dict["pages_per_image"]
-                         )
 
     WORKERS = max(multiprocessing.cpu_count() - 8,2)
     if TESTING:
@@ -139,9 +130,22 @@ def main(opts):
         )
 
         render_text_pair = RenderImageTextPair(renderer, words_dataset)
+        render_text_pair = None
+
+        # Create a LayoutGenerator object with the parsed parameters
+        lg = LayoutGenerator(paragraph_template=paragraph_template,
+                             page_template=page_template,
+                             page_title_template=page_title_template,
+                             margin_notes_template=margin_notes_template,
+                             page_header_template=page_header_template,
+                             paragraph_note_template=paragraph_note_template,
+                             pages_per_image=config_dict["pages_per_image"],
+                             output_path=opts.output,
+                             img_text_pair_gen=render_text_pair
+                             )
+
         layout_dataset = LayoutDataset(layout_generator=lg,
                                        render_text_pairs=render_text_pair,
-                                       output_path=opts.output,
                                        length=opts.count,
                                        degradation_function=opts.degradation_function
                                        )
@@ -156,7 +160,7 @@ def main(opts):
 
     # Generate documents
     for batch in tqdm(layout_loader):
-        for name,data in batch:
+        for name,data,img in batch:
             ocr_dataset[name] = data
 
     save_json(opts.ocr_path, ocr_dataset)
@@ -166,14 +170,13 @@ def main(opts):
     ## TEST LAST IMAGE - OCR AND COCO DATASET + BBOXS
     name, d = next(iter(ocr_dataset.items()))
     image_path = opts.output / f"{name}.jpg"
-    load_and_draw_and_display(image_path, opts.ocr_path)
-
     coco_seg = (image_path.parent / (image_path.stem+"_with_seg")).with_suffix(image_path.suffix)
     coco_box = (image_path.parent / (image_path.stem+"_with_boxes")).with_suffix(image_path.suffix)
 
-    load_and_draw_and_display(image_path, opts.coco_path, format="COCO", draw_boxes=True, draw_segmentations=False
-                              , save_path=coco_box)
-    load_and_draw_and_display(image_path, opts.coco_path, format="COCO", draw_boxes=False, draw_segmentations=True, save_path=coco_seg)
+    load_and_draw_and_display(image_path, opts.ocr_path)
+    # load_and_draw_and_display(image_path, opts.coco_path, format="COCO", draw_boxes=True, draw_segmentations=False
+    #                           , save_path=coco_box)
+    # load_and_draw_and_display(image_path, opts.coco_path, format="COCO", draw_boxes=False, draw_segmentations=True, save_path=coco_seg)
 
 
 if __name__ == "__main__":

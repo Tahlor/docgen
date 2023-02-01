@@ -16,10 +16,11 @@ if sys.version_info >= (3, 8):
     from typing import Literal
 else:
     from typing_extensions import Literal
-from typing import List, Tuple
+from typing import List, Tuple, Optional, Union
 from docgen.bbox import BBox
 from docgen import utils
 import logging
+from PIL import Image
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("root")
@@ -58,7 +59,7 @@ def composite_images(background_image, paste_image, position):
 
     return background_image
 
-def composite_images2(background, paste, pos):
+def composite_images2(background:Union[Image.Image, np.ndarray], paste:Union[Image.Image, np.ndarray], pos):
     """
 
     Args:
@@ -71,8 +72,19 @@ def composite_images2(background, paste, pos):
     """
     if isinstance(pos, BBox):
         pos = pos.bbox[:2]
+    elif isinstance(pos, (list, tuple)):
+        pos = pos[:2]
+
     pos = [int(p) for p in pos]
+
+    # # if background is RGB, convert foreground
+    # if background.mode == "RGB" and paste.mode != "RGB":
+    #     paste = paste.convert("RGB")
+    # elif paste.mode == "RGB" and background.mode == "L":
+    #     paste = paste.convert("L")
+
     phrase_img = merge_img(background, paste, pos)
+
     background.paste(phrase_img, pos)
     return background
 
@@ -90,35 +102,33 @@ def merge_img(bck, fore, pos):
 
     """
     if isinstance(bck, np.ndarray):
+        bck = bck.squeeze()
         bck = Image.fromarray(bck.astype(np.uint8), mode="L")
     if isinstance(fore, np.ndarray):
+        fore = fore.squeeze()
         fore = Image.fromarray(fore.astype(np.uint8), mode="L")
     bck = bck.crop((pos[0], pos[1], pos[0]+fore.size[0],pos[1]+fore.size[1]))
+
     if bck.mode == "RGB" and fore.mode != "RGB":
         fore = fore.convert("RGB")
-    elif fore.mode == "RGB" and bck.mode != "RGB":
-        bck = bck.convert("RGB")
+    elif fore.mode == "RGB" and bck.mode == "L":
+        fore = fore.convert("L")
 
     return ImageChops.multiply(fore, bck)
-
-def shape(item):
-    if isinstance(item, np.ndarray):
-        return item.shape
-    elif isinstance(item, (PpmImagePlugin.PpmImageFile,Image.Image)):
-        return item.size
 
 def get_x(item):
     if isinstance(item, np.ndarray):
         return item.shape[1]
-    elif isinstance(item, PpmImagePlugin.PpmImageFile):
+    elif isinstance(item, (PpmImagePlugin.PpmImageFile, Image.Image)):
         return item.size[0]
+width = get_x
 
 def get_y(item):
     if isinstance(item, np.ndarray):
         return item.shape[0]
-    elif isinstance(item, PpmImagePlugin.PpmImageFile):
+    elif isinstance(item, (PpmImagePlugin.PpmImageFile, Image.Image)):
         return item.size[1]
-
+height = get_y
 
 def estimate_space(word_imgs, vertical_space, horizontal_space):
     """ Estimate how much space is needed for horizontal_min_to_fit
@@ -130,6 +140,20 @@ def estimate_space(word_imgs, vertical_space, horizontal_space):
     widths = [word.shape[0] + horizontal_space for word in word_imgs]
     total_length_concat = np.cumsum(widths)
 
+def np_img_to_pil(x):
+    return Image.fromarray((x.squeeze() * 255).astype(np.uint8))
+
+def shape(item):
+    """
+    Args:
+        item:
+    Returns:
+        x, y
+    """
+    if isinstance(item, np.ndarray):
+        return item.shape[1],item.shape[0]
+    elif isinstance(item, PpmImagePlugin.PpmImageFile) or isinstance(item, Image.Image):
+        return item.size
 
 def convert_to_ocr_format(localization, box="bbox", origin_offset=(0,0), section=0):
     """ A localization is a list of BBox objects, which contain the pararaph, line, and word indices
@@ -225,6 +249,387 @@ def fill_box_with_random_lines(word_imgs,
         words = random.randint(*words_per_line)
         img, localization = fill_area_with_words(word_imgs, bbox, text_list, max_words=words)
         # skew would have to happen here
+
+def flip(prob=.5):
+    return random.random() < prob
+
+class BoxFiller:
+    """ A re-usable object for filling in a box with words
+            Initiated using some metaparameters (what will the SD horiz/vert linespacing be etc.)
+            For each new section bbox:
+                * mean of vert/horiz linespacing chosen
+                * mean of slope chosen
+                * mean of word size chosen
+            #Line generation IS aware of the paragraph at all times through self.properties
+            returns a list of BBox objects which contain text, paragraph/line indices
+
+            # Options:
+                Take in EITHER a list of word images and a list of text OR a generator that does both
+                Take just a list in, put into boxes, if space is leftover, WRAP it
+
+        # NOT (fully) IMPLEMENTED:
+            self.channels
+            rescale
+            options/reset
+    """
+    def __init__(self,
+                 img_text_pair_gen=None,
+                 word_img_gen=None,
+                 text_gen=None,
+                 channels=3,
+                 slope_sd=0.001,
+                 size_sd=0.01):
+
+        if img_text_pair_gen is None and word_img_gen is None:
+            warnings.warn("No handwritten images provided, output will be black boxes")
+            length = 512
+            word_img_gen = [np_img_to_pil(np.zeros([32, 64, 1])), np.zeros([33, 128, 1])] * length
+            text_gen = ["short", "long"] * length
+            self._get_word = self._get_from_separate
+            self.dataset_length = length
+        elif img_text_pair_gen is not None:
+            self._get_word = self._get_from_joint
+            if word_img_gen is not None:
+                warnings.warn("Handwritten images overspecified, using the img_text_pair_gen generator")
+            self.dataset_length = len(img_text_pair_gen)
+        else:
+            self._get_word = self._get_from_separate
+            self.dataset_length = len(word_img_gen)
+
+        self.img_text_pair_gen = img_text_pair_gen
+        self.word_img_gen = word_img_gen
+        self.text_gen = text_gen
+
+        self.channels = channels
+        self.slope_gen = lambda: random.gauss(0, slope_sd)
+        self.size_variation_gen = lambda: random.gauss(1, size_sd)
+
+        # return img, localization
+
+    def int(self, i):
+        return int(round(i))
+    def _get_from_joint(self, i):
+        return self.img_text_pair_gen[i]
+
+    def _get_from_separate(self, i):
+        return self.word_img_gen[i], self.text_gen[i]
+
+    def get_word(self, i=None):
+        if i is None:
+            i = self.input_word_idx
+
+        img, self.last_word_text = self._get_word(i)
+
+        to_font_size_factor = self.font_size / height(img) if self.font_size else 1
+        if self.bbox.height < self.y1 + self.font_size*1.2:
+            decimal_percent = to_font_size_factor * random.uniform(.9,1) # make the last line smaller
+        else:
+            decimal_percent = self.size_variation_gen() * to_font_size_factor
+        self.last_word_img = self.rescale(img, decimal_percent)
+        return self.last_word_img, self.last_word_text
+
+    def rescale(self, img, decimal_percent):
+        """
+
+        Args:
+            img:
+            decimal_percent: 1 => no rescale, 0.5 => half size, 2 => double size
+
+        Returns:
+
+        """
+        if isinstance(img, np.ndarray):
+            img = resize_numpy(img, decimal_percent)
+        elif isinstance(img, Image.Image):
+            img = resize_pil(img, decimal_percent)
+        else:
+            raise TypeError("img must be a numpy array or a PIL image")
+        return img
+
+    def reset(self, bbox, img=None,
+              max_lines=sys.maxsize,
+              max_words=sys.maxsize,
+              error_mode="expand",
+              ):
+        self.bbox = bbox
+        if hasattr(bbox, "max_lines") and bbox.max_lines is not None:
+            max_lines = bbox.max_lines
+        self.max_lines = max_lines
+        self.max_words = min(max_words, self.dataset_length)
+
+        self.bbox_list = []
+
+        self.vert_space_min_gen = lambda: random.uniform(0, .2)
+        self.vert_space_max_gen = lambda: random.uniform(.2, .4)
+
+        if img is None:
+            self.img = np_img_to_pil(np.ones((bbox.height, bbox.width, self.channels)))
+            self.origin = 0,0
+        else:
+            # if not numpy, convert to numpy
+            if isinstance(img, np.ndarray):
+                img = np_img_to_pil(img)
+            self.img = img
+
+        self.input_word_idx = 0
+
+        self.words_used = 0
+        self.max_vertical_offset_between_words = 2
+
+        self.gen_new_priors()
+
+        self.max_line_pixel_overlap = 5
+        self.line_idx = 0
+        self.line_word_idx = 0
+        self.paragraph_idx = 0
+
+        self.last_word_img = None
+        self.last_word_text = ""
+        self.tab_spaces = 5
+        self.error_mode = error_mode # skip+, ignore, expand, terminate
+        self.skip_count = 0
+        self.skip_limit = 3
+        self.font_size_sd = .1
+        self.next_is_last_line = False
+
+        if hasattr(self.bbox, "font_size"):
+            self.font_size = self.bbox.font_size
+        else:
+            self.font_size = height(self.get_word()[0])
+
+        if self.bbox.max_lines is not None and self.bbox.vertically_centered:
+            estimated_height = self.bbox.max_lines * (self.font_size* (1+np.mean(self.vertical_space_min_max))) * 1.05
+            self.y1 = self.int((self.bbox.height - estimated_height) / 2)
+        else:
+            self.y1 = self.int(
+                random.uniform(0, self.max_line_pixel_overlap))  # this allows for no margin on first line
+        self.abs_y2_func_prev_line = lambda x: np.interp(x, [0, self.bbox.width], [self.y1, self.y1])
+
+
+
+    def gen_new_priors(self):
+        """ Used as part of reset, to reset some of the idiosyncratic priors of HW
+
+        Args:
+            bbox:
+
+        Returns:
+
+        """
+        # vert offset
+        # horiz space
+        # slope
+        self.starting_x1 = random.uniform(0, self.bbox.width * .01)
+        self.horizontal_space_min_max = (0, .1)
+        self.vertical_space_min_max = (self.vert_space_min_gen(), self.vert_space_max_gen())
+        self.slope = self.slope_gen()
+
+        #self.rescale =
+        # rescale_func = lambda img: np.array(img) / 255.0 if np.max(np.array(word_imgs[0][0])) > 1 else lambda img: img
+        # resize_func = resize if scale != 1 else lambda w, scale: w
+
+    def vertical_offset(self, x1, word_height):
+        base_offset = self.slope * x1
+
+        # Word goes out the bottom of the bbox
+        _max = self.bbox.height - self.y1 - word_height
+
+        # Word interferes with previous line OR goes out the top of the bbox
+        _min = max(self.abs_y2_func_prev_line(x1) - self.max_line_pixel_overlap - self.y1, -self.y1)
+
+        # Word box does not have enough space for valid placement
+        if _min > _max:
+            return None
+
+        if self.words_used > 0: # allow potentially big negative offset for first word of box if we need more space
+            _min = max(_min, -self.max_vertical_offset_between_words)
+            #_max = min(_max, self.max_vertical_offset_between_words)
+        _max = min(_max, self.max_vertical_offset_between_words)
+
+        offset = base_offset + random.uniform(_min, _max)
+        offset = max(_min, min(_max, offset))
+        offset = self.int(offset)
+        return offset
+
+    def random_horizontal_space(self, height=32):
+        return int(random.uniform(*self.horizontal_space_min_max)*height)
+
+    def random_vertical_space(self, height=32):
+        return int(random.uniform(*self.vertical_space_min_max)*height)
+
+    def make_line(self):
+        """ keep adding words until you can't fit anymore
+
+        Returns:
+
+        """
+        # make sure there are enough words
+        # make sure we haven't reached self.max_words
+        while self.words_used < self.max_words:
+            # if there's enough space, add next word, increment i
+            next_word_img, next_word_text = self.get_word(self.input_word_idx)
+
+            if next_word_text == "\n":
+                return "newline_indent"
+
+            next_word_width, next_word_height = shape(next_word_img)[:2]
+            horizontal_space = self.random_horizontal_space(next_word_height)
+            proposed_x1_after_adding = self.x1 + horizontal_space + next_word_width
+
+            if proposed_x1_after_adding > self.bbox.width and self.line_word_idx > 0:
+                return "newline"
+
+            proposed_vert_offset = self.vertical_offset(self.x1, next_word_height)
+            if proposed_vert_offset is None:
+                if (self.line_word_idx > 0 or self.line_idx > 0):
+                    return "complete" # can't fit more words without overlapping previous line
+                else: # the first word is too big, 0 out offsets
+                    warnings.warn("No viable space for word")
+                    proposed_vert_offset = -self.y1
+
+            # Critical errors - word is too big for entire box before we've even started
+            result = self.check_for_errors(next_word_height, next_word_width, proposed_x1_after_adding)
+            if result == "try_again":
+                continue
+
+            self.y1 += proposed_vert_offset
+            assert self.y1 >= 0, "y1 is negative"
+            self.words_used += 1
+            self.x1 += horizontal_space
+            self.x1s.append(self.x1)
+            self.y2s.append(self.y1 + next_word_height)
+            self.bbox_list.append(BBox("ul",
+                                       (self.x1,
+                                       self.y1,
+                                       self.x1+next_word_width,
+                                       self.y1+next_word_height),
+                                       line_index=self.line_idx,
+                                       line_word_index=self.line_word_idx,
+                                       text=next_word_text,
+                                       parent_obj_bbox=self.bbox,
+                                       paragraph_index=self.paragraph_idx,
+                                       img=next_word_img
+                                       )
+                                  )
+
+            # Set for next iteration
+            self.x1 += next_word_width
+            self.line_word_idx += 1
+            self.input_word_idx += 1
+        return "complete"
+
+    def check_for_errors(self, word_height, word_width, proposed_x1_after_adding):
+        if (word_height <= self.bbox.height) and (word_width <= self.bbox.width):
+            return None
+
+        if "skip" in self.error_mode:
+            self.skip_count += 1
+            self.input_word_idx += 1
+            if self.skip_count < self.skip_limit:
+                return "try_again"
+
+        if "ignore" in self.error_mode: # if a background image is supplied, it might not be cropped out
+            return None
+        elif "expand" in self.error_mode:
+            if word_height > self.bbox.height:
+                self.bbox.expand_downward(word_height-self.bbox.height)
+            if word_width > self.bbox.width:
+                self.bbox.expand_rightward(proposed_x1_after_adding-self.bbox.width)
+            return None
+        elif "terminate" in self.error_mode:
+            return "complete"
+
+        raise ValueError("Invalid error mode")
+
+    def gen_box_layout(self):
+        """
+        """
+        self.gen_new_priors()
+        while self.line_idx < self.max_lines:
+            self.x1 = self.starting_x1
+            self.x1s, self.y2s = [], []
+            result = self.make_line()
+
+            # Limit words on last line
+            if self.y1 + 2*height(self.last_word_img) > self.bbox.height:
+                self.next_is_last_line = True
+            elif self.line_idx +1 == self.max_lines-1:
+                self.next_is_last_line = True
+            if self.next_is_last_line:
+                max_words_in_row = self.line_word_idx if self.line_word_idx > 0 else 8
+                self.max_words = min(random.randint(1, max_words_in_row)+self.words_used, self.max_words)
+
+            if "newline" in result:
+                self.line_idx += 1
+                self.line_word_idx = 0
+                self.x1 = self.starting_x1
+                self.abs_y2_func_prev_line = lambda x, _x1s=tuple(self.x1s), _y2s=tuple(self.y2s),: np.interp(x, _x1s,_y2s)
+                self.y1 = max(self.y2s) + self.random_vertical_space(height=height(self.last_word_img))
+            if "indent" in  result:
+                self.starting_x1 += self.random_horizontal_space(height=width(self.last_word_img))*self.tab_spaces
+            elif result == "complete":
+                return "complete"
+
+    def fill_box(self, bbox, *args, **kwargs):
+        self.reset(bbox,
+                   *args, **kwargs)
+        if hasattr(bbox, "category") and (bbox.category in ("margin_note", "paragraph_note", "paragraph_title")):
+            print()
+        self.gen_box_layout()
+        self.paste_images()
+        return self.img, self.bbox_list
+
+    def randomly_fill_box_with_words(self, bbox, *args, **kwargs):
+        self.reset(bbox, *args, **kwargs)
+        self.words_attempted = 0
+        while self.words_used < self.max_words and self.words_attempted < self.max_words*2:
+            self.words_attempted += 1
+            next_word_img, next_word_text = self.get_word(self.input_word_idx)
+            new_angle = np.random.exponential(1.5) / 20 * np.random.choice([-1,1])
+
+            # Rotate the image by the angle
+            if np.random.choice([True, False]):
+                next_word_img = next_word_img.rotate(new_angle, expand=True)
+
+            # Generate a random position within the bounding box
+            max_valid_x1, max_valid_y1 = bbox.width - width(next_word_img), bbox.height - height(next_word_img)
+            x = random.uniform(0, max_valid_x1)
+            y = random.uniform(0, max_valid_y1)
+
+            # make sure the word is not outside the box
+            if max_valid_x1 < 0 or max_valid_y1 < 0:
+                continue
+
+            self.bbox_list.append(
+                                BBox("ul",
+                                       (x,
+                                        y,
+                                        x + width(next_word_img),
+                                        y + height(next_word_img)),
+                                       line_index=0,
+                                       line_word_index=self.line_word_idx,
+                                       text=next_word_text,
+                                       parent_obj_bbox=self.bbox,
+                                       paragraph_index=self.paragraph_idx,
+                                       img=next_word_img
+                                       )
+            )
+
+            self.words_used += 1
+            self.line_word_idx += 1
+
+        self.paste_images()
+
+        return self.img, self.bbox_list
+
+    def paste_images(self):
+        for i, bbox in enumerate(self.bbox_list):
+            composite_images2(self.img, bbox.img, bbox)
+            bbox.img = None
+            bbox.offset_origin(offset_y=self.bbox[1],
+                                offset_x=self.bbox[0])
+
+        return self.img, self.bbox_list
 
 
 def fill_area_with_words(word_imgs,
@@ -325,7 +730,7 @@ def fill_area_with_words(word_imgs,
 
     x1_start = x_end = 0
     rescale_func = lambda img: np.array(img) / 255.0 if np.max(np.array(word_imgs[0][0]))>1 else lambda img:img
-    resize_func = resize if scale != 1 else lambda w,scale:w
+    resize_func = resize_numpy if scale != 1 else lambda w, scale:w
 
     out_text = []
 
@@ -346,7 +751,7 @@ def fill_area_with_words(word_imgs,
         # Make sure non-trivial line
         if not y1s_within_line:
             return
-        # Line can drift up/down, shift so min=0 offset
+        # Line can drift up/down, shift so min=0 offset; line can be squashed later?
         y1s_cum_offset = np.cumsum(y1s_within_line)
         y1s_cum_offset -= np.min(y1s_cum_offset)
 
@@ -447,7 +852,7 @@ def fill_area_with_words(word_imgs,
         bbox_list.append( # Y-positions to be calcuated/updated at the end
             BBox("ul",
                  [x1_start,0,x_end, word_img.shape[0]],
-                 line_number=len(page_lines),
+                 line_index=len(page_lines),
                  line_word_index=len(current_line)-1,  # word was just added
                  text=out_text[-1],
                  parent_obj_bbox=bbox,
@@ -586,7 +991,7 @@ def resize_image_to_bbox(img:Image.Image,
                          resample=resample)
     return img
 
-def resize(img, decimal_percent):
+def resize_numpy(img, decimal_percent):
 
     width = ceil(img.shape[1] * decimal_percent)
     height = ceil(img.shape[0] * decimal_percent)
@@ -596,6 +1001,8 @@ def resize(img, decimal_percent):
     else:
         return img.reshape(height,width)
 
+def resize_pil(img, decimal_percent):
+    return img.resize((ceil(img.size[0] * decimal_percent), ceil(img.size[1] * decimal_percent)))
 
 def draw_bbox(img, bboxs):
     img1 = ImageDraw.Draw(img)
