@@ -4,7 +4,7 @@ __pycache__/
 *$py.class
 
 french_bmd/french_bmd_output*
-
+projects/demos/*output*/
 
 docgen/rendertext/data
 data/

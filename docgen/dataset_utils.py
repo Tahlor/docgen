@@ -1,3 +1,4 @@
+import inspect
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import time
@@ -28,14 +29,37 @@ DEFAULT_COCO_INFO = {'description': 'Synthetic Forms - Pre-alpha Release',
             'date_created': datetime.datetime.now().strftime("%D")}
 
 
+class JSONEncoder(json.JSONEncoder):
+
+    def default(self, obj):
+        if hasattr(obj, "toJSON"):
+            return super().encode(obj.toJSON())
+        # elif hasattr(obj, "__dict__"):
+        #     d = dict(
+        #         (key, value)
+        #         for key, value in inspect.getmembers(obj)
+        #         if not key.startswith("__")
+        #         and not inspect.isabstract(value)
+        #         and not inspect.isbuiltin(value)
+        #         and not inspect.isfunction(value)
+        #         and not inspect.isgenerator(value)
+        #         and not inspect.isgeneratorfunction(value)
+        #         and not inspect.ismethod(value)
+        #         and not inspect.ismethoddescriptor(value)
+        #         and not inspect.isroutine(value)
+        #     )
+        #     return super().encode(d)
+        return super().encode(obj)
+
 def load_json(path):
     with Path(path).open() as ff:
         ocr = json.load(ff)
     return ocr
 
 def save_json(path, arr):
+    # use JSONEncoder to save BBox object
     with Path(path).open("w") as ff:
-        json.dump(arr, ff)
+        json.dump(arr, ff, cls=JSONEncoder)
 
 def numpy_to_json(path):
     arr = np.load(path, allow_pickle=True)
@@ -59,7 +83,8 @@ def delete_extra_images(path):
 def ocr_dataset_to_coco(ocr_dict,
                         data_set_name="Synthetic Forms - Pre-alpha Release",
                         bbox_format_input:Literal['XYXY', 'XYWH']="XYXY",
-                        use_fine_grained_paragraph_categories:bool=True, ):
+                        use_fine_grained_paragraph_categories:bool=True,
+                        exclude_cats=None):
     """
 
     Args:
@@ -143,7 +168,10 @@ def ocr_dataset_to_coco(ocr_dict,
 
 
                 annotation = process_item(item, img_id, category=category, segmentation=child_seg_list)
-                annotations.append(annotation)
+
+                # Including every word massively inflates the COCO dataset size
+                if not (exclude_cats and category in exclude_cats):
+                    annotations.append(annotation)
 
                 if not child_seg is None:
                     segmentation_list.append(to_list(child_seg))

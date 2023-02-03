@@ -5,6 +5,8 @@ ROOT = Path(__file__).parent
 DEFAULT_CONFIG = ROOT / "./default.yaml"
 
 def _recursive_update(d, u):
+    if d is None:
+        return u
     for k, v in u.items():
         if isinstance(v, collections.Mapping):
             d[k] = _recursive_update(d.get(k, {}), v)
@@ -16,9 +18,8 @@ def parse_config(yaml_file, default_values_file=DEFAULT_CONFIG):
         default_values = yaml.safe_load(f)
     with open(yaml_file, "r") as f:
         data = yaml.safe_load(f)
-    _recursive_update(data, default_values)
-
-    return data
+    out = _recursive_update(data, default_values)
+    return out
 
 if __name__ == '__main__':
     config = 'default.yaml'

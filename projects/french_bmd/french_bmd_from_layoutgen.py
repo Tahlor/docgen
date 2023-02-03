@@ -1,7 +1,7 @@
 TESTING = True # TESTING = disables error handling
 
 if TESTING:
-    # set seed
+    # set seeds
     seed = 3
     import random
     import numpy as np
@@ -23,7 +23,7 @@ from textgen.unigram_dataset import Unigrams
 from docgen.rendertext.render_word import RenderImageTextPair
 from pathlib import Path
 from docgen.dataset_utils import load_and_draw_and_display, save_json, ocr_dataset_to_coco
-from docgen.degradation.degrade import degradation_function_composition
+from docgen.degradation.degrade import degradation_function_composition2
 from docgen.utils import file_incrementer, handler
 import multiprocessing
 from docgen.layoutgen.layout_dataset import LayoutDataset
@@ -37,18 +37,18 @@ ROOT = Path(__file__).parent.absolute()
 def parser():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, default=DEFAULT_CONFIG)
-    parser.add_argument("--output", type=str, default=None)
-    parser.add_argument("--ocr_path", type=str, default=None)
-    parser.add_argument("--coco_path", type=str, default=None)
+    parser.add_argument("--config", type=str, default=DEFAULT_CONFIG, help="Path to layout config file")
+    parser.add_argument("--output", type=str, default=None, help="Path to save images and json files")
+    parser.add_argument("--ocr_path", type=str, default=None, help="Path to save OCR json file")
+    parser.add_argument("--coco_path", type=str, default=None, help="Path to save COCO json file")
     parser.add_argument("--hwr_files", type=str, default="sample", help="sample, eng_latest, or path to folder with npy\
                                                                     files of pregenerated handwriting, 1 per author style")
-    parser.add_argument("--unigrams", type=str, default=None)
-    parser.add_argument("--overwrite", type=bool, default=False)
+    parser.add_argument("--unigrams", type=str, default=None, help="Path to unigram file (list of words for text generation)")
+    parser.add_argument("--overwrite", type=bool, default=False, help="Overwrite output directory if it exists")
     parser.add_argument("--batch_size", type=int, default=4, help="Number of images to generate at once, will use parallel processing")
-    parser.add_argument("--count", type=int, default=100)
-    parser.add_argument("--wikipedia", action="store_true")
-    parser.add_argument("--degradation", action="store_true")
+    parser.add_argument("--count", type=int, default=100, help="Number of images to generate")
+    parser.add_argument("--wikipedia", action="store_true", help="Use wikipedia data for text generation")
+    parser.add_argument("--degradation", action="store_true", help="Apply degradation function to images")
 
     args = parser.parse_args()
 
@@ -63,15 +63,12 @@ def parser():
     if not args.coco_path:
         args.coco_path = args.output / "COCO.json"
     if args.degradation:
-        args.degradation_function = degradation_function_composition
+        args.degradation_function = degradation_function_composition2
     else:
         args.degradation_function = None
     if TESTING:
         args.batch_size = 2
         args.count = 2
-
-    args.batch_size = 5
-    args.count = 15
 
     return args
 
@@ -114,7 +111,8 @@ def main(opts):
                 max_sentence_length=None,
                 shuffle=True,
             ),
-            process_fn=lambda x:x.lower()
+            process_fn=["lower"],
+
         )
     else:
         words_dataset = Unigrams(csv_file=opts.unigrams, newline_freq=0)
@@ -130,7 +128,6 @@ def main(opts):
         )
 
         render_text_pair = RenderImageTextPair(renderer, words_dataset)
-        render_text_pair = None
 
         # Create a LayoutGenerator object with the parsed parameters
         lg = LayoutGenerator(paragraph_template=paragraph_template,
@@ -140,43 +137,56 @@ def main(opts):
                              page_header_template=page_header_template,
                              paragraph_note_template=paragraph_note_template,
                              pages_per_image=config_dict["pages_per_image"],
-                             output_path=opts.output,
-                             img_text_pair_gen=render_text_pair
+                             img_text_pair_gen=render_text_pair,
                              )
 
         layout_dataset = LayoutDataset(layout_generator=lg,
                                        render_text_pairs=render_text_pair,
                                        length=opts.count,
-                                       degradation_function=opts.degradation_function
+                                       degradation_function=opts.degradation_function,
+                                       output_path=opts.output,
                                        )
+
         layout_loader = DataLoader(layout_dataset,
                                    batch_size=opts.batch_size,
                                    collate_fn=layout_dataset.collate_fn,
                                    num_workers=WORKERS)
-        return layout_loader
+        return layout_loader, layout_dataset
 
-    layout_loader = create_dataset()
+    layout_loader, layout_dataset = create_dataset()
     ocr_dataset = {}
 
     # Generate documents
-    for batch in tqdm(layout_loader):
-        for name,data,img in batch:
+    import time
+    start = time.time()
+
+    if True: # use the dataloader
+        for batch in tqdm(layout_loader):
+            for name,data,img in batch:
+                ocr_dataset[name] = data
+    else:
+        for i in tqdm(range(0,len(layout_loader)*opts.batch_size)):
+            name,data,img = layout_dataset[i]
             ocr_dataset[name] = data
+    stop = time.time()
+    print("TIME: ", stop-start)
+
 
     save_json(opts.ocr_path, ocr_dataset)
-    coco = ocr_dataset_to_coco(ocr_dataset, "French BMD Layout - v0.0.0.3 pre-Alpha")
+    coco = ocr_dataset_to_coco(ocr_dataset, "French BMD Layout - v0.0.0.3 pre-Alpha", exclude_cats="word")
     save_json(opts.coco_path, coco)
 
     ## TEST LAST IMAGE - OCR AND COCO DATASET + BBOXS
     name, d = next(iter(ocr_dataset.items()))
     image_path = opts.output / f"{name}.jpg"
+
     coco_seg = (image_path.parent / (image_path.stem+"_with_seg")).with_suffix(image_path.suffix)
     coco_box = (image_path.parent / (image_path.stem+"_with_boxes")).with_suffix(image_path.suffix)
 
     load_and_draw_and_display(image_path, opts.ocr_path)
-    # load_and_draw_and_display(image_path, opts.coco_path, format="COCO", draw_boxes=True, draw_segmentations=False
-    #                           , save_path=coco_box)
-    # load_and_draw_and_display(image_path, opts.coco_path, format="COCO", draw_boxes=False, draw_segmentations=True, save_path=coco_seg)
+    load_and_draw_and_display(image_path, opts.coco_path, format="COCO", draw_boxes=True, draw_segmentations=False
+                               , save_path=coco_box)
+    load_and_draw_and_display(image_path, opts.coco_path, format="COCO", draw_boxes=False, draw_segmentations=True, save_path=coco_seg)
 
 
 if __name__ == "__main__":

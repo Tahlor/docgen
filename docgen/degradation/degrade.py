@@ -40,7 +40,7 @@ def fibrous2(img):
 
 all_funcs = [blur, random_distortions, ruled_surface_distortions, splotches, fibrous1, fibrous2]
 
-def degradation_function_composition(img):
+def degradation_function_composition(img, number_of_distortions=None):
     if isinstance(img, Image.Image):
         PIL = True
         mode = img.mode
@@ -54,7 +54,8 @@ def degradation_function_composition(img):
     else:
         rescale = False
 
-    number_of_distortions = random.randint(0, len(all_funcs))
+    if number_of_distortions is None:
+        number_of_distortions = random.randint(0, len(all_funcs))
     random.shuffle(all_funcs)
 
     img = apply_all(img, all_funcs[:number_of_distortions])
@@ -66,6 +67,9 @@ def degradation_function_composition(img):
         img = Image.fromarray(img, mode=mode)
 
     return img
+
+def degradation_function_composition2(img):
+    return degradation_function_composition(img, 2)
 
 def apply_all(img, funcs=all_funcs):
     for f in funcs:

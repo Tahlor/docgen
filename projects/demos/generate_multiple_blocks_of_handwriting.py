@@ -1,5 +1,5 @@
 import traceback
-
+from tqdm import tqdm
 import torch
 import json
 import random
@@ -49,7 +49,7 @@ def create_parser():
                         help="20220301.en, 20220301.fr, etc.")
     parser.add_argument("--batch_size", default=12, type=int, help="Batch size for processing")
     parser.add_argument("--resume", action="store_const", const=-1, help="Resuming from previous process")
-    parser.add_argument("--freq", default=5000, type=int, help="Frequency of processing")
+    parser.add_argument("--freq", default=5000, type=int, help="How often to update JSON GT file, in case generation is interrupted")
     parser.add_argument("--output_folder", default=ROOT / "output", help="Path to output directory")
     parser.add_argument("--output_json", default=None, help="Path to output directory")
     parser.add_argument("--incrementer", default=True, help="Increment output folder")
@@ -58,9 +58,11 @@ def create_parser():
     return parser
 
 def process_args(args):
-    global OUTPUT_DICT
+    global OUTPUT_DICT, OUTPUT_PATH
     print(args)
     args.output_folder = Path(args.output_folder)
+    args.output_folder.mkdir(parents=True, exist_ok=True)
+    OUTPUT_PATH = args.output_folder
     args.last_idx = 0
     if args.saved_handwriting_model is None and args.saved_handwriting_data is None:
         raise ValueError("Must specify either saved handwriting model or saved handwriting data")
@@ -106,9 +108,11 @@ def main(args=None):
             dataset=load_dataset("wikipedia", args.wikipedia)["train"],
             vocabulary=set(VOCABULARY),  # set(self.model.netconverter.dict.keys())
             exclude_chars="0123456789()+*;#:!/",
+            use_unidecode=True,
             min_sentence_length=60,
             max_sentence_length=64
         )
+
     elif args.unigrams is not None:
         basic_text_encoded_dataset = Unigrams(
             csv_file=args.unigrams,
@@ -117,7 +121,7 @@ def main(args=None):
     if args.saved_handwriting_model is not None:
         renderer = HWGenerator(next_text_dataset=basic_text_encoded_dataset,
                            batch_size=args.batch_size,
-                           model="IAM")
+                           model=args.saved_handwriting_model)
 
     elif args.saved_handwriting_data is not None:
         saved_hw_dataset = SavedHandwritingRandomAuthor(
@@ -139,12 +143,11 @@ def main(args=None):
         renderer = DataLoader(RenderImageTextPair(saved_hw_dataset, basic_text_encoded_dataset),
                               collate_fn=RenderImageTextPair.no_collate_dict,
                               batch_size=args.batch_size)
-
     text_dataloader = DataLoader(basic_text_encoded_dataset,
                             batch_size=args.batch_size,
                             collate_fn=basic_text_encoded_dataset.collate_fn)
     remainder = 1000
-    for i, d in enumerate(text_dataloader):
+    for i, d in tqdm(enumerate(text_dataloader)):
         process_batch(d, renderer)
         ii = i * args.batch_size
         if remainder > ii % args.freq:
@@ -203,7 +206,8 @@ def process_batch(d, renderer):
                                                   text_list=sample["raw_text"].split(" "),
                                                   max_vertical_offset_between_words=5,
                                                   error_handling="expand",
-                                                  scale=scale
+                                                  scale=scale,
+                                                  max_lines=100
                                                   )
         background_img.paste(Image.fromarray(box1), origin)
         ocr_format = convert_to_ocr_format(localization, origin_offset=origin, section=section)
@@ -213,8 +217,8 @@ def process_batch(d, renderer):
     font_resize_factor = random.uniform(.8,2.5)
     default_font_size = 32
     word_imgs = [renderer.render_word(t, size=int(default_font_size*font_resize_factor)) for t in text_list]
-
     """
+
     if isinstance(renderer, HWGenerator):
         new_sample_batch = list(renderer.process_batch(d)) # process batch returns [{"words": [PIL], "raw_text": str}]
     # elif isinstance(renderer, SavedHandwriting):
@@ -266,24 +270,32 @@ def process_batch(d, renderer):
         IDX += 1
 
 
-if __name__ == "__main__":
+def testing():
     output = ROOT / "output"
+
+    # USE SAVED HANDWRITING - NOT WORKING RIGHT NOW
     command = f"""
     --output_folder {output}
     --batch_size 16 
     --freq 5000 
     --unigrams
     --saved_handwriting_data sample"""
+
+    # GENERATE NEW HANDWRITING ON THE FLY -- NEEDED FOR FRENCH
     command2 = f"""
     --output_folder {output}
     --batch_size 16 
     --freq 5000 
-    --saved_handwriting_model
-    --wikipedia
+    --saved_handwriting_model IAM
+    --wikipedia 20220301.fr
     """
 
-    for i in range(0,1):
-        background_img, ocr_format = main(command)
+    background_img, ocr_format = main(command2)
+
+
+if __name__ == "__main__":
+    # ' --output_folder C:\\Users\\tarchibald\\github\\docgen\\projects\\demos\\output --batch_size 16  --freq 1  --saved_handwriting_model IAM --wikipedia 20220301.fr '
+    background_img, ocr_format = main()
 
 
 # truncate words

@@ -6,7 +6,7 @@ from pathlib import Path
 import socket
 from torch.utils.data import Dataset, DataLoader, IterableDataset
 
-TESTING=True
+TESTING = False
 
 class LayoutDataset(Dataset):
     """ Generates layouts with handwriting
@@ -16,6 +16,7 @@ class LayoutDataset(Dataset):
                  render_text_pairs,
                  length=100000,
                  degradation_function=None,
+                 output_path=None,
                  *args,
                  **kwargs):
         super().__init__(*args, **kwargs)
@@ -23,17 +24,7 @@ class LayoutDataset(Dataset):
         self.render_text_pairs = render_text_pairs
         self.length = length
         self.degradation_function = degradation_function
-
-    # def make_one_image(self, i):
-    #     name = f"{i:07.0f}"
-    #     layout = self.layout_generator.generate_layout()
-    #     image = self.layout_generator.render_text(layout, self.render_text_pairs)
-    #     save_path = self.output_path / f"{name}.jpg"
-    #     if self.degradation_function:
-    #         image = self.degradation_function(image)
-    #     image.save(save_path)
-    #     ocr = self.layout_generator.create_ocr(layout, id=i, filename=name)
-    #     return name, ocr
+        self.output_path = output_path
 
     def __len__(self):
         return self.length
@@ -41,6 +32,13 @@ class LayoutDataset(Dataset):
     @handler(testing=TESTING, return_on_fail=(None, None))
     def __getitem__(self, i):
         name, ocr, image = self.layout_generator.make_one_image(i)
+
+        if self.degradation_function:
+            image = self.degradation_function(image)
+        if self.output_path:
+            name = f"{i:07.0f}"
+            save_path = self.output_path / f"{name}.jpg"
+            image.save(save_path)
         return name, ocr, image
 
     @staticmethod
@@ -61,7 +59,7 @@ if __name__ == "__main__":
     lg = LayoutGenerator()
     words = Unigrams(csv_file=UNIGRAMS_PATH, newline_freq=0)
 
-    renderer = SavedHandwritingRandomAuthor (
+    renderer = SavedHandwritingRandomAuthor(
         format="PIL",
         dataset_root=HWR_FILES,
         # dataset_path=HWR_FILE,
@@ -73,7 +71,7 @@ if __name__ == "__main__":
     render_text_pair = RenderImageTextPair(renderer, words)
     layout_dataset = LayoutDataset(layout_generator=lg,
                                    render_text_pairs=render_text_pair,
-                                   #output_path=OUTPUT,
+                                   output_path=OUTPUT,
                                    length=NUMBER_OF_DOCUMENTS)
     for i in layout_dataset:
         pass

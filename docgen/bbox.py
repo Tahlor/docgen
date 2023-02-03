@@ -51,6 +51,8 @@ class BBox:
             raise NotImplementedError
         self.force_int = self._force_int if force_int else lambda *x:x
         self.img = img
+
+        # BBox is always stored as XYXY, update if format is XYWH
         self.update_bbox(bbox, self.format)
         self.line_number = line_index
         self.line_word_index = line_word_index
@@ -65,6 +67,8 @@ class BBox:
             self._bbox = tuple(bbox)
         elif isinstance(bbox, np.ndarray):
             self._bbox = bbox.tolist()
+        elif isinstance(bbox, BBox):
+            self._bbox = bbox.get_bbox()
         else:
             raise NotImplementedError("Unexpected type for BBox")
         if format == "XYWH":
@@ -79,6 +83,7 @@ class BBox:
     def expand_downward(self, pixels):
         self._bbox = self.force_int((self._bbox[0], self._bbox[1], self._bbox[2], self._bbox[3]+pixels))
         return self.bbox
+
     @staticmethod
     def _XYWH_to_XYXY(bbox):
         return bbox[0], bbox[1], bbox[0]+bbox[2], bbox[1]+bbox[3]
@@ -383,10 +388,20 @@ class BBox:
             raise NotImplementedError
 
     def __getitem__(self, i):
-        return self._bbox[i]
+        return self.bbox[i]
 
     def __repr__(self):
-        return str(self._bbox)
+        return self.bbox.__repr__()
+
+    def __str__(self):
+        return str(self.bbox)
+
+    # def __getstate__(self):
+    #     return self.bbox
+    # THIS WILL BREAK PICKLING
+
+    def toJSON(self):
+        return self.bbox
 
     @staticmethod
     def get_maximal_box(list_of_bboxes):

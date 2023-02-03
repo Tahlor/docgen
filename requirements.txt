@@ -13,6 +13,7 @@ typing_extensions
 opencv-python
 scikit-image
 editdistance
+unidecode
 
 ocrodeg @ git+https://github.com/NVlabs/ocrodeg
 
