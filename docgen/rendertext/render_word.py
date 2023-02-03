@@ -199,10 +199,36 @@ class RenderWordFont(RenderWord):
                 "raw_text":word}
 
 class RenderImageTextPair:
+    """ TODO: MOVE to textgen
 
+    """
     def __init__(self, renderer, textgen):
         self.renderer = renderer
         self.textgen = textgen
+
+    @staticmethod
+    def collate_fn(batch):
+        """
+        Args:
+            batch: [(image, text), (image, text), ...]
+
+        Returns:
+            dict: {"image":[image, image, ...], "text":[text, text, ...]}
+        """
+        out = [x for x in zip(*batch)]
+        return {"word_img":out[0], "text":out[1]}
+
+    @staticmethod
+    def no_collate_dict(batch):
+        """ Just return the dict of the pairs
+
+        Args:
+            batch:
+
+        Returns:
+
+        """
+        return [{"word_imgs":out[0], "text":out[1]} for out in batch]
 
     @property
     def font_size(self):

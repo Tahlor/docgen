@@ -7,7 +7,7 @@ from docgen.rendertext.render_word import RenderWordFont
 from hwgen.data.saved_handwriting_dataset import SavedHandwriting
 import numpy as np
 from docgen import utils
-from docgen.utils import display
+from hwgen.data.utils import display
 from docgen.image_composition.utils import new_textbox_given_background
 from textgen.wikipedia_dataset import Wikipedia
 from datasets import load_dataset
@@ -25,8 +25,8 @@ def main():
                                     conversion=lambda image: np.uint8(image * 255)
                                     )
     else:
-        from hwgen.data.basic_text_dataset import VOCABULARY
-        basic_text_dataset = Wikipedia(
+        from textgen.basic_text_encoded_dataset import VOCABULARY
+        basic_text_encoded_dataset = Wikipedia(
             dataset=load_dataset("wikipedia", "20220301.en")["train"],
             vocabulary=set(VOCABULARY),  # set(self.model.netconverter.dict.keys())
             encode_function=model.netconverter.encode,
@@ -47,11 +47,11 @@ def main():
     shp = utils.shape(background_img)
     size, origin = new_textbox_given_background(shp)
     box1, bboxs1 = fill_area_with_words(word_imgs=[w["image"] for w in word_imgs],
-                                    bbox=[0,0,*size],
-                                    text_list=[w["raw_text"] for w in word_imgs],
-                                    max_intraline_vertical_space_offset=5,
-                                    error_handling="force",
-                                    )
+                                        bbox=[0,0,*size],
+                                        text_list=[w["raw_text"] for w in word_imgs],
+                                        max_vertical_offset_between_words=5,
+                                        error_handling="force",
+                                        )
 
     # Test draw boxes on numpy
     for bbox in bboxs1:

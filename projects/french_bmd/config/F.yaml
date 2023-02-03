@@ -1,0 +1,10 @@
+page_header_margins:
+  top_margin: [-0.02, 0.02]
+  bottom_margin: [-0.02, 0.02]
+  left_margin: [-0.02, 0.5]
+  right_margin: [-0.02, 0.5]
+paragraph_margins:
+  top_margin: [-0.05, 0.05]
+  bottom_margin: [-0.05, 0.05]
+  left_margin: [-0.05, 0.02]
+  right_margin: [-0.05, 0.02]

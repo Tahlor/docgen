@@ -6,7 +6,7 @@ from docgen.rendertext.render_word import RenderWordFont
 from hwgen.data.saved_handwriting_dataset import SavedHandwriting
 import numpy as np
 from docgen import utils
-from docgen.utils import display
+from hwgen.data.utils import display
 
 PATH= r"C:\Users\tarchibald\github\handwriting\handwriting\data\datasets\synth_hw\style_298_samples_0.npy"
 PDF_FILE = r"C:\Users\tarchibald\github\docx_localization\temp\TEMPLATE.pdf"
@@ -59,15 +59,15 @@ if __name__ == '__main__':
                          text_list=[w["raw_text"] for w in word_imgs]
                          )
     box2, bboxs2 = fill_area_with_words(word_imgs=[w["image"] for w in word_imgs],
-                        bbox=[0, 0, 300, 1200],
-                         text_list=[w["raw_text"] for w in word_imgs],
-                        max_intraline_vertical_space_offset = 5
-    )
+                                        bbox=[0, 0, 300, 1200],
+                                        text_list=[w["raw_text"] for w in word_imgs],
+                                        max_vertical_offset_between_words= 5
+                                        )
     box3, bboxs3 = fill_area_with_words(word_imgs=[w["image"] for w in word_imgs],
-                        bbox=[0, 0, 300, 1200],
-                         text_list=[w["raw_text"] for w in word_imgs],
-                        max_intraline_vertical_space_offset=15
-                         )
+                                        bbox=[0, 0, 300, 1200],
+                                        text_list=[w["raw_text"] for w in word_imgs],
+                                        max_vertical_offset_between_words=15
+                                        )
 
     result = convert_to_ocr_format(bboxs1)
 

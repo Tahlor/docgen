@@ -1,0 +1,14 @@
+#page_template: {}
+#page_title_template:
+#    probability_existence: 1
+#page_header_template:
+#  probability_existence: 1
+#margin_notes_template:
+#  probability_existence: 1
+#  probability_blank: 0
+#paragraph_note_template:
+#  probability_existence: 1
+#  probability_blank: 0
+#paragraph_template:
+#  probability_vertically_centered: 0
+#pages_per_image: [1, 2]
