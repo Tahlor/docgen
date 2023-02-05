@@ -61,6 +61,8 @@ Requires:
 * [**download_resources**](https://github.com/tahlor@/download_resources): For downloading databases required by packages
   git+https://github.com/tahlor@/download_resources
 
+=======
+>>>>>>> master
 # Usage
 
 Example projects for `french_bmd`, `census`, etc. can be found under `docgen/projects`.

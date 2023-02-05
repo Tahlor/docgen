@@ -19,7 +19,7 @@ ocrodeg @ git+https://github.com/NVlabs/ocrodeg
 
 # IF REPO IS PUBLIC
 #hwgen @ https://github.com/tahlor/hwgen/archive/master.zip
-#git+https://github.com/herobd/synthetic_text_gen@master
+#git+https://github.com/herobd/synthetic_text_gen@galois
 #synthetictextgen @ https://github.com/tahlor/synthetic_text_gen/archive/galois.zip
 
 # IF REPO IS LOCAL
