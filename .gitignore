@@ -3,7 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-french_bmd/french_bmd_output*
+projects/french_bmd/*output*/
 projects/demos/*output*/
 
 docgen/rendertext/data
