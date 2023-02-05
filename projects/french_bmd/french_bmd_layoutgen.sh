@@ -1,1 +1,1 @@
-python frech_bmd_layoutgen.py --config ./config/default.yaml --degradation --count 100
+python french_bmd_layoutgen.py --config ./config/default.yaml --degradation --count 100

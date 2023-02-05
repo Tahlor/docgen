@@ -104,7 +104,7 @@ def main(opts):
 
         words_dataset = WikipediaWord(
                 Wikipedia(
-                dataset=load_dataset("wikipedia", "20220301.en")["train"],
+                dataset=load_dataset("wikipedia", "20220301.fr")["train"],
                 vocabulary=set(ALPHA_VOCABULARY),  # set(self.model.netconverter.dict.keys())
                 exclude_chars="0123456789()+*;#:!/.,",
                 min_sentence_length=None,
