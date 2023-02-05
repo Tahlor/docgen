@@ -632,7 +632,7 @@ def split_into_categories(coco):
 
 
 def test_coco():
-    path = r'C:\Users\tarchibald\github\docgen/projects/french_bmd/french_bmd_output_0002/ocr.pkl'
+    path = r'/projects/french_bmd/output/french_bmd_output_0002/ocr.pkl'
     coco = ocr_dataset_to_coco(ocr_dict=path, data_set_name="french_bmd")
     p = draw_boxes_sections_COCO(coco, category_id="paragraph", draw_boxes=False, draw_segmentations=True, image_root=Path(path).parent)
     p.show()

@@ -1,0 +1,1 @@
+python generate_multiple_blocks_of_handwriting.py --output_folder ./output --batch_size 16  --freq 1  --saved_handwriting_model IAM --wikipedia 20220301.fr
