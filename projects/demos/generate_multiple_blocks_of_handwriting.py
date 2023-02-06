@@ -54,6 +54,7 @@ def create_parser():
     parser.add_argument("--output_json", default=None, help="Path to output directory")
     parser.add_argument("--incrementer", default=True, help="Increment output folder")
     parser.add_argument("--debug", action="store_true", help="Debugging mode")
+    parser.add_argument("--display_output", action="store_true", help="Display sample output segmentation")
 
     return parser
 

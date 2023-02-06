@@ -6,7 +6,7 @@ from pathlib import Path
 import socket
 from torch.utils.data import Dataset, DataLoader, IterableDataset
 
-TESTING = True
+TESTING = False
 
 class LayoutDataset(Dataset):
     """ Generates layouts with handwriting

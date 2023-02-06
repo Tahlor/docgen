@@ -1,4 +1,4 @@
-TESTING = True # TESTING = disables error handling
+TESTING = False # TESTING = disables error handling
 
 if TESTING:
     # set seeds
@@ -43,17 +43,19 @@ def parser():
     parser.add_argument("--coco_path", type=str, default=None, help="Path to save COCO json file")
     parser.add_argument("--hwr_files", type=str, default="sample", help="sample, eng_latest, or path to folder with npy\
                                                                     files of pregenerated handwriting, 1 per author style")
+    parser.add_argument("--download_all_hw_styles", action="store_true", help="Will download all handwriting styles from S3 if they don't exist")
     parser.add_argument("--unigrams", type=str, default=None, help="Path to unigram file (list of words for text generation)")
     parser.add_argument("--overwrite", type=bool, default=False, help="Overwrite output directory if it exists")
     parser.add_argument("--batch_size", type=int, default=4, help="Number of images to generate at once, will use parallel processing")
     parser.add_argument("--count", type=int, default=100, help="Number of images to generate")
     parser.add_argument("--wikipedia", action="store_true", help="Use wikipedia data for text generation")
     parser.add_argument("--degradation", action="store_true", help="Apply degradation function to images")
+    parser.add_argument("--workers", type=int, default=None, help="How many parallel processes to spin up? (default is number of cores - 2)")
 
     args = parser.parse_args()
 
     if args.output is None:
-        args.output = ROOT / "french_bmd_output"
+        args.output = ROOT / "output" / "french_bmd_output"
     if not args.overwrite and args.output.exists():
         args.output = file_incrementer(args.output, create_dir=True)
     elif not args.output.exists():
@@ -69,6 +71,13 @@ def parser():
     if TESTING:
         args.batch_size = 2
         args.count = 2
+
+    if args.workers is None:
+        args.workers = max(multiprocessing.cpu_count() - 8,2)
+        if TESTING:
+            args.workers = 0
+    else:
+        args.workers = args.workers
 
     return args
 
@@ -91,11 +100,6 @@ def main(opts):
     paragraph_template = SectionTemplate(**config_dict["paragraph_template"])
     margin_notes_template = SectionTemplate(**config_dict["margin_notes_template"])
     paragraph_note_template = SectionTemplate(**config_dict["paragraph_note_template"])
-
-
-    WORKERS = max(multiprocessing.cpu_count() - 8,2)
-    if TESTING:
-        WORKERS = 0
 
     if opts.wikipedia:
         from datasets import load_dataset
@@ -150,7 +154,7 @@ def main(opts):
         layout_loader = DataLoader(layout_dataset,
                                    batch_size=opts.batch_size,
                                    collate_fn=layout_dataset.collate_fn,
-                                   num_workers=WORKERS)
+                                   num_workers=opts.workers)
         return layout_loader, layout_dataset
 
     layout_loader, layout_dataset = create_dataset()
@@ -183,11 +187,11 @@ def main(opts):
     coco_seg = (image_path.parent / (image_path.stem+"_with_seg")).with_suffix(image_path.suffix)
     coco_box = (image_path.parent / (image_path.stem+"_with_boxes")).with_suffix(image_path.suffix)
 
-    load_and_draw_and_display(image_path, opts.ocr_path)
-    load_and_draw_and_display(image_path, opts.coco_path, format="COCO", draw_boxes=True, draw_segmentations=False
-                               , save_path=coco_box)
-    load_and_draw_and_display(image_path, opts.coco_path, format="COCO", draw_boxes=False, draw_segmentations=True, save_path=coco_seg)
-
+    if opts.display_output:
+        load_and_draw_and_display(image_path, opts.ocr_path)
+        load_and_draw_and_display(image_path, opts.coco_path, format="COCO", draw_boxes=True, draw_segmentations=False
+                                   , save_path=coco_box)
+        load_and_draw_and_display(image_path, opts.coco_path, format="COCO", draw_boxes=False, draw_segmentations=True, save_path=coco_seg)
 
 if __name__ == "__main__":
     opts = parser()
