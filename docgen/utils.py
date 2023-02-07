@@ -168,6 +168,8 @@ def handler(testing=False, return_on_fail=None):
             if not testing:
                 try:
                     return func(*args,**kwargs)
+                except KeyboardInterrupt:
+                    raise KeyboardInterrupt
                 except:
                     traceback.print_exc()
                     return return_on_fail
