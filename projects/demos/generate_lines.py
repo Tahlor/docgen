@@ -327,8 +327,8 @@ def testing():
 
 if __name__ == "__main__":
     # ' --output_folder C:\\Users\\tarchibald\\github\\docgen\\projects\\demos\\output --batch_size 16  --freq 1  --saved_handwriting_model IAM --wikipedia 20220301.fr '
-    #background_img, ocr_format = main()
-    testing()
+    background_img, ocr_format = main()
+    #testing()
 
 # truncate words
 # bad lining up
