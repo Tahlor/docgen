@@ -30,7 +30,7 @@ class LayoutDataset(Dataset):
     def __len__(self):
         return self.length
 
-    @handler(testing=TESTING, return_on_fail=(None, None, None))
+    @handler(testing=RAISE_ERRORS_ON_FAILED_ITERATION, return_on_fail=(None, None, None))
     def __getitem__(self, i):
         name, ocr, image = self.layout_generator.make_one_image(i)
 
