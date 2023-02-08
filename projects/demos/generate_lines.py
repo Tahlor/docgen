@@ -33,7 +33,8 @@ from ast import literal_eval as make_tuple
 
 ROOT = Path(__file__).parent.absolute()
 DEBUG = True
-
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = "cpu"
 def create_parser():
     global OUTPUT_DICT, OUTPUT_OCR_JSON
     parser = argparse.ArgumentParser()
@@ -131,7 +132,8 @@ def main(args=None):
     if args.saved_handwriting_model is not None:
         renderer = HWGenerator(next_text_dataset=basic_text_encoded_dataset,
                            batch_size=args.batch_size,
-                           model=args.saved_handwriting_model)
+                           model=args.saved_handwriting_model,
+                           device=DEVICE)
 
     elif args.saved_handwriting_data is not None:
         saved_hw_dataset = SavedHandwritingRandomAuthor(
