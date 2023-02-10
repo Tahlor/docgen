@@ -10,6 +10,10 @@ if TESTING:
     np.random.seed(seed)
     torch.manual_seed(seed)
 
+import logging
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.CRITICAL)
+
 import os
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 from config.parse_config import parse_config, DEFAULT_CONFIG
@@ -60,6 +64,8 @@ def parser():
     if not args.verbose:
         import warnings
         warnings.filterwarnings("ignore")
+        hw_logger = logging.getLogger("hwgen.data.saved_handwriting_dataset")
+        hw_logger.setLevel(logging.CRITICAL)
 
     if args.output is None:
         args.output = ROOT / "output" / "french_bmd_output"
@@ -80,7 +86,7 @@ def parser():
         args.count = 2
 
     if args.workers is None:
-        args.workers = max(multiprocessing.cpu_count() - 8,2)
+        args.workers = max(multiprocessing.cpu_count() - 1,1)
         if TESTING:
             args.workers = 0
     else:
@@ -155,7 +161,7 @@ def main(opts):
                                        render_text_pairs=render_text_pair,
                                        length=opts.count,
                                        degradation_function=opts.degradation_function,
-                                       output_path=opts.output,
+                                       #output_path=opts.output,
                                        )
 
         layout_loader = DataLoader(layout_dataset,
@@ -175,6 +181,7 @@ def main(opts):
         for batch in tqdm(layout_loader):
             for name,data,img in batch:
                 ocr_dataset[name] = data
+                img.save(opts.output / f"{name}.jpg")
     else:
         for i in tqdm(range(0,len(layout_loader)*opts.batch_size)):
             name,data,img = layout_dataset[i]

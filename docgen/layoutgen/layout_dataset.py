@@ -37,7 +37,6 @@ class LayoutDataset(Dataset):
         if self.degradation_function:
             image = self.degradation_function(image)
         if self.output_path:
-            name = f"{i:07.0f}"
             save_path = self.output_path / f"{name}.jpg"
             image.save(save_path)
         return name, ocr, image
