@@ -10,10 +10,6 @@ if TESTING:
     np.random.seed(seed)
     torch.manual_seed(seed)
 
-import logging
-root_logger = logging.getLogger()
-root_logger.setLevel(logging.CRITICAL)
-
 import os
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 from config.parse_config import parse_config, DEFAULT_CONFIG
@@ -33,6 +29,9 @@ import multiprocessing
 from docgen.layoutgen.layout_dataset import LayoutDataset
 from torch.utils.data import DataLoader
 import site
+
+import logging
+logger = logging.getLogger()
 
 
 RESOURCES = Path(site.getsitepackages()[0]) / "docgen/resources"
@@ -69,6 +68,8 @@ def parser():
 
     if args.output is None:
         args.output = ROOT / "output" / "french_bmd_output"
+    else:
+        args.output = Path(args.output)
     if not args.overwrite and args.output.exists():
         args.output = file_incrementer(args.output, create_dir=True)
     elif not args.output.exists():
@@ -92,6 +93,7 @@ def parser():
     else:
         args.workers = args.workers
 
+    logger.info(args)
     return args
 
 
