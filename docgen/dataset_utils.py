@@ -34,22 +34,12 @@ class JSONEncoder(json.JSONEncoder):
     def default(self, obj):
         if hasattr(obj, "toJSON"):
             return super().encode(obj.toJSON())
-        # elif hasattr(obj, "__dict__"):
-        #     d = dict(
-        #         (key, value)
-        #         for key, value in inspect.getmembers(obj)
-        #         if not key.startswith("__")
-        #         and not inspect.isabstract(value)
-        #         and not inspect.isbuiltin(value)
-        #         and not inspect.isfunction(value)
-        #         and not inspect.isgenerator(value)
-        #         and not inspect.isgeneratorfunction(value)
-        #         and not inspect.ismethod(value)
-        #         and not inspect.ismethoddescriptor(value)
-        #         and not inspect.isroutine(value)
-        #     )
-        #     return super().encode(d)
-        return super().encode(obj)
+        # WindowsPath
+        elif isinstance(obj, Path):
+            return super().encode(str(obj))
+        #return super().encode(obj)
+        return json.JSONEncoder.default(self, obj)
+
 
 def load_json(path):
     with Path(path).open() as ff:

@@ -46,11 +46,12 @@ def parser():
     parser.add_argument("--download_all_hw_styles", action="store_true", help="Will download all handwriting styles from S3 if they don't exist")
     parser.add_argument("--unigrams", type=str, default=None, help="Path to unigram file (list of words for text generation)")
     parser.add_argument("--overwrite", type=bool, default=False, help="Overwrite output directory if it exists")
-    parser.add_argument("--batch_size", type=int, default=4, help="Number of images to generate at once, will use parallel processing")
+    parser.add_argument("--batch_size", type=int, default=1, help="Number of images to generate at once, just use 1")
     parser.add_argument("--count", type=int, default=100, help="Number of images to generate")
     parser.add_argument("--wikipedia", action="store_true", help="Use wikipedia data for text generation")
     parser.add_argument("--degradation", action="store_true", help="Apply degradation function to images")
     parser.add_argument("--workers", type=int, default=None, help="How many parallel processes to spin up? (default is number of cores - 2)")
+    parser.add_argument("--display_output", action="store_true", help="Display output images")
 
     args = parser.parse_args()
 

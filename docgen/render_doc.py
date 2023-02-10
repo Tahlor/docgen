@@ -261,6 +261,9 @@ def fill_box_with_random_lines(word_imgs,
 def flip(prob=.5):
     return random.random() < prob
 
+def hasattr_not_none(obj, attr):
+    return hasattr(obj, attr) and getattr(obj, attr) is not None
+
 class BoxFiller:
     """ A re-usable object for filling in a box with words
         #   All word BBox's are relative to the box (i.e., assumes 0,0 origin) until pasted onto the image
@@ -286,7 +289,9 @@ class BoxFiller:
                  channels=3,
                  slope_sd=0.0015,
                  font_size_sd=0.01,
-                 random_word_idx=True, ):
+                 random_word_idx=True,
+                 default_font_size=32,
+                 ):
         """ Initiate the BoxFiller object
 
         Args:
@@ -323,6 +328,7 @@ class BoxFiller:
         self.slope_sd = slope_sd
         self.font_size_sd = font_size_sd
         self.random_word_idx = random_word_idx
+        self.default_font_size = default_font_size
 
     def gen_slope(self):
         return random.gauss(0, self.slope_sd)
@@ -386,6 +392,7 @@ class BoxFiller:
     def reset(self, bbox, img=None,
               max_lines=sys.maxsize,
               max_words=sys.maxsize,
+              img_text_pair_gen=None,
               error_mode="expand",
               ):
         """ Reset the BoxFiller object, usually done for each new box
@@ -408,7 +415,20 @@ class BoxFiller:
         Returns:
 
         """
+        if not isinstance(bbox, BBox):
+            bbox = BBox("ul", bbox, format="XYXY")
         self.bbox = bbox
+
+        if self.default_font_size is not None:
+            self.font_size = None
+        else:
+            self.font_size = self.default_font_size
+
+        if img_text_pair_gen is not None:
+            self.img_text_pair_gen = img_text_pair_gen
+            self.dataset_length = len(img_text_pair_gen)
+            self._get_word = self._get_from_joint
+
         if hasattr(bbox, "max_lines") and bbox.max_lines is not None:
             max_lines = bbox.max_lines
         self.max_lines = max_lines
@@ -448,16 +468,18 @@ class BoxFiller:
         self.font_size_sd = .1
         self.next_is_last_line = False
         self.slope = self.gen_slope()
-        self.starting_x1 = self.round(random.uniform(0, self.bbox.font_size * .3))
-
-        self.reset_line_variation()
 
         if hasattr(self.bbox, "font_size"):
             self.font_size = self.bbox.font_size
         else:
-            self.font_size = height(self.get_word()[0])
+            # Get height of first word
+            img, _ = self._get_word(0)
+            self.font_size = height(img)
 
-        if self.bbox.max_lines is not None and self.bbox.vertically_centered:
+        self.starting_x1 = self.round(random.uniform(0, self.font_size * .3))
+        self.reset_line_variation()
+
+        if hasattr_not_none(self.bbox, "max_lines") and hasattr_not_none(self.bbox, "vertically_centered"):
             estimated_height = self.bbox.max_lines * (self.font_size* (1+np.mean(self.vertical_space_min_max))) * 1.05
             self.y1 = self.round((self.bbox.height - estimated_height) / 2)
         else:
@@ -477,9 +499,9 @@ class BoxFiller:
         # vert offset
         # horiz space
         # slope
-        self.starting_x1 += int(random.gauss(0,.3) * self.bbox.font_size )
+        self.starting_x1 += int(random.gauss(0,.3) * self.font_size )
         self.starting_x1 = abs(self.starting_x1)
-        self.horizontal_space_min_max = (.05, .2)
+        self.horizontal_space_min_max = (.1, .5)
         self.vertical_space_min_max = (self.vert_space_min_gen(), self.vert_space_max_gen())
 
 
@@ -737,7 +759,7 @@ class BoxFiller:
             bbox.offset_origin(offset_y=self.bbox[1],
                                 offset_x=self.bbox[0])
 
-            composite_images2(self.img, bbox.img, bbox, offset=self.paste_offset)
+            composite_images2(self.img, bbox.img, bbox) # offset=self.paste_offset)
             bbox.img = None # free up memory
 
 

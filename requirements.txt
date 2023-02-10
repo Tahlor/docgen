@@ -14,7 +14,8 @@ opencv-python
 scikit-image
 editdistance
 unidecode
-
+reportlab
+easydict
 ocrodeg @ git+https://github.com/NVlabs/ocrodeg
 
 # IF REPO IS PUBLIC
@@ -31,4 +32,7 @@ textgen @ git+ssh://git@github.ancestry.com/tarchibald/textgen@master#egg=textge
 Faker @ git+ssh://git@github.ancestry.com/tarchibald/Faker@master#egg=Faker
 docdegrade @ git+ssh://git@github.ancestry.com/tarchibald/docdegrade@master#egg=docdegrade
 download_resources @ git+ssh://git@github.ancestry.com/tarchibald/download_resources@master#egg=download_resources
+
+# reportlab
+#conda install -c conda-forge poppler
 
