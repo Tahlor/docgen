@@ -52,8 +52,14 @@ def parser():
     parser.add_argument("--degradation", action="store_true", help="Apply degradation function to images")
     parser.add_argument("--workers", type=int, default=None, help="How many parallel processes to spin up? (default is number of cores - 2)")
     parser.add_argument("--display_output", action="store_true", help="Display output images")
+    parser.add_argument("--verbose", action="store_true", help="Display warnings etc.")
 
     args = parser.parse_args()
+
+    # disable warnings
+    if not args.verbose:
+        import warnings
+        warnings.filterwarnings("ignore")
 
     if args.output is None:
         args.output = ROOT / "output" / "french_bmd_output"
