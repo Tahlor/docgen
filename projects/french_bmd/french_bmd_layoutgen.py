@@ -1,4 +1,4 @@
-TESTING = False # TESTING = disables error handling
+TESTING = True # TESTING = disables error handling
 
 if TESTING:
     # set seeds
