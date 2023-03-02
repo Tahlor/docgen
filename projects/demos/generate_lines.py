@@ -75,6 +75,7 @@ class LineGenerator:
                            model=self.args.saved_handwriting_model,
                            device=self.args.device
                             )
+                , buffer_size=100,
                 )
         self.renderer_daemon.start()
         self.next_word_iterator = self.get_next_word_iterator()
@@ -89,6 +90,10 @@ class LineGenerator:
         else:
             logger.exception(e)
             warnings.warn(f"Only generated {i} out of {self.args.count} images")
+
+        self.renderer_daemon.stop()
+        self.renderer_daemon.join()
+
         with self.args.output_ocr_json.open("w") as f:
             json.dump(ocr_dict, f)
         with self.args.output_text_json.open("w") as f:
@@ -218,10 +223,10 @@ def process_args(args):
     out = {"OCR": args.output_ocr_json, "COCO": args.output_coco_json, "TEXT": args.output_text_json}
     for k, v in out.items():
         if v is not None:
-            out[k] = Path(v)
+            setattr(args, f"output_{k.lower()}_json", Path(v))
             out[k].parent.mkdir(parents=True, exist_ok=True)
         else:
-            out[k] = args.output_folder / f"{k}.json"
+            setattr(args, f"output_{k.lower()}_json", args.output_folder / f"{k}.json")
 
     if isinstance(args.canvas_size, str):
         args.canvas_size = make_tuple(args.canvas_size)
