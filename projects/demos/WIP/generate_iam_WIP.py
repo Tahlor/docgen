@@ -25,8 +25,8 @@ def main():
                                     conversion=lambda image: np.uint8(image * 255)
                                     )
     else:
-        from textgen.basic_text_encoded_dataset import VOCABULARY
-        basic_text_encoded_dataset = Wikipedia(
+        from textgen.basic_text_dataset import VOCABULARY
+        basic_text_dataset = Wikipedia(
             dataset=load_dataset("wikipedia", "20220301.en")["train"],
             vocabulary=set(VOCABULARY),  # set(self.model.netconverter.dict.keys())
             encode_function=model.netconverter.encode,
@@ -48,9 +48,9 @@ def main():
     size, origin = new_textbox_given_background(shp)
     box1, bboxs1 = fill_area_with_words(word_imgs=[w["image"] for w in word_imgs],
                                         bbox=[0,0,*size],
-                                        text_list=[w["raw_text"] for w in word_imgs],
+                                        text_list=[w["text_raw"] for w in word_imgs],
                                         max_vertical_offset_between_words=5,
-                                        error_handling="force",
+                                        error_handling="ignore",
                                         )
 
     # Test draw boxes on numpy

@@ -40,7 +40,8 @@ def fibrous2(img):
 
 all_funcs = [blur, random_distortions, ruled_surface_distortions, splotches, fibrous1, fibrous2]
 
-def degradation_function_composition(img, number_of_distortions=None):
+def pil_to_np(img):
+    mode = None
     if isinstance(img, Image.Image):
         PIL = True
         mode = img.mode
@@ -53,6 +54,10 @@ def degradation_function_composition(img, number_of_distortions=None):
         img = img / 255.0
     else:
         rescale = False
+    return img, rescale, mode, PIL
+
+def degradation_function_composition(img, number_of_distortions=None):
+    img, rescale, mode, PIL = pil_to_np(img)
 
     if number_of_distortions is None:
         number_of_distortions = random.randint(0, len(all_funcs))
@@ -69,7 +74,7 @@ def degradation_function_composition(img, number_of_distortions=None):
     return img
 
 def degradation_function_composition2(img):
-    return degradation_function_composition(img, 2)
+    return degradation_function_composition(img, 1)
 
 def apply_all(img, funcs=all_funcs):
     for f in funcs:
@@ -78,7 +83,28 @@ def apply_all(img, funcs=all_funcs):
     img = np.clip(img, 0, 1)
     return img
 
+def test_all():
+    _img = Image.open("test.jpg")
 
-if __name__ == "__main__":
+    for f in [fibrous1]:
+        img = _img.copy()
+        print(f.__name__)
+        #img = np.ones((800, 1000))
+        img, rescale, mode, PIL = pil_to_np(img)
+
+        img = f(img)
+
+        if rescale:
+            img = img * 255
+            img = img.astype(np.uint8)
+        if PIL:
+            img = Image.fromarray(img, mode=mode)
+        img.show()
+
+def something():
     noise = np.random.uniform(size=3200*2500).reshape(3200, -1)
     apply_all(noise)
+
+
+if __name__ == "__main__":
+    test_all()

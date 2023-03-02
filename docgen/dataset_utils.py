@@ -172,23 +172,9 @@ def ocr_dataset_to_coco(ocr_dict,
         return segmentation, segmentation_list
 
     # Loop through each image/document and associated OCR information
-    for img_id, sub_dict in ocr_dict.items():
+    for img_id, sub_dict in tqdm(ocr_dict.items()):
         image = {"id":img_id, "file_name": img_id+".jpg", "height": sub_dict["height"], "width": sub_dict["width"]}
         images.append(image)
-
-        # for section in dict["sections"]:
-        #     for paragraph in section["paragraphs"]:
-        #         for line in paragraph["lines"]:
-        #             seg_words = []
-        #             for word in line["words"]:
-        #                 annotations.append(process_item(word, img_id, "word"))
-        #                 seg_words.append(word["bbox"])
-        #             seg_lines.append(BBoxNGon.get_convex_hull(seg_words))
-        #
-        #             annotations.append(process_item(line, img_id, "line"))
-        #         annotations.append(process_item(paragraph, img_id, "paragraph"))
-        #     category = section["category"] if "category" in section.keys() else "section"
-        #     annotations.append(process_item(section, img_id, category))
         nested(img_id, sub_dict, hierarchy[0])
 
     info = DEFAULT_COCO_INFO.copy()

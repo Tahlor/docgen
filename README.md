@@ -19,8 +19,8 @@ Or:
 ## TODO LIST
 * finalize degradation
 * update output format
-* fix signature section
-* make a version that mimics what Siteng wants better
+* French BMD / Layoutgen: abandon the paired dataset? 
+  * SavedHandwritingRandomAuthor: refactor; right now it assumes each author is a different file, but implied functionality is author can be requested
 
 ## Dependencies
 Requires:

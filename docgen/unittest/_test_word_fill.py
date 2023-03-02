@@ -56,16 +56,16 @@ if __name__ == '__main__':
     shp = utils.shape(background_img)
     box1, bboxs1 = fill_area_with_words(word_imgs=[w["image"] for w in word_imgs],
                          bbox=[0, 0, 600, 1200],
-                         text_list=[w["raw_text"] for w in word_imgs]
+                         text_list=[w["text_raw"] for w in word_imgs]
                          )
     box2, bboxs2 = fill_area_with_words(word_imgs=[w["image"] for w in word_imgs],
                                         bbox=[0, 0, 300, 1200],
-                                        text_list=[w["raw_text"] for w in word_imgs],
+                                        text_list=[w["text_raw"] for w in word_imgs],
                                         max_vertical_offset_between_words= 5
                                         )
     box3, bboxs3 = fill_area_with_words(word_imgs=[w["image"] for w in word_imgs],
                                         bbox=[0, 0, 300, 1200],
-                                        text_list=[w["raw_text"] for w in word_imgs],
+                                        text_list=[w["text_raw"] for w in word_imgs],
                                         max_vertical_offset_between_words=15
                                         )
 

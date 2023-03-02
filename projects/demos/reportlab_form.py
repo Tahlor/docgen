@@ -5,11 +5,9 @@ from tqdm import tqdm
 from docgen.reportlab_tools.reportlab_generator import FormGenerator, filter_to_one_row
 from docgen.content.table_from_faker import TableDataFromFaker
 from docgen.img_tools import convert_pdf_to_img_paths
-from hwgen.data.saved_handwriting_dataset import SavedHandwriting, SavedHandwritingRandomAuthor
-from hwgen.resources import HW_GENERATED
-from hwgen.data.utils import show
+from hwgen.data.saved_handwriting_dataset import SavedHandwritingRandomAuthor
 from PIL import Image
-from docgen.pdf_edit import fill_area_with_words, composite_images2, BoxFiller
+from docgen.pdf_edit import BoxFiller
 from docgen.rendertext.render_word import RenderImageTextPair
 from docgen.bbox import BBox
 from copy import deepcopy
@@ -56,7 +54,7 @@ class FormerFiller:
                                        include_row_number=False,
                                        random_fields=27)
 
-        self.bf = BoxFiller()
+        self.bf = BoxFiller(random_word_idx=True)
 
     def generate_form(self):
 
@@ -87,17 +85,26 @@ class FormerFiller:
 
         return background_img, ocr_dict
 
-    def main(self, output_path="./output"):
-        variations=1000
-        form_types=10
+    def main(self, output_path="./output", number_of_form_types=10, copies_of_each_form=10, test_set_ration=0.1):
         output_path = file_incrementer(output_path, create_dir=True)
         master_output = {}
-        for form_type in tqdm(range(form_types)):
+        for form_type in tqdm(range(number_of_form_types)):
             ocr_dict, background_img, scale_factors = self.generate_form()
             output = master_output[form_type] = {}
-            for variation in range(variations):
-                out_img, out_ocr = self.fill_form(deepcopy(ocr_dict), background_img.copy(), scale_factors)
+            for variation in range(copies_of_each_form):
+                if variation==0:
+                    out_img, out_ocr = background_img, ocr_dict
+                else:
+                    out_img, out_ocr = self.fill_form(deepcopy(ocr_dict), background_img.copy(), scale_factors)
                 name = f"{form_type:03.0f}_{variation:03.0f}"
+
+                # if variation > copies_of_each_form * (1-test_set_ration):
+                #     output_path = output_path / "test"
+                #     output_path.mkdir(exist_ok=True)
+                # else:
+                #     output_path = output_path / "train"
+                #     output_path.mkdir(exist_ok=True)
+
                 save_path = output_path / f"{name}.jpg"
                 out_img.save(save_path)
                 out_ocr.update({"name": name, "path": save_path})
@@ -109,4 +116,4 @@ class FormerFiller:
 
 if __name__ == "__main__":
     ff = FormerFiller()
-    ff.main()
+    ff.main(copies_of_each_form=1000, number_of_form_types=10)

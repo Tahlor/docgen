@@ -23,6 +23,7 @@ from docgen import utils
 import logging
 from PIL import Image
 import dill as pickle
+from collections.abc import Iterator
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("root")
@@ -148,6 +149,8 @@ def estimate_space(word_imgs, vertical_space, horizontal_space):
     widths = [word.shape[0] + horizontal_space for word in word_imgs]
     total_length_concat = np.cumsum(widths)
 
+def identity(x):
+    return x
 def np_img_to_pil(x):
     return Image.fromarray((x.squeeze() * 255).astype(np.uint8))
 
@@ -289,8 +292,12 @@ class BoxFiller:
                  channels=3,
                  slope_sd=0.0015,
                  font_size_sd=0.01,
-                 random_word_idx=True,
+                 random_word_idx=False,
                  default_font_size=32,
+                 default_max_words=sys.maxsize,
+                 default_max_lines=sys.maxsize,
+                 default_error_mode="ignore",
+                 word_img_format="auto",
                  ):
         """ Initiate the BoxFiller object
 
@@ -302,8 +309,30 @@ class BoxFiller:
             slope_sd: Standard deviation of the slope of a line of text
             font_size_sd: Standard deviation of font
             random_word_idx: Whether to randomly select a word from the word_img_gen/text_gen
-        """
+            default_font_size: Default font size
+            default_max_words: Default maximum number of words to put in a box
+            default_max_lines: Default maximum number of lines to put in a box
+            word_img_format: Format of the word images; only numpy01, PIL and auto implemented
+                                                        numpy01 -> 0-255 PIL
 
+        """
+        self.word_img_format = word_img_format
+
+        self.img_text_pair_gen, self.word_img_gen, self.text_gen = img_text_pair_gen, word_img_gen, text_gen
+
+        if self.img_text_pair_gen is not None or self.word_img_gen is not None or self.text_gen is not None:
+            self.setup_content_gen(img_text_pair_gen,word_img_gen,text_gen)
+
+        self.channels = channels
+        self.slope_sd = slope_sd
+        self.font_size_sd = font_size_sd
+        self.random_word_idx = random_word_idx
+        self.default_font_size = default_font_size
+        self.default_max_words = default_max_words
+        self.default_max_lines = default_max_lines
+        self.default_error_mode = default_error_mode
+
+    def setup_content_gen(self, img_text_pair_gen, word_img_gen, text_gen):
         if img_text_pair_gen is None and word_img_gen is None:
             warnings.warn("No handwritten images provided, output will be black boxes")
             length = 512
@@ -312,23 +341,20 @@ class BoxFiller:
             self._get_word = self._get_from_separate
             self.dataset_length = length
         elif img_text_pair_gen is not None:
-            self._get_word = self._get_from_joint
+            if isinstance(img_text_pair_gen, Iterator):
+                self._get_word = self._get_from_joint_iterator
+                self.dataset_length = sys.maxsize
+            else:
+                self._get_word = self._get_from_joint
+                self.dataset_length = len(img_text_pair_gen)
             if word_img_gen is not None:
                 warnings.warn("Handwritten images overspecified, using the img_text_pair_gen generator")
-            self.dataset_length = len(img_text_pair_gen)
+
         else:
             self._get_word = self._get_from_separate
             self.dataset_length = len(word_img_gen)
 
-        self.img_text_pair_gen = img_text_pair_gen
-        self.word_img_gen = word_img_gen
-        self.text_gen = text_gen
-
-        self.channels = channels
-        self.slope_sd = slope_sd
-        self.font_size_sd = font_size_sd
-        self.random_word_idx = random_word_idx
-        self.default_font_size = default_font_size
+        return img_text_pair_gen, word_img_gen, text_gen
 
     def gen_slope(self):
         return random.gauss(0, self.slope_sd)
@@ -339,10 +365,30 @@ class BoxFiller:
     def round(self, i):
         return int(round(i))
     def _get_from_joint(self, i):
-        return self.img_text_pair_gen[i]
+        img, text = self.img_text_pair_gen[i]
+        return self.convert_img_format(img), text
+
+    def _get_from_joint_iterator(self, i):
+        img, text = next(self.img_text_pair_gen)
+        return self.convert_img_format(img), text
 
     def _get_from_separate(self, i):
-        return self.word_img_gen[i], self.text_gen[i]
+        return self.convert_img_format(self.word_img_gen[i]), self.text_gen[i]
+
+    def convert_img_format(self, img):
+        if self.word_img_format == "auto":
+            if isinstance(img, np.ndarray) and np.max(img) <= 1:
+                return np_img_to_pil(img)
+            else:
+                return img
+        elif self.word_img_format == "numpy01":
+            return np_img_to_pil(img)
+        elif self.word_img_format == "PIL":
+            return img
+        else:
+            raise NotImplementedError("Only numpy01, auto, and PIL implemented for word_img_format")
+        return img
+
 
     def get_word(self, i=None):
         """ Get a word image and text
@@ -390,10 +436,12 @@ class BoxFiller:
     def vert_space_min_gen(self):
         return random.uniform(0, .2)
     def reset(self, bbox, img=None,
-              max_lines=sys.maxsize,
-              max_words=sys.maxsize,
+              max_lines=None,
+              max_words=None,
               img_text_pair_gen=None,
-              error_mode="expand",
+              word_img_gen=None,
+              text_gen=None,
+              error_mode=None,
               ):
         """ Reset the BoxFiller object, usually done for each new box
 
@@ -404,12 +452,16 @@ class BoxFiller:
             max_words: The maximum number of words to fill
             error_mode: How to handle errors when filling the box.
                           "expand" will expand the box to fit the text
-                          "ignore" will ignore the out-of-bounds
+                          "ignore" will ignore the out-of-bounds (formerly "force")
                           "terminate" will end the line
                           "skip_" will try the next word, should be combined with one of the others
                             skip_expand will skip and expand
                             skip_ignore will skip and ignore
                             skip_terminate will skip and terminate
+            img_text_pair_gen: A generator that yields (img, text) pairs
+            OR
+            word_img_gen: A list of images to use
+            text_gen: A list of text to use
 
 
         Returns:
@@ -419,19 +471,27 @@ class BoxFiller:
             bbox = BBox("ul", bbox, format="XYXY")
         self.bbox = bbox
 
-        if self.default_font_size is not None:
-            self.font_size = None
+        if img_text_pair_gen is not None or word_img_gen is not None:
+            if self.random_word_idx:
+                warnings.warn("Not recommended to use random_word_idx when updating the word_img_gen or img_text_pair_gen every call")
+                self.random_word_idx = False
+            self.img_text_pair_gen, self.word_img_gen, self.text_gen = self.setup_content_gen(img_text_pair_gen, word_img_gen, text_gen)
+
+        if hasattr_not_none(self.bbox, "font_size"):
+            self.font_size = self.bbox.font_size
         else:
             self.font_size = self.default_font_size
 
-        if img_text_pair_gen is not None:
-            self.img_text_pair_gen = img_text_pair_gen
-            self.dataset_length = len(img_text_pair_gen)
-            self._get_word = self._get_from_joint
 
-        if hasattr(bbox, "max_lines") and bbox.max_lines is not None:
+        if hasattr_not_none(self.bbox, "max_lines"):
             max_lines = bbox.max_lines
+        elif max_lines is None:
+            max_lines = self.default_max_lines
+
         self.max_lines = max_lines
+
+        if max_words is None:
+            max_words = self.default_max_words
         self.max_words = min(max_words, self.dataset_length)
 
         self.bbox_list = []
@@ -462,19 +522,16 @@ class BoxFiller:
         self.last_word_img = None
         self.last_word_text = ""
         self.tab_spaces = 5
-        self.error_mode = error_mode # skip+, ignore, expand, terminate
+        if error_mode is not None:
+            self.error_mode = error_mode # skip+, ignore, expand, terminate
+        else:
+            self.error_mode = self.default_error_mode
+
         self.skip_count = 0
         self.skip_limit = 3
         self.font_size_sd = .1
         self.next_is_last_line = False
         self.slope = self.gen_slope()
-
-        if hasattr(self.bbox, "font_size"):
-            self.font_size = self.bbox.font_size
-        else:
-            # Get height of first word
-            img, _ = self._get_word(0)
-            self.font_size = height(img)
 
         self.starting_x1 = self.round(random.uniform(0, self.font_size * .3))
         self.reset_line_variation()
@@ -501,7 +558,7 @@ class BoxFiller:
         # slope
         self.starting_x1 += int(random.gauss(0,.3) * self.font_size )
         self.starting_x1 = abs(self.starting_x1)
-        self.horizontal_space_min_max = (.1, .5)
+        self.horizontal_space_min_max = (.2, .6)
         self.vertical_space_min_max = (self.vert_space_min_gen(), self.vert_space_max_gen())
 
 
@@ -667,7 +724,10 @@ class BoxFiller:
             self.reset_line_variation()
             self.x1 = self.starting_x1
             self.x1s, self.y2s = [], []
-            self.update_max_words()
+
+            # Realistic paragraph ending on last line
+            if self.max_lines > 1:
+                self.update_max_words()
             result = self.make_line()
 
             if "newline" in result:
@@ -759,7 +819,7 @@ class BoxFiller:
             bbox.offset_origin(offset_y=self.bbox[1],
                                 offset_x=self.bbox[0])
 
-            composite_images2(self.img, bbox.img, bbox) # offset=self.paste_offset)
+            composite_images2(self.img, bbox.img, bbox, offset=self.paste_offset)
             bbox.img = None # free up memory
 
 

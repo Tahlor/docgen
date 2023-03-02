@@ -17,7 +17,6 @@ except:
     warnings.warn("Failed to import win32com")
 from hwgen.data.utils import display, shape, ndim, show, shape
 
-
 # def shape(item):
 #     """
 #     Args:
@@ -177,6 +176,7 @@ def handler(testing=False, return_on_fail=None):
                 return func(*args,**kwargs)
         return wrapper2
     return wrapper1
+
 
 if __name__ == '__main__':
     """
