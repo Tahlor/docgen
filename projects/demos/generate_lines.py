@@ -34,7 +34,7 @@ from hwgen.daemon import Daemon
 from textgen.basic_text_dataset import VOCABULARY
 from docgen.cuda_utils import try_try_again_factory
 
-try_try_again = try_try_again_factory(debug=True)
+try_try_again = try_try_again_factory(debug=False)
 
 logger = logging.getLogger(__name__)
 ROOT = Path(__file__).parent.absolute()
@@ -83,11 +83,10 @@ class LineGenerator:
                                    default_error_mode="expand",
                                    img_text_pair_gen=self.next_word_iterator)
 
-        if True:
+        try:
             for i in tqdm(range(self.args.count)):
                 self.create_line(i)
-        #except Exception as e:
-        else:
+        except Exception as e:
             logger.exception(e)
             warnings.warn(f"Only generated {i} out of {self.args.count} images")
 
