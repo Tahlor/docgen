@@ -196,15 +196,17 @@ class RenderWordFont(RenderWord):
                 "font":font,
                 "size":size,
                 "bbox":None,
-                "raw_text":word}
+                "text_raw":word}
 
 class RenderImageTextPair:
     """ TODO: MOVE to textgen
 
     """
-    def __init__(self, renderer, textgen):
+    def __init__(self, renderer, textgen, renderer_text_key=None, renderer_img_key="image"):
         self.renderer = renderer
         self.textgen = textgen
+        self.renderer_text_key = renderer_text_key
+        self.renderer_img_key = renderer_img_key
 
     @staticmethod
     def collate_fn(batch):
@@ -239,7 +241,7 @@ class RenderImageTextPair:
 
     def __getitem__(self,i):
         d = self.renderer.render_word(self.textgen[i])
-        return d["image"], d["raw_text"]
+        return d[self.renderer_img_key], d[self.text_gen_key]
 
 
 if __name__ == '__main__':

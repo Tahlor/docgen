@@ -28,10 +28,12 @@ class BBox:
                  paragraph_index=None,
                  force_int=True,
                  img=None,
-                 format:Literal['XYXY', 'XYWH']="XYXY"):
+                 format:Literal['XYXY', 'XYWH']="XYXY",
+                 height_ll=None):
         """
-        Store BBox as TUPLE to prevent accidental modification
-        
+        Store BBox as UL XYXY TUPLE to prevent accidental modification
+        The only functions that should modify in place are: update_bbox, enlarge, expand, offset_origin
+
         Args:
             origin: ul = upper left, ll = lower left; lower left not IMPLEMENTED
             bbox: ALWAYS x1,y1,x2,y2; assume origin is top left, x1,y1 is top left and smaller than x2,y2
@@ -44,23 +46,25 @@ class BBox:
             format:Literal['XYXY', 'XYWH']="XYXY"): by default, bbox is in X1,Y1,X2,Y2 format;
                             ALL INTERNAL OPERATIONS WORK ON XYXY
                             You can input/output to XYWH (COCO)
+            height (int): if origin is ll, you must supply the height of the image; ONLY USED FOR LL calculation
         """
-        #self.origin = self.set_origin(origin)
+        self.origin = origin
         self.format = format
-        if origin=="ll":
-            raise NotImplementedError
         self.force_int = self._force_int if force_int else lambda *x:x
         self.img = img
 
+        self.height_ll = height_ll
+
         # BBox is always stored as XYXY, update if format is XYWH
         self.update_bbox(bbox, self.format)
+
         self.line_number = line_index
         self.line_word_index = line_word_index
         self.text = text
         self.parent_bbox = parent_obj_bbox
         self.paragraph_index = paragraph_index
 
-    def update_bbox(self, bbox, format:Literal['XYXY', 'XYWH']="XYXY"):
+    def update_bbox(self, bbox, format:Literal['XYXY', 'XYWH']="XYXY", origin="ul"):
         if isinstance(bbox, tuple):
             self._bbox = bbox # list(bbox)
         elif isinstance(bbox, list):
@@ -71,8 +75,13 @@ class BBox:
             self._bbox = bbox.get_bbox()
         else:
             raise NotImplementedError("Unexpected type for BBox")
-        if format == "XYWH":
-            self._bbox = tuple(self._XYWH_to_XYXY(self._bbox))
+        if origin=="ll" and format=="XYXY":
+            self._bbox = self._change_origin(self.height_ll)
+        elif format == "XYWH":
+            if origin=="ll":
+                self._bbox = self._XYWH_ll_to_XYXY_ul(self._bbox, self.height_ll)
+            else:
+                self._bbox = tuple(self._XYWH_to_XYXY(self._bbox))
 
         self._bbox = self.force_int(self._bbox)
 
@@ -83,6 +92,33 @@ class BBox:
     def expand_downward(self, pixels):
         self._bbox = self.force_int((self._bbox[0], self._bbox[1], self._bbox[2], self._bbox[3]+pixels))
         return self.bbox
+
+    def rescale(self, scale):
+        self._rescale(self._bbox, scale)
+        return self.bbox
+    @staticmethod
+    def _rescale(bbox, scale):
+        if isinstance(scale, (tuple, list)):
+            return bbox[0]*scale[0], bbox[1]*scale[1], bbox[2]*scale[0], bbox[3]*scale[1]
+        else:
+            return bbox[0]*scale, bbox[1]*scale, bbox[2]*scale, bbox[3]*scale
+
+    @staticmethod
+    def _XYWH_ll_to_XYXY_ul(bbox, height):
+        """ This assumes are BBox's are defined with X1,Y1 being the lower left (LL) corner relative to the LL origin
+
+        Args:
+            bbox:
+            height:
+
+        Returns:
+
+        """
+        return bbox[0], height-bbox[1]-bbox[3], bbox[0]+bbox[2], height-bbox[1]
+
+    @staticmethod
+    def _XYXY_ul_to_XYWH_ll(bbox, height):
+        return bbox[0], height-bbox[3], bbox[2]-bbox[0], bbox[3]-bbox[1]
 
     @staticmethod
     def _XYWH_to_XYXY(bbox):
@@ -105,9 +141,15 @@ class BBox:
 
     def get_bbox(self):
         if self.format == "XYWH":
-            return self.get_XYWH()
+            if self.origin == "ll":
+                return self._XYXY_ul_to_XYWH_ll(self.get_XYWH(), self.height)
+            else:
+                return self.get_XYWH()
         else:
-            return self._bbox
+            if self.origin == "ll":
+                return self._change_origin(self._bbox, self.height_ll)
+            else:
+                return self._bbox
 
     @property
     def bbox(self):
@@ -145,29 +187,27 @@ class BBox:
         self._bbox = self.force_int(self._enlarge(self._bbox, pixels, format="XYXY"))
         return self.bbox
 
-    def change_origin(self, origin: Literal['ul', 'll'], height):
+    @staticmethod
+    def _change_origin(bbox, height):
         """ Change from UL (upper-left) to LL (lower-left) or LL to UL coordinate origin
             Must know the height of the coordinate-plane naturally
 
             If the self.parent_bbox is defined, user can use it to compute height.
             Not automatic, since it's not clear what origin was used to define the parent_bbox.
-            Obviously won't adjust the parent bbox, since it would need the height of its parent.
-
-        Args:
-            origin:
-            height:
-
-        Returns:
-
         """
-        if self.origin!=origin:
-            self.origin=origin
-            self.invert_y_axis(height)
 
-            # Swap y-coords; only works on boxes
-            self._bbox = self._bbox[0],self._bbox[3],self._bbox[2],self._bbox[1]
+        bbox = BBox._invert_y_axis(bbox, height)
+
+        # Swap y-coords; only works on boxes
+        return bbox[0], bbox[3], bbox[2], bbox[1]
+
 
     def invert_y_axis(self, height=None):
+        height = self.height_ll if height is None else height
+        return self.force_int(self._invert_y_axis(self._bbox, height=height))
+
+    @staticmethod
+    def _invert_y_axis(_bbox, height):
         """ This only inverts the y scale
             Now the larger y-coord will be the first point, use change origin to swap y-coords
         Args:
@@ -176,9 +216,7 @@ class BBox:
         Returns:
 
         """
-        height = self.height if height is None else height
-        self._bbox = self.force_int((self._bbox[0], height-self._bbox[1], self._bbox[2], height-self._bbox[3]))
-        return self._bbox
+        return _bbox[0], height-_bbox[1], _bbox[2], height-_bbox[3]
 
     @staticmethod
     def _swap_bbox_axes(bbox):
@@ -442,6 +480,9 @@ class BBoxNGon(BBox):
                  parent_obj_bbox=None,
                  paragraph_index=None,
                  force_int=True,
+                 img=None,
+                 format: Literal['XYXY', 'XYWH'] = "XYXY",
+                 height_ll=None
                  ):
         """
 
@@ -451,7 +492,7 @@ class BBoxNGon(BBox):
         Returns:
 
         """
-        super().__init__(origin, bbox, line_index, line_word_index, text, parent_obj_bbox, paragraph_index, force_int)
+        super().__init__(origin, bbox, line_index, line_word_index, text, parent_obj_bbox, paragraph_index, force_int, img, format, height_ll)
         self.format = "XYXY"
         self._bbox = np.asarray(bbox)
 
@@ -473,7 +514,7 @@ class BBoxNGon(BBox):
         return bbox_array[::2]
 
     def invert_y_axis(self, height=None):
-        height = self.height if height is None else height
+        height = self.height_ll if height is None else height
         coords = self._bbox.reshape(-1, 2)
         coords[:,1] = height - coords[:,1]
         self._bbox = coords.ravel()
@@ -649,19 +690,7 @@ def flatten_test():
     print(timeit.timeit("flatten(a); flatten(b); flatten(c); flatten(d); flatten(e)", setup="from __main__ import flatten, a,b,c,d,e", number=10000))
     print(timeit.timeit("flatten2(a); flatten2(b); flatten2(c); flatten2(d); flatten2(e)", setup="from __main__ import flatten2, a,b,c,d,e", number=10000))
 
-def concave_hull_test():
-    import matplotlib.pyplot as plt
-
-    # 8 points defining rectangle from 0,0 to 10,10
-    flattened_bbox_list_of_clockwise_points = [0, 0, 5, 0, 10, 0, 10, 5, 10, 10, 5, 10, 0, 10, 0, 5]
-    shuffled = np.array(flattened_bbox_list_of_clockwise_points).reshape(-1, 2)
-    np.random.shuffle(shuffled)
-
-    m = BBoxNGon.concave_hull(shuffled)
-    plt.plot(m[:, 0], m[:, 1])
-    plt.plot(shuffled[:, 0], shuffled[:, 1])
-    plt.show()
 
 
 if __name__=='__main__':
-    concave_hull_test()
+    pass

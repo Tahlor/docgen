@@ -420,9 +420,11 @@ class LayoutGenerator:
         self.word_img_gen = word_img_gen
         self.img_text_pair_gen = img_text_pair_gen
 
+
         self.filler = BoxFiller(img_text_pair_gen=self.img_text_pair_gen,
                                 word_img_gen=self.word_img_gen,
-                                text_gen=self.text_gen, )
+                                text_gen=self.text_gen,
+                                random_word_idx=True)
 
     def make_one_image(self,i):
         """ Generates a single image, layout, and ocr

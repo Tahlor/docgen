@@ -6,7 +6,8 @@ from pathlib import Path
 import socket
 from torch.utils.data import Dataset, DataLoader, IterableDataset
 
-TESTING = True
+# if there is an occasional bug, ignore it and move on
+RAISE_ERRORS_ON_FAILED_ITERATION = True
 
 class LayoutDataset(Dataset):
     """ Generates layouts with handwriting
@@ -29,14 +30,13 @@ class LayoutDataset(Dataset):
     def __len__(self):
         return self.length
 
-    @handler(testing=TESTING, return_on_fail=(None, None, None))
+    @handler(testing=RAISE_ERRORS_ON_FAILED_ITERATION, return_on_fail=(None, None, None))
     def __getitem__(self, i):
         name, ocr, image = self.layout_generator.make_one_image(i)
 
         if self.degradation_function:
             image = self.degradation_function(image)
         if self.output_path:
-            name = f"{i:07.0f}"
             save_path = self.output_path / f"{name}.jpg"
             image.save(save_path)
         return name, ocr, image

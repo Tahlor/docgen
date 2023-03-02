@@ -40,13 +40,15 @@ class FormGenerator():
         self.line_idx = 0
         self.within_line_idx = 0
         self.fill_fields_with_text = fill_fields_with_text
+        self.document_height = 842
+        self.document_width = 595
 
     def create_new_form(self, fields, form_name='simple_form.pdf'):
         self.ocr = {"sections": []}
 
         self.c = canvas.Canvas(form_name)
         # self.c._pagesize
-        self.c.setPageSize((595, 842))
+        self.c.setPageSize((self.document_width, self.document_height))
         self.shape_excl_margins = (self.c._pagesize[0]-self.margins.L-self.margins.R,
                                 self.c._pagesize[1] - self.margins.T - self.margins.B)
 
@@ -75,7 +77,7 @@ class FormGenerator():
         y1 = self.current_position[1] if y1 is None else y1
         height = self.line_height if height is None else height
         x2, y2 = x1 + width, y1 + height
-        return BBox("ul", bbox=[x1,y1,x2,y2])
+        return BBox("ll", bbox=[x1,y1,x2,y2], height_ll=self.document_height)
 
 
     def add_title(self, title):

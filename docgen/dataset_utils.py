@@ -34,22 +34,12 @@ class JSONEncoder(json.JSONEncoder):
     def default(self, obj):
         if hasattr(obj, "toJSON"):
             return super().encode(obj.toJSON())
-        # elif hasattr(obj, "__dict__"):
-        #     d = dict(
-        #         (key, value)
-        #         for key, value in inspect.getmembers(obj)
-        #         if not key.startswith("__")
-        #         and not inspect.isabstract(value)
-        #         and not inspect.isbuiltin(value)
-        #         and not inspect.isfunction(value)
-        #         and not inspect.isgenerator(value)
-        #         and not inspect.isgeneratorfunction(value)
-        #         and not inspect.ismethod(value)
-        #         and not inspect.ismethoddescriptor(value)
-        #         and not inspect.isroutine(value)
-        #     )
-        #     return super().encode(d)
-        return super().encode(obj)
+        # WindowsPath
+        elif isinstance(obj, Path):
+            return super().encode(str(obj))
+        #return super().encode(obj)
+        return json.JSONEncoder.default(self, obj)
+
 
 def load_json(path):
     with Path(path).open() as ff:
@@ -182,23 +172,9 @@ def ocr_dataset_to_coco(ocr_dict,
         return segmentation, segmentation_list
 
     # Loop through each image/document and associated OCR information
-    for img_id, sub_dict in ocr_dict.items():
+    for img_id, sub_dict in tqdm(ocr_dict.items()):
         image = {"id":img_id, "file_name": img_id+".jpg", "height": sub_dict["height"], "width": sub_dict["width"]}
         images.append(image)
-
-        # for section in dict["sections"]:
-        #     for paragraph in section["paragraphs"]:
-        #         for line in paragraph["lines"]:
-        #             seg_words = []
-        #             for word in line["words"]:
-        #                 annotations.append(process_item(word, img_id, "word"))
-        #                 seg_words.append(word["bbox"])
-        #             seg_lines.append(BBoxNGon.get_convex_hull(seg_words))
-        #
-        #             annotations.append(process_item(line, img_id, "line"))
-        #         annotations.append(process_item(paragraph, img_id, "paragraph"))
-        #     category = section["category"] if "category" in section.keys() else "section"
-        #     annotations.append(process_item(section, img_id, category))
         nested(img_id, sub_dict, hierarchy[0])
 
     info = DEFAULT_COCO_INFO.copy()

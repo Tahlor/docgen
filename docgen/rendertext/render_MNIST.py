@@ -127,7 +127,7 @@ class RenderEMNIST(RenderWord):
             "font": img_idx,
             "size": size,
             "bbox": None,
-            "raw_text": word}
+            "text_raw": word}
 
 
 if __name__ == '__main__':

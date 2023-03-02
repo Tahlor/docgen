@@ -4,7 +4,9 @@ __pycache__/
 *$py.class
 
 projects/french_bmd/*output*/
-projects/demos/*output*/
+projects/demos/**output*/
+projects/demos/production_scripts/*output*/
+projects/demos/FORMS
 
 docgen/rendertext/data
 data/
