@@ -24,7 +24,7 @@ from docgen.rendertext.render_word import RenderImageTextPair
 from pathlib import Path
 from docgen.dataset_utils import load_and_draw_and_display, save_json, ocr_dataset_to_coco
 from docgen.degradation.degrade import degradation_function_composition2
-from docgen.utils import file_incrementer, handler
+from docgen.utils.utils import file_incrementer, handler
 import multiprocessing
 from docgen.layoutgen.layout_dataset import LayoutDataset
 from torch.utils.data import DataLoader

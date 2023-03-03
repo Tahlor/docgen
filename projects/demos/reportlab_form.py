@@ -11,7 +11,7 @@ from docgen.pdf_edit import BoxFiller
 from docgen.rendertext.render_word import RenderImageTextPair
 from docgen.bbox import BBox
 from copy import deepcopy
-from docgen.utils import file_incrementer
+from docgen.utils.utils import file_incrementer
 from docgen.dataset_utils import JSONEncoder
 
 class FormerFiller:

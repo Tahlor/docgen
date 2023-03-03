@@ -19,7 +19,7 @@ else:
     from typing_extensions import Literal
 from typing import List, Tuple, Optional, Union
 from docgen.bbox import BBox
-from docgen import utils
+from docgen.utils import utils
 import logging
 from PIL import Image
 import dill as pickle

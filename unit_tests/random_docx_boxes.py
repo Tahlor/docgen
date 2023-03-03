@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 from docx.shared import Cm, Inches
 import random
-from docgen.utils import file_incrementer
+from docgen.utils.utils import file_incrementer
 
 def create_docx(output="test.docx", heading = 'TAYLOR'):
     # Create an instance of a word document

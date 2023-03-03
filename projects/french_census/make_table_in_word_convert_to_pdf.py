@@ -5,7 +5,7 @@ import numpy.random
 from docgen import docx2pdf
 from docgen.content.table_from_faker import TableDataFromFaker
 from docgen.docx_tools.docx_tools import *
-from docgen.utils import *
+from docgen.utils.utils import *
 from docgen.pdf_edit import PDF
 from docgen.rendertext.render_word import RenderWordFont
 from hwgen.data.saved_handwriting_dataset import SavedHandwriting

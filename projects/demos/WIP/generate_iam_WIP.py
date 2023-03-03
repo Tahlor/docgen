@@ -6,7 +6,7 @@ from textgen.unigram_dataset import Unigrams
 from docgen.rendertext.render_word import RenderWordFont
 from hwgen.data.saved_handwriting_dataset import SavedHandwriting
 import numpy as np
-from docgen import utils
+from docgen.utils import utils
 from hwgen.data.utils import display
 from docgen.image_composition.utils import new_textbox_given_background
 from textgen.wikipedia_dataset import Wikipedia

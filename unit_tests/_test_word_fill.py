@@ -5,7 +5,7 @@ from textgen.unigram_dataset import Unigrams
 from docgen.rendertext.render_word import RenderWordFont
 from hwgen.data.saved_handwriting_dataset import SavedHandwriting
 import numpy as np
-from docgen import utils
+from docgen.utils import utils
 from hwgen.data.utils import display
 
 PATH= r"C:\Users\tarchibald\github\handwriting\handwriting\data\datasets\synth_hw\style_298_samples_0.npy"

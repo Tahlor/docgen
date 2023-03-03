@@ -9,14 +9,14 @@ from textgen.unigram_dataset import Unigrams
 from docgen.rendertext.render_word import RenderWordFont
 from hwgen.data.saved_handwriting_dataset import SavedHandwriting, SavedHandwritingRandomAuthor
 import numpy as np
-from docgen import utils
+from docgen.utils import utils
 from hwgen.data.utils import display
 from docgen.image_composition.utils import new_textbox_given_background, new_textbox_given_background_line
 from textgen.wikipedia_dataset import Wikipedia
 from hwgen.data.hw_generator import HWGenerator
 from datasets import load_dataset
 from torch.utils.data import DataLoader
-from docgen.utils import file_incrementer
+from docgen.utils.utils import file_incrementer
 from docgen.dataset_utils import load_json, draw_boxes_sections
 from docgen.pdf_edit import convert_to_ocr_format
 import argparse
