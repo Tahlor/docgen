@@ -42,7 +42,7 @@ ROOT = Path(__file__).parent.absolute()
 DEBUG = False
 DEFAULT_DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #DEVICE = "cpu"
-TESTING = True
+TESTING = False
 try_try_again = try_try_again_factory(debug=DEBUG)
 
 if TESTING:
@@ -145,6 +145,7 @@ class LineGenerator:
 
         self.reset_output_data_dict()
         next_img_idx = self.args.last_idx
+        logger.info(f"Starting from index {next_img_idx}")
         while next_img_idx < self.args.count:
             create_dataset_piece(next_img_idx, min(self.args.save_frequency, self.args.count-next_img_idx))
             number_of_zeros_fmt = f"0{int(math.log(self.args.count) // math.log(10)) + 1}d"
