@@ -713,7 +713,7 @@ class BoxFiller:
 
         """
         if self.is_last_line():
-            last_row_words = self.bbox_list[-1].line_word_index + 1 if self.bbox_list else 8
+            last_row_words = self.bbox_list[-1].line_word_index + 1 if self.bbox_list else 10
             self.max_words = min(random.randint(1, last_row_words) + self.words_used, self.max_words)
 
     def gen_box_layout(self):
@@ -728,6 +728,7 @@ class BoxFiller:
             # Realistic paragraph ending on last line
             if self.max_lines > 1:
                 self.update_max_words()
+
             result = self.make_line()
 
             if "newline" in result:

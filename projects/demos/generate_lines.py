@@ -33,6 +33,7 @@ import logging
 from hwgen.daemon import Daemon
 from textgen.basic_text_dataset import VOCABULARY
 from docgen.cuda_utils import try_try_again_factory
+from torch.nn import functional
 
 try_try_again = try_try_again_factory(debug=False)
 
@@ -41,6 +42,18 @@ ROOT = Path(__file__).parent.absolute()
 DEBUG = True
 DEFAULT_DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #DEVICE = "cpu"
+TESTING = True
+
+if TESTING:
+    # set seeds
+    seed = 3
+    import random
+    import numpy as np
+    import torch
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
 
 class LineGenerator:
     def __init__(self, args=None):
@@ -75,7 +88,7 @@ class LineGenerator:
                            model=self.args.saved_handwriting_model,
                            device=self.args.device
                             )
-                , buffer_size=100,
+                , buffer_size=10000,
                 )
         self.renderer_daemon.start()
         self.next_word_iterator = self.get_next_word_iterator()
@@ -83,24 +96,44 @@ class LineGenerator:
                                    default_error_mode="expand",
                                    img_text_pair_gen=self.next_word_iterator)
 
-        try:
-            for i in tqdm(range(self.args.count)):
-                self.create_line(i)
-        except Exception as e:
-            logger.exception(e)
-            warnings.warn(f"Only generated {i} out of {self.args.count} images")
+        def create_dataset_piece(start_idx, batch_size):
+            nonlocal completed_images
+            try:
+                for i in tqdm(range(start_idx, start_idx+batch_size)):
+                    self.create_line(completed_images)
+                    completed_images +=1
+            except Exception as e:
+                logger.exception(e)
+                warnings.warn(f"Only generated {i} out of {self.args.count} images")
+
+        completed_images = 0
+        while completed_images < self.args.count:
+            create_dataset_piece(completed_images, min(self.args.save_frequency, self.args.count-completed_images))
+            self.save_out_data_dict(f"_{completed_images}")
+            self.ocr_dict = self.reset_output_data_dict()
 
         self.renderer_daemon.stop()
         self.renderer_daemon.join()
 
-        with self.args.output_ocr_json.open("w") as f:
+        return ocr_dict
+
+    def save_out_data_dict(self, suffix):
+        # add suffix to paths
+        OCR = self.args.output_ocr_json.with_name(self.args.output_ocr_json.stem + suffix + self.args.output_ocr_json.suffix)
+        TEXT = self.args.output_text_json.with_name(self.args.output_text_json.stem + suffix + self.args.output_text_json.suffix)
+        COCO = self.args.output_coco_json.with_name(self.args.output_coco_json.stem + suffix + self.args.output_coco_json.suffix)
+        logger.info(f"Saving to out {suffix}")
+        with OCR.open("w") as f:
             json.dump(ocr_dict, f)
-        with self.args.output_text_json.open("w") as f:
+        with TEXT.open("w") as f:
             out = {k:d['sections'][0]['paragraphs'][0]["lines"][0]["text"] for k,d in ocr_dict.items()}
             json.dump(out, f)
-        coco = ocr_dataset_to_coco(ocr_dict, "French Lines - v0.0.1.0 Alpha", exclude_cats="word")
-        with self.args.output_coco_json.open("w") as f:
+        coco = ocr_dataset_to_coco(ocr_dict, f"French Lines - v0.1.0.0 - piece {suffix}", exclude_cats="word")
+        with COCO.open("w") as f:
             json.dump(coco, f)
+
+    def reset_output_data_dict(self):
+        ocr_dict = {}
         return ocr_dict
 
     def get_next_word_iterator(self):
@@ -125,24 +158,22 @@ class LineGenerator:
     def create_line(self, idx):
         """
         """
+        # if random.random() < .5:
+        #     raise Exception("Randomly failing to test try_try_again")
+
         def new_paragraph(shp, offset=None):
             scale = random.uniform(.7, 1.8)
             font_size = scale * 32
-            if self.args.max_lines > 1:
-                size, origin = new_textbox_given_background(shp, font_size=font_size)
-            else:
-                size, origin, font_size = new_textbox_given_background_line(shp,
+            size, origin, font_size, bbox = new_textbox_given_background_line(shp,
                                                                             font_size=font_size,
                                                                             minimum_width_percent=self.args.min_width)
-
             if not offset is None:
-                origin = origin[0] + offset[0], origin[1] + offset[1]
+                bbox.offset_origin(*offset)
 
-            box1, localization = self.BOX_FILLER.fill_box(bbox=[0, 0, *size],
+            box1, localization = self.BOX_FILLER.fill_box(bbox=bbox,
                                                      img=background_img,
                                                      )
-
-            ocr_format = convert_to_ocr_format(localization, origin_offset=origin, section=section)
+            ocr_format = convert_to_ocr_format(localization, section=section)
             return size, origin, box1, localization, ocr_format
 
         """
@@ -185,7 +216,7 @@ def create_parser():
     parser.add_argument("--batch_size", default=12, type=int, help="Batch size for processing")
     parser.add_argument("--count", default=100, type=int, help="Batch size for processing")
     parser.add_argument("--resume", action="store_const", const=-1, help="Resuming from previous process")
-    parser.add_argument("--freq", default=5000, type=int, help="How often to update JSON GT file, in case generation is interrupted")
+    parser.add_argument("--save_frequency", default=50000, type=int, help="How often to update JSON GT file, in case generation is interrupted")
     parser.add_argument("--output_folder", default=ROOT / "output", help="Path to output directory")
     parser.add_argument("--output_ocr_json", default=None, help="Path to output json (OCR format)")
     parser.add_argument("--output_text_json", default=None, help="Path to output json (just text transcriptions)")

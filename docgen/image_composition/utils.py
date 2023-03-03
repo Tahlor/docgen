@@ -1,4 +1,5 @@
 import random
+from docgen.bbox import BBox
 
 def pick_origin(background_shape,
                 factor=4):
@@ -65,13 +66,13 @@ def new_textbox_given_background(background_shape,
 def new_textbox_given_background_line(background_shape,
                                  font_size=32,
                                  minimum_width_percent=.75):
-    if font_size > background_shape[1]:
-        font_size = int(background_shape[1] * random.uniform(.8,.9))
+    if font_size > background_shape[1] * .95:
+        font_size = int(background_shape[1] * random.uniform(.8,.95))
 
     y1_max = int(background_shape[1] - font_size)
     x2_min = int(background_shape[0] * minimum_width_percent)
     origin = random.randint(0, background_shape[0] - x2_min), random.randint(0, y1_max)
     #endpoint = (background_shape[0], random.randint(x2_min, background_shape[1]))
-    size = max_size_given_origin_and_background(origin, background_shape, vertical_buffer_factor=.9)
-
-    return size, origin, font_size
+    size = max_size_given_origin_and_background(origin, background_shape, vertical_buffer_factor=1)
+    bbox = BBox("ul", [origin[0], origin[1], origin[0] + size[0], origin[1] + size[1]], format="XYXY", font_size=font_size)
+    return size, origin, font_size, bbox

@@ -1,4 +1,8 @@
 import torch
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def try_try_again_factory(tries=3,
                           debug=False,
@@ -18,8 +22,9 @@ def try_try_again_factory(tries=3,
                 except KeyboardInterrupt as e:
                     if early_fail_fallback_function:
                         early_fail_fallback_function()
+                    raise Exception("Keyboard Interrupt Requested")
                 except Exception as e:
-                    print(f"ERROR {i} {e}")
+                    logger.error(f"ERROR {i} {e}")
                     torch.cuda.empty_cache()
                     if i >= tries:
                         if early_fail_fallback_function:
