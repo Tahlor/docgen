@@ -2,6 +2,7 @@ from time import sleep
 import os
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 from docgen.dataset_utils import ocr_dataset_to_coco
+import math
 import traceback
 from tqdm import tqdm
 import torch
@@ -65,11 +66,9 @@ class LineGenerator:
         self.args = self.process_args(args)
 
     def process_args(self, args):
-        print(args)
-        if args.incrementer:
-            args.output_folder = Path(file_incrementer(args.output_folder))
-        else:
-            args.output_folder = Path(args.output_folder)
+        if not args.no_incrementer and not args.resume:
+            args.output_folder = file_incrementer(args.output_folder)
+        args.output_folder = Path(args.output_folder)
         args.output_folder.mkdir(parents=True, exist_ok=True)
         print(f"OUTPUT: {Path(args.output_folder).resolve()}")
         args.last_idx = 0
@@ -87,22 +86,18 @@ class LineGenerator:
             else:
                 setattr(args, f"output_{k.lower()}_json", args.output_folder / f"{k}.json")
 
+        if args.resume:
+            last_file = get_latest_ocr_json_file_in_folder(args.output_ocr_json)
+            if last_file:
+                if args.resume == -1:
+                    _ocr_dict = load_json(last_file)
+                    if _ocr_dict:
+                        args.last_idx = max(int(x) for x in _ocr_dict) + 1
+            else:
+                logger.warning("No OCR JSON files found in output folder, starting from scratch")
+
         if isinstance(args.canvas_size, str):
             args.canvas_size = make_tuple(args.canvas_size)
-
-        if args.resume:
-            self.ocr_dict = load_json(args.output_ocr_json)
-
-            if args.resume == -1:
-                args.last_idx = max(int(x) for x in self.ocr_dict) + 1
-            if args.incrementer:
-                warnings.warn("Incrementer is on, but resuming from previous process")
-                args.output_folder = file_incrementer(args.output_folder)
-        else:
-            if args.incrementer:
-                args.output_folder = file_incrementer(args.output_folder)
-
-            self.ocr_dict = {}
 
         return args
 
@@ -139,20 +134,22 @@ class LineGenerator:
                                    img_text_pair_gen=self.next_word_iterator)
 
         def create_dataset_piece(start_idx, batch_size):
-            nonlocal completed_images
+            nonlocal next_img_idx
             try:
                 for i in tqdm(range(start_idx, start_idx+batch_size)):
-                    self.create_line(completed_images)
-                    completed_images +=1
+                    self.create_line(next_img_idx)
+                    next_img_idx +=1
             except Exception as e:
                 logger.exception(e)
                 warnings.warn(f"Only generated {i} out of {self.args.count} images")
 
-        completed_images = 0
-        while completed_images < self.args.count:
-            create_dataset_piece(completed_images, min(self.args.save_frequency, self.args.count-completed_images))
-            self.save_out_data_dict(f"_{completed_images}")
-            self.ocr_dict = self.reset_output_data_dict()
+        self.reset_output_data_dict()
+        next_img_idx = self.args.last_idx
+        while next_img_idx < self.args.count:
+            create_dataset_piece(next_img_idx, min(self.args.save_frequency, self.args.count-next_img_idx))
+            number_of_zeros_fmt = f"0{int(math.log(self.args.count) // math.log(10)) + 1}d"
+            self.save_out_data_dict(f"_{next_img_idx:{number_of_zeros_fmt}}")
+            self.reset_output_data_dict()
 
         self.renderer_daemon.stop()
         self.renderer_daemon.join()
@@ -253,13 +250,15 @@ def create_parser():
                         help="20220301.en, 20220301.fr, etc.")
     parser.add_argument("--batch_size", default=12, type=int, help="Batch size for processing")
     parser.add_argument("--count", default=100, type=int, help="Batch size for processing")
-    parser.add_argument("--resume", action="store_const", const=-1, help="Resuming from previous process")
+    parser.add_argument('--resume', type=int, default=None, nargs='?', const=-1,
+                            help='An argument that can take a user specified value or -1')
+
     parser.add_argument("--save_frequency", default=50000, type=int, help="How often to update JSON GT file, in case generation is interrupted")
     parser.add_argument("--output_folder", default=ROOT / "output", help="Path to output directory")
     parser.add_argument("--output_ocr_json", default=None, help="Path to output json (OCR format)")
     parser.add_argument("--output_text_json", default=None, help="Path to output json (just text transcriptions)")
     parser.add_argument("--output_coco_json", default=None, help="Path to output json (COCO format)")
-    parser.add_argument("--incrementer", default=True, help="Increment output folder")
+    parser.add_argument("--no_incrementer", action="store_true", help="DON'T increment output folder")
     parser.add_argument("--debug", action="store_true", help="Debugging mode")
     parser.add_argument("--display_output", action="store_true", help="Display sample output segmentation")
     parser.add_argument("--canvas_size", default=(1152, 48), type=str, help="Canvas size")
@@ -271,6 +270,16 @@ def create_parser():
     parser.add_argument("--device", default=DEFAULT_DEVICE, help="cpu, cuda, cuda:0, etc.")
     return parser
 
+def get_latest_ocr_json_file_in_folder(json_path):
+    """
+    """
+    folder = Path(json_path).parent
+    json_name = Path(json_path).stem
+    ocr_json_files = list(folder.glob(f"**/{json_name}*"))
+    if len(ocr_json_files) == 0:
+        return None
+    else:
+        return sorted(ocr_json_files)[-1]
 
 def testing():
     output = ROOT / "output"

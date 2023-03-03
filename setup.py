@@ -84,7 +84,7 @@ def get_requirements(path="requirements.txt"):
     return packages
 
 setup(name='docgen',
-      version='0.1.26',
+      version='0.1.27',
       description='docgen',
       long_description= "" if not os.path.isfile("README.md") else read_md('README.md'),
       author='Taylor Archibald',
