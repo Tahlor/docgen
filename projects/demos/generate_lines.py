@@ -35,6 +35,7 @@ from hwgen.daemon import Daemon
 from textgen.basic_text_dataset import VOCABULARY
 from docgen.cuda_utils import try_try_again_factory
 from torch.nn import functional
+from docgen.utils.file_utils import get_last_file_in_collection_matching_base_path
 
 
 logger = logging.getLogger(__name__)
@@ -87,7 +88,7 @@ class LineGenerator:
                 setattr(args, f"output_{k.lower()}_json", args.output_folder / f"{k}.json")
 
         if args.resume:
-            last_file = get_latest_ocr_json_file_in_folder(args.output_ocr_json)
+            last_file = get_last_file_in_collection_matching_base_path(args.output_ocr_json)
             if last_file:
                 if args.resume == -1:
                     _ocr_dict = load_json(last_file)
@@ -270,17 +271,6 @@ def create_parser():
     parser.add_argument("--min_width", default=.75, type=int, help="Minimum width of a textbox as a percent of document")
     parser.add_argument("--device", default=DEFAULT_DEVICE, help="cpu, cuda, cuda:0, etc.")
     return parser
-
-def get_latest_ocr_json_file_in_folder(json_path):
-    """
-    """
-    folder = Path(json_path).parent
-    json_name = Path(json_path).stem
-    ocr_json_files = list(folder.glob(f"**/{json_name}*"))
-    if len(ocr_json_files) == 0:
-        return None
-    else:
-        return sorted(ocr_json_files)[-1]
 
 def testing():
     output = ROOT / "output"
