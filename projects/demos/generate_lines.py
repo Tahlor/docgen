@@ -35,18 +35,18 @@ from textgen.basic_text_dataset import VOCABULARY
 from docgen.cuda_utils import try_try_again_factory
 from torch.nn import functional
 
-try_try_again = try_try_again_factory(debug=False)
 
 logger = logging.getLogger(__name__)
 ROOT = Path(__file__).parent.absolute()
-DEBUG = True
+DEBUG = False
 DEFAULT_DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #DEVICE = "cpu"
 TESTING = True
+try_try_again = try_try_again_factory(debug=DEBUG)
 
 if TESTING:
     # set seeds
-    seed = 3
+    seed = 7
     import random
     import numpy as np
     import torch
@@ -62,7 +62,49 @@ class LineGenerator:
             args = parser.parse_args()
         else:
             args = parser.parse_args(shlex.split(args))
-        self.args = process_args(args)
+        self.args = self.process_args(args)
+
+    def process_args(self, args):
+        print(args)
+        if args.incrementer:
+            args.output_folder = Path(file_incrementer(args.output_folder))
+        else:
+            args.output_folder = Path(args.output_folder)
+        args.output_folder.mkdir(parents=True, exist_ok=True)
+        print(f"OUTPUT: {Path(args.output_folder).resolve()}")
+        args.last_idx = 0
+        if args.saved_handwriting_model is None and args.saved_handwriting_data is None:
+            raise ValueError("Must specify either saved handwriting model or saved handwriting data")
+        if args.unigrams is None and args.wikipedia is None:
+            warnings.warn("No text dataset specified, will try to use unigrams CSV resource (pulled from S3)")
+
+        # Set up paths
+        out = {"OCR": args.output_ocr_json, "COCO": args.output_coco_json, "TEXT": args.output_text_json}
+        for k, v in out.items():
+            if v is not None:
+                setattr(args, f"output_{k.lower()}_json", Path(v))
+                out[k].parent.mkdir(parents=True, exist_ok=True)
+            else:
+                setattr(args, f"output_{k.lower()}_json", args.output_folder / f"{k}.json")
+
+        if isinstance(args.canvas_size, str):
+            args.canvas_size = make_tuple(args.canvas_size)
+
+        if args.resume:
+            self.ocr_dict = load_json(args.output_ocr_json)
+
+            if args.resume == -1:
+                args.last_idx = max(int(x) for x in self.ocr_dict) + 1
+            if args.incrementer:
+                warnings.warn("Incrementer is on, but resuming from previous process")
+                args.output_folder = file_incrementer(args.output_folder)
+        else:
+            if args.incrementer:
+                args.output_folder = file_incrementer(args.output_folder)
+
+            self.ocr_dict = {}
+
+        return args
 
     def main(self):
         print(f"Vocab: {VOCABULARY}")
@@ -115,8 +157,6 @@ class LineGenerator:
         self.renderer_daemon.stop()
         self.renderer_daemon.join()
 
-        return ocr_dict
-
     def save_out_data_dict(self, suffix):
         # add suffix to paths
         OCR = self.args.output_ocr_json.with_name(self.args.output_ocr_json.stem + suffix + self.args.output_ocr_json.suffix)
@@ -124,17 +164,16 @@ class LineGenerator:
         COCO = self.args.output_coco_json.with_name(self.args.output_coco_json.stem + suffix + self.args.output_coco_json.suffix)
         logger.info(f"Saving to out {suffix}")
         with OCR.open("w") as f:
-            json.dump(ocr_dict, f)
+            json.dump(self.ocr_dict, f)
         with TEXT.open("w") as f:
-            out = {k:d['sections'][0]['paragraphs'][0]["lines"][0]["text"] for k,d in ocr_dict.items()}
+            out = {k:d['sections'][0]['paragraphs'][0]["lines"][0]["text"] for k,d in self.ocr_dict.items()}
             json.dump(out, f)
-        coco = ocr_dataset_to_coco(ocr_dict, f"French Lines - v0.1.0.0 - piece {suffix}", exclude_cats="word")
+        coco = ocr_dataset_to_coco(self.ocr_dict, f"French Lines - v0.1.0.0 - piece {suffix}", exclude_cats="word")
         with COCO.open("w") as f:
             json.dump(coco, f)
 
     def reset_output_data_dict(self):
-        ocr_dict = {}
-        return ocr_dict
+        self.ocr_dict = {}
 
     def get_next_word_iterator(self):
         item = self.renderer_daemon.queue.get()
@@ -195,12 +234,11 @@ class LineGenerator:
         file_name = f"{idx:07.0f}"
         # draw_boxes_sections(ocr_out, background_img)
 
-        utils.save_image(background_img, OUTPUT_PATH / (file_name + ".jpg"))
+        utils.save_image(background_img, self.args.output_folder / (file_name + ".jpg"))
         # print(shape(background_img))
-        ocr_dict[file_name] = ocr_out
+        self.ocr_dict[file_name] = ocr_out
 
 def create_parser():
-    global ocr_dict, OUTPUT_OCR_JSON
     parser = argparse.ArgumentParser()
     parser.add_argument("--saved_handwriting_data",
                         action="store", const="sample", nargs="?",
@@ -232,53 +270,6 @@ def create_parser():
     parser.add_argument("--min_width", default=.75, type=int, help="Minimum width of a textbox as a percent of document")
     parser.add_argument("--device", default=DEFAULT_DEVICE, help="cpu, cuda, cuda:0, etc.")
     return parser
-
-def process_args(args):
-    global ocr_dict, OUTPUT_PATH
-    print(args)
-    if args.incrementer:
-        args.output_folder = Path(file_incrementer(args.output_folder))
-    else:
-        args.output_folder = Path(args.output_folder)
-    args.output_folder.mkdir(parents=True, exist_ok=True)
-    OUTPUT_PATH = args.output_folder
-    print(f"OUTPUT: {Path(OUTPUT_PATH).resolve()}")
-    args.last_idx = 0
-    if args.saved_handwriting_model is None and args.saved_handwriting_data is None:
-        raise ValueError("Must specify either saved handwriting model or saved handwriting data")
-    if args.unigrams is None and args.wikipedia is None:
-        warnings.warn("No text dataset specified, will try to use unigrams CSV resource (pulled from S3)")
-
-    # Set up paths
-    out = {"OCR": args.output_ocr_json, "COCO": args.output_coco_json, "TEXT": args.output_text_json}
-    for k, v in out.items():
-        if v is not None:
-            setattr(args, f"output_{k.lower()}_json", Path(v))
-            out[k].parent.mkdir(parents=True, exist_ok=True)
-        else:
-            setattr(args, f"output_{k.lower()}_json", args.output_folder / f"{k}.json")
-
-    if isinstance(args.canvas_size, str):
-        args.canvas_size = make_tuple(args.canvas_size)
-
-    if args.resume:
-        ocr_dict = load_json(args.output_ocr_json)
-
-        if args.resume == -1:
-            args.last_idx = max(int(x) for x in ocr_dict) + 1
-        if args.incrementer:
-            warnings.warn("Incrementer is on, but resuming from previous process")
-            args.output_folder = file_incrementer(args.output_folder)
-    else:
-        if args.incrementer:
-            args.output_folder = file_incrementer(args.output_folder)
-
-        ocr_dict = {}
-
-    if args.debug:
-        DEBUG = True
-
-    return args
 
 
 def testing():
