@@ -103,12 +103,12 @@ class LineGenerator:
         return args
 
     def main(self):
-        print(f"Vocab: {VOCABULARY}")
+
         if self.args.wikipedia is not None:
             self.basic_text_dataset = WikipediaEncodedTextDataset(
                 dataset=load_dataset("wikipedia", self.args.wikipedia)["train"],
-                vocabulary=set(VOCABULARY),  # set(self.model.netconverter.dict.keys())
-                exclude_chars="0123456789()+*;#:!/,.",
+                vocabulary=set(self.args.vocab),  # set(self.model.netconverter.dict.keys())
+                exclude_chars=self.args.exclude_chars,
                 use_unidecode=True,
                 min_chars=self.args.min_chars,
                 max_chars=self.args.max_chars,
@@ -250,6 +250,8 @@ def create_parser():
                         help="Path to unigram frequency file, if 'true' it will be downloaded from S3")
     parser.add_argument("--wikipedia", action="store", const="20220301.en", nargs="?",
                         help="20220301.en, 20220301.fr, etc.")
+    parser.add_argument("--vocab", default=VOCABULARY, type=str, help="The list of vocab tokens to use")
+    parser.add_argument("--exclude_chars", default="0123456789()+*;#:!/,.", type=str, help="Exclude these chars from the vocab")
     parser.add_argument("--batch_size", default=12, type=int, help="Batch size for processing")
     parser.add_argument("--count", default=100, type=int, help="Batch size for processing")
     parser.add_argument('--resume', type=int, default=None, nargs='?', const=-1,

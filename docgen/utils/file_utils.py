@@ -34,16 +34,45 @@ def get_last_file_in_collection_matching_base_path(base_path):
     else:
         return sorted(matching_files)[-1]
 
-def append_json_files_in_collection_matching_base_path(base_path, exclude_base_path):
+def append_json_files_in_collection_matching_base_path(base_path,
+                                                       exclude_base_path,
+                                                       dict_format="dict",
+                                                       ):
     """
+
+    Args:
+        base_path:
+        exclude_base_path:
+        dict_format (str): dict, COCO
+
+    Returns:
+
     """
     matching_json_files = get_collection_files_matching_base_path(base_path, exclude_base_path)
     output_json = {}
     for f in matching_json_files:
         logger.info(f"Adding {f} to master dict")
         with Path(f).open("r") as f:
-            output_json.update(json.load(f))
+            new_dict = json.load(f)
+        if dict_format=="dict":
+            append_dict(output_json, new_dict)
+        elif dict_format=="COCO":
+            append_coco(output_json, new_dict)
+        else:
+            raise NotImplementedError(f"Unrecognized {dict_format}")
     return output_json
+
+def append_dict(master_dict, new_dict):
+    master_dict.update(new_dict)
+
+def append_coco(master_coco, new_coco):
+    if master_coco:
+        master_coco["images"] += new_coco["images"]
+        master_coco["annotations"] += new_coco["annotations"]
+        #master_coco["categories"] += list(set( master_coco["categories"] + new_coco["categories"] ))
+        master_coco["info"].update(new_coco["info"])
+    else:
+        master_coco.update(new_coco)
 
 def save_dict_as_json(dic, json_path):
     logger.info(f"Saving as {json_path}")
@@ -52,9 +81,10 @@ def save_dict_as_json(dic, json_path):
 
 def create_parser():
     parser = argparse.ArgumentParser(add_help=False)
-    # base_file name
-    parser.add_argument("--base_file", type=str, help="Path to output directory")
-    parser.add_argument("--exclude_base_file", action="store_true", help="Exclude the base path file from search")
+    # base_path name
+    parser.add_argument("--base_path", type=str, help="Path to output directory")
+    parser.add_argument("--exclude_base_path", action="store_true", help="Exclude the base path file from search")
+    parser.add_argument("--dict_format", type=str, default="dict", help="Exclude the base path file from search")
     return parser
 
 def main(args=None):
@@ -63,9 +93,8 @@ def main(args=None):
         args = parser.parse_args()
     else:
         args = parser.parse_args(shlex.split(args))
-    json_dict = append_json_files_in_collection_matching_base_path(args.base_file, args.exclude_base_file)
-    save_dict_as_json(json_dict, args.base_file)
-
+    json_dict = append_json_files_in_collection_matching_base_path(**vars(args))
+    save_dict_as_json(json_dict, args.base_path)
 
 if __name__=="__main__":
     main()
