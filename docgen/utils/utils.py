@@ -1,3 +1,5 @@
+import threading
+import signal
 import os
 import random
 import json
@@ -177,7 +179,39 @@ def handler(testing=False, return_on_fail=None):
         return wrapper2
     return wrapper1
 
+class linux_timeout:
+    def __init__(self, seconds=1, error_message='Timeout'):
+        self.seconds = seconds
+        self.error_message = error_message
+    def handle_timeout(self, signum, frame):
+        raise TimeoutError(self.error_message)
+    def __enter__(self):
+        signal.signal(signal.SIGALRM, self.handle_timeout)
+        signal.alarm(self.seconds)
+    def __exit__(self, type, value, traceback):
+        signal.alarm(0)
 
+class TimeoutError(Exception):
+    pass
+
+class windows_timeout:
+    def __init__(self, seconds=1, error_message='Timeout'):
+        self.seconds = seconds
+        self.error_message = error_message
+        self.timer = None
+
+    def timeout_handler(self):
+        raise TimeoutError(self.error_message)
+
+    def __enter__(self):
+        self.timer = threading.Timer(self.seconds, self.timeout_handler)
+        self.timer.start()
+
+    def __exit__(self, type, value, traceback):
+        self.timer.cancel()
+
+timeout = linux_timeout if os.name == 'posix' else windows_timeout
+print(timeout.__name__)
 if __name__ == '__main__':
     """
     
