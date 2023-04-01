@@ -1,0 +1,551 @@
+# My Dataset Configuration v5 - just text / handwriting / backgrounds
+
+v6.8:
+  - images are closer to same font size
+  - Need to pair with RESIZING
+  - Maybe do 224 crops / downsampling
+
+
+v6.6-7:
+  - smaller
+  - more italic
+  - limit to 1 handwriting per page
+
+v6.5:
+  - BIG
+  - cursive fonts
+
+v6.4:
+  - MNIST
+  - CEDAR
+  - IAM WASN'T BEING GENERATED!!!
+  - HWGEN WASN'T SWITCHING MUCH!
+  - EMNIST - we have numbers now
+
+v6.3:
+  - 50k-60k+
+  - bigger fonts
+  - more color jitter
+  - noisier backgrounds (more bleedthrough for DIBCO)
+
+v6.2:
+ - fixed gaussian dash dot sampling
+ - fix ignore darkness threshold
+ - added the IGNORE option on light color masks to make GT more aggressive on lighter handwritten colors
+ - stronger ink color jitter
+
+v6.1:
+  - improved typewriter class, restricted approved font, more english fonts
+  - more colors
+  - more random box fill
+  - big english font text
+
+v6.0:
+  - add typewriter class
+  - added more real hw lines
+
+workers: 4
+final_size: 448
+dataset_length: 50000
+drive_mappings:
+  "B:": "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle"
+output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v6.8_50k"
+overwrite: false
+output_img_size: 448
+composite_function: composite_the_images_torch
+layout_sampler_kwargs:
+  default_min_layers: 3
+  default_max_layers: 5
+  number_of_layer_weights:
+    - .3
+    - .3
+    - .2
+  max_layers_of_one_type:
+    handwriting: 1
+    text: 1
+    form_elements: 1
+    typewriter: 1
+
+datasets:
+  - name: RenderedFonts
+    type: PrintedTextGenerator
+    layer_contents: "text"
+    base_dataset_kwargs:
+      saved_fonts_folder: "G:/s3/synthetic_data/resources/fonts"
+      font_size_rng: [ 20, 40 ]
+      word_count_rng: [ 10, 20 ]
+      font_class_weights: [ 5, 5, 30, 10, 100 ]
+      font_size_scalers: [ 1, 2, 1 ]
+      probability_of_random_box_fill: .8
+      font_class_files:
+        - "G:/s3/synthetic_data/resources/fonts/FONT_SAMPLES/italic_fonts.pkl"
+        - "G:/s3/synthetic_data/resources/fonts/FONT_SAMPLES/italic2_fonts.pkl"
+        - "G:/s3/synthetic_data/resources/fonts/FONT_SAMPLES/italic3_fonts.pkl"
+        - "G:/s3/synthetic_data/resources/fonts/FONT_SAMPLES/english_fonts.pkl"
+        - "G:/s3/synthetic_data/resources/fonts/FONT_SAMPLES/CLEAR_no_typewriter_fonts.pkl"
+    mask:
+      type: MaskWithIgnoreThreshold
+      kwargs:
+        threshold: .9
+        ignore_threshold: .95
+    sample_weight: 5
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - InkColorJitter
+        - InkColorJitter
+        - InkColorJitter
+        - InkColorJitter
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - Blur
+      - ToTensor
+      - RandomResize:
+          min_scale: .8
+          max_scale: 1.1
+
+  - name: RenderedFonts
+    type: PrintedTextGenerator
+    layer_contents: "typewriter"
+    base_dataset_kwargs:
+      saved_fonts_folder: "G:/s3/synthetic_data/resources/fonts"
+      font_size_rng: [ 20, 40 ]
+      word_count_rng: [ 10, 20 ]
+      font_class_weights: [ 100 ]
+      probability_of_random_box_fill: .9
+      font_class_files:
+        - "G:/s3/synthetic_data/resources/fonts/FONT_SAMPLES/typewriter_fonts.pkl"
+    mask:
+      type: MaskWithIgnoreThreshold
+      kwargs:
+        threshold: .9
+        ignore_threshold: .95
+    sample_weight: 5
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - InkColorJitter
+        - InkColorJitter
+        - InkColorJitter
+        - InkColorJitter
+        - Blur
+        - Lighten
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+      #- Typewriter
+      - ToTensor
+      - RandomResize:
+          min_scale: .8
+          max_scale: 1.1
+
+  - name: handwriting
+    type: HWGenerator
+    layer_contents: handwriting
+    switch_frequency: 10 # switch to new npy file
+    base_dataset_kwargs:
+        probability_of_random_box_fill: .95
+        saved_hw_folder: "C:/Users/tarchibald/Anaconda3/envs/docgen_windows/hwgen/resources/generated"
+        word_count_rng: [ 10, 20 ]
+        font_size_rng: [ 20, 40 ]
+    sample_weight: 5
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - InkColorJitter
+        - InkColorJitter
+        - InkColorJitter
+        - InkColorJitter
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - Blur
+        - Lighten
+      - MoreContrast
+      - ToTensor
+      - RandomResize:
+          min_scale: .8
+          max_scale: 1.1
+    composite_function:
+        type: CompositerTorch
+        method: torchmul
+    mask:
+      type: MaskWithIgnoreThreshold
+      kwargs:
+        threshold: .8
+        ignore_threshold: .95
+
+  - name: handwriting_emnist
+    type: HWGenerator
+    layer_contents: handwriting
+    unigrams_path: null # just use the letters that exist in unigrams
+    switch_frequency: null # don't switch "authors" (there's only 1 in EMNIST)
+    base_dataset_kwargs:
+        probability_of_random_box_fill: .98
+        saved_hw_folder: "G:/data/standard_hwr/emnist/tiny"
+        word_count_rng: [ 10, 20 ]
+        font_size_rng: [ 20, 40 ]
+    sample_weight: 3
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - InkColorJitter
+        - IdentityTransform
+      - ToTensor
+      - RandomResize:
+          min_scale: .8
+          max_scale: 1.1
+    composite_function:
+        type: CompositerTorch
+        method: torchmul
+    mask:
+      type: MaskWithIgnoreThreshold
+      kwargs:
+        threshold: .8
+        ignore_threshold: .95
+
+
+  - name: background
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      # "B:/document_backgrounds/paper_only"
+      img_dirs:
+#        - "B:/document_backgrounds/paper_only/old paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting"
+#        - "B:/document_backgrounds/paper_only/paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting"
+#        - "B:/document_backgrounds/paper_only/white paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting"
+#        - "B:/document_backgrounds/paper_only/aged blank letter with imprints of text from the reverse side, as if some vestiges of the ink permeated through the paper, but impossible to read; full frame"
+#        - "B:/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frame"
+#        - "B:/document_backgrounds/paper_only/blank paper with a some random highlighter and marker marks, full frame"
+#        - "B:/document_backgrounds/paper_only/blank paper with mold damage, full frame"
+#        - "B:/document_backgrounds/paper_only/old blank paper with a some random highlighter and marker marks, full frame"
+#        - "B:/document_backgrounds/paper_only/old blank paper with water or coffee stains, full frame"
+#        - "B:/document_backgrounds/paper_only/old blank paper, some wrinkles and imperfections, variable lighting"
+#        - "B:/document_backgrounds/paper_only/old paper with ink marks, crinkles, wrinkles, and imperfections and variable lighting"
+#        - "B:/document_backgrounds/with_backgrounds/"
+
+#        - "B:/document_backgrounds/with_backgrounds/blank discolored paper with creases; it is stapled along the top, bottom, and sides, also has paperclips"
+#        - "B:/document_backgrounds/with_backgrounds/blank old document"
+
+        - "B:/document_backgrounds/with_backgrounds/full frame aerial view of 2 blank pages of old open book with wrinkles; book is on top of a noisey background"
+        - "B:/document_backgrounds/with_backgrounds/2 blank pages of old book, full frame"
+        - "B:/document_backgrounds/with_backgrounds/aerial view of 2 blank pages of old open book with ink marks and wrinkles, full frame"
+        - "B:/document_backgrounds/with_backgrounds/aerial view of 2 blank pages of old open book, full frame"
+        - "B:/document_backgrounds/with_backgrounds/microfilm blank old page with ink marks"
+        - "B:/document_backgrounds/with_backgrounds/old blank weathered document"
+        - "B:/document_backgrounds/with_backgrounds/old microfilm blank document"
+
+        - "B:/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frameG:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frameG:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frame/"
+        - "B:/document_backgrounds/paper_only/aged blank letter with imprints of text from the reverse side, as if some vestiges of the ink permeated through the paper, but impossible to read; full frame/"
+      img_dir_weights:
+        - 2
+        - 2
+        - 2
+        - 2
+        - 1
+        - 1
+        - 1
+        - 3
+        - 0
+
+    layer_contents: noise
+    layer_position: 0 # background layer
+    sample_weight: 15
+    percent_overlap: 1
+    mask:
+      type: GrayscaleMask
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - ColorJitter
+        - ColorJitter
+        - RandomDistortions
+        - RuledSurfaceDistortions
+        - Blobs
+        - Blobs
+        - Blobs
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+      - Mirror
+      - ToTensor
+
+  - name: pdf_text
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      img_dirs:
+        - "G:/s3/forms/PDF/OPM/text/images"
+        - "G:/s3/forms/PDF/SSA/text/images"
+    layer_contents: text
+    sample_weight: 1
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        #- RandomDistortions
+        #- RuledSurfaceDistortions
+        - ConditionalContrast
+        #- Blur
+        - BlurThreshold
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - InkColorJitter
+        - InkColorJitter
+        - InkColorJitter
+      - ToTensor
+      - RandomResize:
+          min_scale: .8
+          max_scale: 1.4
+          max_upscale: 3
+    mask:
+      type: MaskWithIgnoreThreshold
+      kwargs:
+        threshold: .9
+        ignore_threshold: .95
+
+
+  - name: pdf_form_elements
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      img_dirs:
+        - "G:/s3/forms/PDF/IRS/other_elements/images"
+        - "G:/s3/forms/PDF/GDC/other_elements/images/good"
+        - "G:/s3/forms/PDF/OPM/other_elements/images"
+        - "G:/s3/forms/PDF/SSA/other_elements/images"
+      recursive: false
+    layer_contents: form_elements
+    sample_weight: 2
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+#        - RandomDistortions
+#        - RuledSurfaceDistortions
+        - ConditionalContrast
+        - RandomRotate
+        - InkColorJitter
+        - InkColorJitter
+        - InkColorJitter
+        - InkColorJitter
+        - Blur
+        - Lighten
+        - Lighten
+        - Lighten
+      - ToTensor
+      - RandomResize:
+          min_scale: .5
+          max_scale: 1.8
+          max_upscale: 3
+    mask:
+      type: MaskWithIgnoreThreshold
+      kwargs:
+        threshold: .8
+        ignore_threshold: .92
+
+    filters:
+      - RejectIfTooManyPixelsAreBelowThreshold:
+          threshold: 0.9
+          max_percent_of_pixels_allowed_below_threshold: 0.15
+
+  - name: handwriting_images_dalle
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      img_dirs:
+        - B:/document_backgrounds/handwriting/enhanced/0
+        - B:/document_backgrounds/handwriting/enhanced/4
+        - B:/document_backgrounds/handwriting/enhanced/5
+      recursive: true
+    layer_contents: handwriting
+    sample_weight: 0
+    filters:
+      - RejectIfTooManyPixelsAreBelowThreshold:
+          threshold: 0.8
+          max_percent_of_pixels_allowed_below_threshold: 0.4
+    mask:
+      type: MaskWithIgnoreThreshold
+      kwargs:
+        threshold: .5
+        ignore_threshold: .92
+
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - InkColorJitter
+        - RandomRotate
+        #- RandomDistortions
+        #- RuledSurfaceDistortions
+        - Blur
+        #- ConditionalContrast
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+      - ToTensor
+      - RandomResize:
+          min_scale: .8
+          max_scale: 1.3
+      - CropBorder:
+            border_size_rng: 40
+    composite_function:
+        type: CompositerTorch
+        method: torchmul
+
+  - name: handwriting_images_iam
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      img_dirs:
+        - "G:/data/standard_hwr/IAM_OFFLINE/lines"
+      recursive: true
+    layer_contents: handwriting
+    sample_weight: 0
+    filters:
+      - RejectIfTooManyPixelsAreBelowThreshold:
+          threshold: 0.8
+          max_percent_of_pixels_allowed_below_threshold: 0.4
+    mask:
+      type: MaskWithIgnoreThreshold
+      kwargs:
+        threshold: .7
+        ignore_threshold: .90
+
+    transforms:
+      - ToNumpy
+      #- CropToDarkness
+      - RandomChoice:
+        - InkColorJitter
+        - InkColorJitter
+        - IdentityTransform
+        - IdentityTransform
+        - Blur
+      - MoreContrast
+      - ToTensor
+      - RandomResize:
+          min_scale: .8
+          max_scale: 1.1
+    composite_function:
+        type: CompositerTorch
+        method: torchmul
+
+  - name: handwriting_images_other
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      img_dirs:
+        - "G:/data/standard_hwr/CSAFE_handwriting/" # about 60 px
+        - "G:/data/standard_hwr/CEDAR-Letter-FULL" # about 70 px
+      recursive: true
+    layer_contents: handwriting
+    sample_weight: 6
+    mask:
+      type: MaskWithIgnoreThreshold
+      kwargs:
+        threshold: .9
+        ignore_threshold: .95
+
+    transforms:
+      - ToNumpy
+      - CropToDarkness
+      - RandomChoice:
+        - InkColorJitter
+        - InkColorJitter
+        - InkColorJitter
+        - InkColorJitter
+        - Lighten
+        - Blur
+      - ToTensor
+      - RandomResize:
+          min_scale: .25
+          max_scale: .5
+    composite_function:
+        type: CompositerTorch
+        method: torchmul
+
+  - name: generated_form_elements
+    type: PreprintedFormElementGenerator
+    layer_contents:
+      - form_elements
+    sample_weight: 2
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+          - InkColorJitter
+#          - RandomDistortions
+#          - RuledSurfaceDistortions
+#          - ConditionalContrast
+          - Lighten
+          - Lighten
+          - Lighten
+          - RandomRotate
+          - IdentityTransform
+          - IdentityTransform
+          - IdentityTransform
+          - Blur
+      - ToTensor
+      - RandomResize:
+          min_scale: .5
+          max_scale: 2
+    mask:
+      type: MaskWithIgnoreThreshold
+      kwargs:
+        threshold: .93
+        ignore_threshold: .99
+
+  - name: images
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      img_dirs: "G:/s3/synthetic_data/resources/images"
+    layer_contents: seals_and_images
+    sample_weight: 0
+    mask:
+      type: mask
+      kwargs:
+        threshold: .99
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - InkColorJitter
+        - RandomDistortions
+        - RuledSurfaceDistortions
+        - Blur
+        - Lighten
+        - Contrast
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+
+      - ToTensor
+      - ResizeLongestSide:
+          longest_side: [ 24, 128 ]
+
+  - name: seals
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      img_dirs: "G:/s3/synthetic_data/resources/seals"
+    layer_contents: seals_and_images # seals, text
+    sample_weight: 0
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - RandomDistortions
+        - RuledSurfaceDistortions
+        - InkColorJitter
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+      - ToTensor
+      - ResizeLongestSide:
+          longest_side: [ 24, 128 ]
+
+
+transforms_after_compositing:
+
+background_bounding_boxes_pkl_path: "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/with_backgrounds/bounding_boxes_FILESTEM_BOUNDINGBOX.pkl"

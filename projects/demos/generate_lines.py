@@ -1,6 +1,8 @@
+import sys
 from time import sleep
 import os
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
+import datetime
 from docgen.dataset_utils import ocr_dataset_to_coco
 import math
 import traceback
@@ -10,8 +12,8 @@ import json
 import random
 from docgen.pdf_edit import *
 from PIL import Image
-from textgen.unigram_dataset import Unigrams
-from docgen.rendertext.render_word import RenderWordFont
+from textgen.unigram_dataset import Unigrams, UnigramsData
+from textgen.rendertext.render_word import RenderWordFont
 from hwgen.data.saved_handwriting_dataset import SavedHandwriting, SavedHandwritingRandomAuthor
 import numpy as np
 from docgen.utils import utils
@@ -27,7 +29,7 @@ from docgen.pdf_edit import convert_to_ocr_format
 import argparse
 from pathlib import Path
 import shlex
-from docgen.rendertext.render_word import RenderImageTextPair
+from textgen.rendertext.render_word import RenderImageTextPair
 from ast import literal_eval as make_tuple
 from docgen.render_doc import BoxFiller
 import logging
@@ -36,15 +38,18 @@ from textgen.basic_text_dataset import VOCABULARY
 from docgen.cuda_utils import try_try_again_factory
 from torch.nn import functional
 from docgen.utils.file_utils import get_last_file_in_collection_matching_base_path
+from docgen.image_composition.autocrop import AutoCropper
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
 ROOT = Path(__file__).parent.absolute()
 DEBUG = False
 DEFAULT_DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #DEVICE = "cpu"
 TESTING = False
-try_try_again = try_try_again_factory(debug=DEBUG)
 
 if TESTING:
     # set seeds
@@ -55,7 +60,9 @@ if TESTING:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+    DEBUG=True
 
+try_try_again = try_try_again_factory(debug=DEBUG)
 
 class LineGenerator:
     def __init__(self, args=None):
@@ -65,6 +72,7 @@ class LineGenerator:
         else:
             args = parser.parse_args(shlex.split(args))
         self.args = self.process_args(args)
+        logger.info(f"Args: {self.args}")
 
     def process_args(self, args):
         if not args.no_incrementer and not args.resume:
@@ -75,7 +83,7 @@ class LineGenerator:
         args.last_idx = 0
         if args.saved_handwriting_model is None and args.saved_handwriting_data is None:
             raise ValueError("Must specify either saved handwriting model or saved handwriting data")
-        if args.unigrams is None and args.wikipedia is None:
+        if args.unigram_file is None and args.wikipedia is None and args.unigram_list is None:
             warnings.warn("No text dataset specified, will try to use unigrams CSV resource (pulled from S3)")
 
         # Set up paths
@@ -88,51 +96,86 @@ class LineGenerator:
                 setattr(args, f"output_{k.lower()}_json", args.output_folder / f"{k}.json")
 
         if args.resume:
-            last_file = get_last_file_in_collection_matching_base_path(args.output_ocr_json)
-            if last_file:
-                if args.resume == -1:
-                    _ocr_dict = load_json(last_file)
-                    if _ocr_dict:
-                        args.last_idx = max(int(x) for x in _ocr_dict) + 1
+            if args.resume > 0:
+                args.last_idx = args.resume
             else:
-                logger.warning("No OCR JSON files found in output folder, starting from scratch")
+                last_file = get_last_file_in_collection_matching_base_path(args.output_ocr_json)
+                logger.info(f"Last file found: {last_file}")
+                if last_file:
+                    if args.resume == -1:
+                        _ocr_dict = load_json(last_file)
+                        if _ocr_dict:
+                            args.last_idx = max(int(x) for x in _ocr_dict) + 1
+                            logger.info(f"Resuming from index {args.last_idx}")
+                else:
+                    logger.warning("No OCR JSON files found in output folder, starting from scratch")
 
         if isinstance(args.canvas_size, str):
             args.canvas_size = make_tuple(args.canvas_size)
+
+        if args.autocrop:
+            self.autocropper = AutoCropper(crop_mode="horizontal", crop_color=(255,255,255))
+
 
         return args
 
     def main(self):
 
         if self.args.wikipedia is not None:
+            preprocessed = ["en", "fr", "it", "de"]
+            if not Path(self.args.wikipedia).suffix[-2:] in preprocessed:
+                date, language = self.args.wikipedia.split(".")
+                current_year = str(datetime.datetime.now().year)
+                date = date.replace("2022", current_year)
+                dataset = load_dataset("wikipedia", date=date, language=language, beam_runner="DirectRunner",
+                                       cache_dir=self.args.cache_dir)["train"]
+            else:
+                dataset = load_dataset("wikipedia", self.args.wikipedia, cache_dir=self.args.cache_dir)["train"]
+
+            if self.args.prep_wikipedia_only:
+                return
+
             self.basic_text_dataset = WikipediaEncodedTextDataset(
-                dataset=load_dataset("wikipedia", self.args.wikipedia)["train"],
+                dataset=dataset,
                 vocabulary=set(self.args.vocab),  # set(self.model.netconverter.dict.keys())
                 exclude_chars=self.args.exclude_chars,
                 use_unidecode=True,
                 min_chars=self.args.min_chars,
                 max_chars=self.args.max_chars,
+                decode_vocabulary="default_expanded" if not self.args.no_text_decode_vocab else None,
+            )
+        elif self.args.unigram_file is not None:
+            self.basic_text_dataset = Unigrams(
+                csv_file=self.args.unigram_file,
+            )
+        elif self.args.unigram_list is not None:
+            self.basic_text_dataset = UnigramsData(
+                words=self.args.unigram_list,
+                counts=None,
+                top_k=10000,
+                sample="unweighted",
+                newline_freq=0,
+                size_override=sys.maxsize,
             )
 
-        elif self.args.unigrams is not None:
-            basic_text_dataset = Unigrams(
-                csv_file=self.args.unigrams,
-            )
 
         self.renderer_daemon = Daemon(
                 HWGenerator(
                            next_text_dataset=self.basic_text_dataset,
                            batch_size=self.args.batch_size,
                            model=self.args.saved_handwriting_model,
-                           device=self.args.device
-                            )
+                           model_path=self.args.saved_hw_model_folder,
+                           device=self.args.device,
+                           data_split=self.args.style_data_split,
+                           iterations_before_new_style=self.args.iterations_before_new_style,
+                           )
                 , buffer_size=10000,
                 )
         self.renderer_daemon.start()
         self.next_word_iterator = self.get_next_word_iterator()
         self.BOX_FILLER = BoxFiller(default_max_lines=self.args.max_lines,
-                                   default_error_mode="expand",
-                                   img_text_pair_gen=self.next_word_iterator)
+                                    default_error_mode="expand",
+                                    img_text_word_dict=self.next_word_iterator)
 
         def create_dataset_piece(start_idx, batch_size):
             nonlocal next_img_idx
@@ -161,15 +204,29 @@ class LineGenerator:
         OCR = self.args.output_ocr_json.with_name(self.args.output_ocr_json.stem + suffix + self.args.output_ocr_json.suffix)
         TEXT = self.args.output_text_json.with_name(self.args.output_text_json.stem + suffix + self.args.output_text_json.suffix)
         COCO = self.args.output_coco_json.with_name(self.args.output_coco_json.stem + suffix + self.args.output_coco_json.suffix)
-        logger.info(f"Saving to out {suffix}")
+        logger.info(f"Saving out to {suffix}")
         with OCR.open("w") as f:
             json.dump(self.ocr_dict, f)
-        with TEXT.open("w") as f:
-            out = {k:d['sections'][0]['paragraphs'][0]["lines"][0]["text"] for k,d in self.ocr_dict.items()}
-            json.dump(out, f)
-        coco = ocr_dataset_to_coco(self.ocr_dict, f"French Lines - v0.1.0.0 - piece {suffix}", exclude_cats="word")
+        self.dump_text_json(TEXT)
+        coco = ocr_dataset_to_coco(self.ocr_dict, f"{self.args.wikipedia} Lines - v0.1.0.0 - piece {suffix}", exclude_cats="word")
         with COCO.open("w") as f:
             json.dump(coco, f)
+
+    def dump_text_json(self, TEXT):
+        with TEXT.open("w") as f:
+            if self.args.no_text_decode_vocab:
+                out = {k: {"text": d['sections'][0]['paragraphs'][0]["lines"][0]["text"],
+                           "style": d['sections'][0]["style"],
+                           }
+                       for k, d in self.ocr_dict.items()}
+            else:
+                out = {k:
+                           {"text": d['sections'][0]['paragraphs'][0]["lines"][0]["text"],
+                            "text_decode_vocab": d['sections'][0]['paragraphs'][0]["lines"][0]["text_decode_vocab"],
+                            "style": d['sections'][0]["style"],
+                            }
+                       for k, d in self.ocr_dict.items()}
+            json.dump(out, f)
 
     def reset_output_data_dict(self):
         self.ocr_dict = {}
@@ -180,8 +237,12 @@ class LineGenerator:
             for i in range(len(item["text_list"])):
                 if 0 in item["word_imgs"][i].shape:
                     continue # kind of a bug, it's an empty image e.g. \n or something
-
-                yield item["word_imgs"][i], item["text_list"][i]
+                # yield item["word_imgs"][i], item["text_list"][i], item["author_id"][i]
+                yield {"img": item["word_imgs"][i],
+                       "text": item["text_list"][i],
+                       "style": item["author_id"],
+                       "text_decode_vocab": item["text_list_decode_vocab"][i]
+                       }
             while True:
                 try:
                     item = self.renderer_daemon.queue.get()
@@ -208,11 +269,17 @@ class LineGenerator:
             if not offset is None:
                 bbox.offset_origin(*offset)
 
-            box1, localization = self.BOX_FILLER.fill_box(bbox=bbox,
+            box_dict = self.BOX_FILLER.fill_box(bbox=bbox,
                                                      img=background_img,
                                                      )
-            ocr_format = convert_to_ocr_format(localization, section=section)
-            return size, origin, box1, localization, ocr_format
+            image = box_dict["img"]
+            localization = box_dict["bbox_list"]
+            styles = box_dict["styles"]
+
+            ocr_format = convert_to_ocr_format(localization, section=section, text_decode_vocab=not self.args.no_text_decode_vocab)
+            ocr_format["style"] = tuple(styles)
+
+            return size, origin, image, localization, ocr_format
 
         """
         font_resize_factor = random.uniform(.8,2.5)
@@ -226,12 +293,15 @@ class LineGenerator:
         background_img = Image.new("RGB", canvas_size, (255, 255, 255))
         canvas_size = utils.shape(background_img)
 
-        text_box_shp, origin, box1, bboxs1, ocr_format = new_paragraph(canvas_size)
+        text_box_shp, origin, img, bboxs1, ocr_format = new_paragraph(canvas_size)
         ocr_out["sections"].append(ocr_format)
         section += 1
 
-        file_name = f"{idx:07.0f}"
+        file_name = f"{idx:09.0f}"
         # draw_boxes_sections(ocr_out, background_img)
+
+        if self.autocropper:
+            background_img = self.autocropper.crop(background_img)
 
         utils.save_image(background_img, self.args.output_folder / (file_name + ".jpg"))
         # print(shape(background_img))
@@ -246,18 +316,24 @@ def create_parser():
                         action="store", const="IAM", nargs="?",
                         help="Path to HWR model, OR 'CVL' or 'IAM'",
                         )
-    parser.add_argument("--unigrams", action="store_const", const=True,
+    parser.add_argument("--saved_hw_model_folder", type=str, default=None, help="Use random author for each word")
+    parser.add_argument("--style_data_split", default="all", type=str, help="train, test, or all")
+    parser.add_argument("--unigram_file", action="store_const", const=True,
                         help="Path to unigram frequency file, if 'true' it will be downloaded from S3")
+    parser.add_argument("--unigram_list", help="List of unigrams to use", nargs="+", default=None)
     parser.add_argument("--wikipedia", action="store", const="20220301.en", nargs="?",
                         help="20220301.en, 20220301.fr, etc.")
+    parser.add_argument("--cache_dir", action="store", const=None, nargs="?",
+                        help="where to store the downloaded files")
     parser.add_argument("--vocab", default=VOCABULARY, type=str, help="The list of vocab tokens to use")
+    parser.add_argument("--no_text_decode_vocab", action="store_true", help="Don't save out text with alternate vocabulary")
     parser.add_argument("--exclude_chars", default="0123456789()+*;#:!/,.", type=str, help="Exclude these chars from the vocab")
     parser.add_argument("--batch_size", default=12, type=int, help="Batch size for processing")
-    parser.add_argument("--count", default=100, type=int, help="Batch size for processing")
+    parser.add_argument("--count", default=100, type=int, help="Total number of images to generate")
     parser.add_argument('--resume', type=int, default=None, nargs='?', const=-1,
-                            help='An argument that can take a user specified value or -1')
+                            help='What index to start geneating from; -1 will attempt to infer last index from last JSON')
 
-    parser.add_argument("--save_frequency", default=50000, type=int, help="How often to update JSON GT file, in case generation is interrupted")
+    parser.add_argument("--save_frequency", default=50, type=int, help="How often to update JSON GT file, in case generation is interrupted")
     parser.add_argument("--output_folder", default=ROOT / "output", help="Path to output directory")
     parser.add_argument("--output_ocr_json", default=None, help="Path to output json (OCR format)")
     parser.add_argument("--output_text_json", default=None, help="Path to output json (just text transcriptions)")
@@ -266,15 +342,20 @@ def create_parser():
     parser.add_argument("--debug", action="store_true", help="Debugging mode")
     parser.add_argument("--display_output", action="store_true", help="Display sample output segmentation")
     parser.add_argument("--canvas_size", default=(1152, 48), type=str, help="Canvas size")
+    parser.add_argument("--autocrop", action="store_true", help="Crop whitespace from output images")
     parser.add_argument("--min_chars", default=8, type=int, help="Min chars to be generated by textgen")
     parser.add_argument("--max_chars", default=20*8, type=int, help="Max chars to be generated by textgen")
     parser.add_argument("--max_lines", default=1, type=int, help="Max lines in a paragraph")
     parser.add_argument("--max_paragraphs", default=1, type=int, help="Max paragraphs in a document")
     parser.add_argument("--min_width", default=.75, type=int, help="Minimum width of a textbox as a percent of document")
+    parser.add_argument("--paragraph_mark_dataset_path", default=None, help="If each paragraph should start with a mark,"
+                                                                            "this is a folder with these character images")
     parser.add_argument("--device", default=DEFAULT_DEVICE, help="cpu, cuda, cuda:0, etc.")
+    parser.add_argument("--prep_wikipedia_only", action="store_true", help="download or prepare wikipedia data only without processing")
+    parser.add_argument("--iterations_before_new_style", default=100, type=int, help="How many iterations before changing style")
     return parser
 
-def testing():
+def _testing():
     output = ROOT / "output"
 
     # USE SAVED HANDWRITING - NOT WORKING RIGHT NOW
@@ -303,21 +384,41 @@ def testing():
     --output_folder ./output --batch_size 16  
     --freq 1 
     --saved_handwriting_model IAM
-     --wikipedia 20220301.fr 
+    --wikipedia 20220301.fr 
     --canvas_size 768,1152 
     --min_chars 50 
     --max_chars 64 
     --max_lines 100 
     --max_paragraphs 2
     """
-
     background_img, ocr_format = main(command3)
     return background_img, ocr_format
 
 if __name__ == "__main__":
     # ' --output_folder C:\\Users\\tarchibald\\github\\docgen\\projects\\demos\\output --batch_size 16  --freq 1  --saved_handwriting_model IAM --wikipedia 20220301.fr '
 
-    ocr_format = main()
+    # galois french lines
+    # GENERATE NEW HANDWRITING ON THE FLY -- NEEDED FOR FRENCH
+    # --output_folder {output}
+    args = rf"""
+    --batch_size 16 
+    --saved_handwriting_model IAM
+    --unigram_list '-'
+    --max_lines 1
+    --max_chars 1
+    --min_chars 1
+    --canvas_size 48,48
+    --saved_handwriting_model "IAM"
+    --autocrop
+    --count 1000
+    --save_frequency 1000
+    --iterations_before_new_style 1
+    """.replace("\n"," ")
+
+    # --saved_hw_model_folder /media/data/1TB/datasets/s3/HWR/synthetic-data/python-package-resources/handwriting-models
+
+
+    ocr_format = LineGenerator(args=args).main()
 
     #testing()
 

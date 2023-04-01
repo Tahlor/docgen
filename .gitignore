@@ -2,11 +2,15 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.h5
+
+kwdc-synthetic-data-forms/
 
 projects/french_bmd/*output*/
 projects/demos/**output*/
 projects/demos/production_scripts/*output*/
 projects/demos/FORMS
+kwdc-synthetic-data-forms/
 
 docgen/rendertext/data
 data/
@@ -17,6 +21,10 @@ credentials*
 *.swp
 *deprecated/
 projects/*/*_output_*
+*.log
+*.out
+output/
+fonts/
 
 # C extensions
 *.so

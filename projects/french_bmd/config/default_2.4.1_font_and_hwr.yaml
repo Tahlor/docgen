@@ -1,0 +1,68 @@
+page_template:
+    top_margin: [0, 0]
+    bottom_margin: [0, 0]
+    left_margin: [0, 0]
+    right_margin: [0, 0]
+    lines_rng: [1, 1]
+    words_rng: [1, 1]
+    font_scale_factor_rng: [1.0, 1.0]
+    min_height_pixels: 40
+    probability_vertically_centered: 0
+    probability_existence: 1.0
+    probability_blank: 0.01
+    probability_left_margin: 1
+
+page_title_template:
+    top_margin: null
+    bottom_margin: null
+    left_margin: [0,.3]
+    right_margin: [0,.3]
+    lines_rng: [1, 1]
+    words_rng: [1, 15]
+    font_scale_factor_rng: [1.0, 1.4]
+    min_height_pixels: 40
+    probability_existence: .5
+page_header_template:
+  top_margin: [-0.03, 0.1]
+  bottom_margin: [-0.02, 0.1]
+  left_margin: [0,.3]
+  right_margin: [0,.3]
+  lines_rng: [ 1, 2 ]
+  words_rng: [1, 30]
+  font_scale_factor_rng: [ .85, 1.3 ]
+  min_height_pixels: 40
+  probability_existence: 0.1
+paragraph_template:
+  top_margin: [-0.01, 0.08]
+  bottom_margin: [-0.03, 0.05]
+  left_margin: [-0.03, 0.02]
+  right_margin: [-0.03, 0.02]
+  lines_rng: [4, 30]
+  font_scale_factor_rng: [.85, 1.15]
+  min_height_pixels: 100
+  probability_vertically_centered: .5 # inheritable
+  probability_indent: .8
+  indent_factor_rng: [1,5]
+margin_notes_template:
+  top_margin: [-0.03, 0.2]
+  bottom_margin: [-0.03, 0.2]
+  left_margin: [-0.03, 0.1]
+  right_margin: [-0.03, 0.1]
+  lines_rng: [ 1, 5 ]
+  font_scale_factor_rng: null
+  min_height_pixels: 40
+  probability_existence: 0.2
+  probability_blank: 0.1
+paragraph_note_template:
+  top_margin: [-0.03, 0.2]
+  bottom_margin: [-0.03, 0.2]
+  left_margin: [-0.03, 0.2]
+  right_margin: [-0.03, 0.2]
+  lines_rng: [ 1, 2 ]
+  font_scale_factor_rng: [ .85, 1.3 ]
+  height_as_percent_of_page_rng: null
+  min_height_pixels: 40
+  probability_existence: 0.2
+  probability_blank: 0.1
+
+pages_per_image: [1, 2]

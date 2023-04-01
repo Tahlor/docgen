@@ -1,0 +1,193 @@
+# My Dataset Configuration v5 - just text / handwriting / backgrounds
+# basically vanilla binarization, only recognizing handwriting
+# not actually useful, since it should do handwriting + text, not being exposed to text it usually classifies it as handwriting but not always
+
+
+v5.DIBCO.2_10k:
+  - way more backgrounds
+
+v5.DIBCO.1_10k:
+  - just HW and backgrounds - light DALLE
+
+
+workers: 0
+final_size: 448
+dataset_length: 10000
+drive_mappings:
+  "B:": "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle"
+output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v5.DIBCO.2_10k"
+overwrite: false
+output_img_size: 448
+composite_function: composite_the_images_torch
+layout_sampler_kwargs:
+  default_min_layers: 2
+  default_max_layers: 3
+  number_of_layer_weights:
+    - .1
+    - .3
+
+datasets:
+
+  - name: handwriting
+    type: HWGenerator
+    layer_contents: handwriting
+    base_dataset_kwargs:
+        img_dirs:
+          - "C:/Users/tarchibald/Anaconda3/envs/docgen_windows/hwgen/resources/generated"
+    sample_weight: 5
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        #- ColorJitter
+        - RandomDistortions
+        - RuledSurfaceDistortions
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - MoreContrast
+        - MoreContrast
+        - MoreContrast
+        - MoreContrast
+        - MoreContrast
+
+
+        #- Blur
+        #- ConditionalContrast
+      - ToTensor
+      - RandomResize:
+          min_scale: .8
+          max_scale: 1.5
+    composite_function:
+        type: CompositerTorch
+        method: torchmul
+    mask:
+      type: SoftMask
+      kwargs:
+        threshold: .8
+
+  - name: background
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      # "B:/document_backgrounds/paper_only"
+      img_dirs:
+        - "B:/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frame/light"
+        - "B:/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frame"
+        - "B:/document_backgrounds/paper_only/aged blank letter with imprints of text from the reverse side, as if some vestiges of the ink permeated through the paper, but impossible to read; full frame"
+        - "B:/document_backgrounds/with_backgrounds/full frame aerial view of 2 blank pages of old open book with wrinkles; book is on top of a noisey background"
+        - "B:/document_backgrounds/paper_only/old blank paper with a some random highlighter and marker marks, full frame"
+        - "B:/document_backgrounds/paper_only/old paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting"
+    layer_contents: noise
+    layer_position: 0 # background layer
+    sample_weight: 10000
+    percent_overlap: 1
+    mask:
+      type: GrayscaleMask
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - ColorJitter
+        - RandomDistortions
+        - RuledSurfaceDistortions
+        - Blobs
+        - Blobs
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+
+      - ToTensor
+
+  - name: handwriting_images_dalle
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      img_dirs:
+        - B:/document_backgrounds/handwriting/enhanced/0
+        - B:/document_backgrounds/handwriting/enhanced/4
+        - B:/document_backgrounds/handwriting/enhanced/5
+      recursive: true
+      #file_name_filter: "[2-9][0-9]_"
+
+    layer_contents: handwriting
+    sample_weight: 1
+    filters:
+      - RejectIfTooManyPixelsAreBelowThreshold:
+          threshold: 0.8
+          max_percent_of_pixels_allowed_below_threshold: 0.4
+    mask:
+      type: SoftMask
+      kwargs:
+        threshold: .6
+
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        #- ColorJitter
+        - RandomRotate
+        #- RandomDistortions
+        - RuledSurfaceDistortions
+        #- Blur
+        #- ConditionalContrast
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+
+      - ToTensor
+      - RandomResize:
+          min_scale: .5
+          max_scale: 1.3
+#      - CropBorder:
+#            border_size_rng: 200
+    composite_function:
+        type: CompositerTorch
+        method: torchmul
+
+  - name: handwriting_images_iam
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      img_dirs:
+        - "G:/data/standard_hwr/IAM_OFFLINE/lines"
+      recursive: true
+    layer_contents: handwriting
+    sample_weight: 1
+    filters:
+      - RejectIfTooManyPixelsAreBelowThreshold:
+          threshold: 0.8
+          max_percent_of_pixels_allowed_below_threshold: 0.4
+    mask:
+      type: SoftMask
+      kwargs:
+        threshold: .6
+
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        #- ColorJitter
+        #- RandomDistortions
+        - RuledSurfaceDistortions
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - MoreContrast
+        - MoreContrast
+        - MoreContrast
+        - MoreContrast
+        - MoreContrast
+        #- Blur
+        #- ConditionalContrast
+      - ToTensor
+      - RandomResize:
+          min_scale: .3
+          max_scale: 1.1
+    composite_function:
+        type: CompositerTorch
+        method: torchmul
+
+
+transforms_after_compositing:
+
+background_bounding_boxes_pkl_path: "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/with_backgrounds/bounding_boxes_FILESTEM_BOUNDINGBOX.pkl"

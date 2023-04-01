@@ -7,6 +7,23 @@ def convert_pdf_bytes_to_img_bytes(pdf):
     images = convert_from_bytes(pdf)
     return images
 
+def crop_image(image_tensor, bbox, format="CHW"):
+    x_min, y_min, x_max, y_max = bbox
+    if format == "CHW":
+        return image_tensor[:, y_min:y_max, x_min:x_max]
+    elif format == "HWC":
+        return image_tensor[y_min:y_max, x_min:x_max, :]
+    else:
+        raise ValueError(f"Unknown format: {format}")
+def replace_region(original_image, bbox, cropped_image, format="CHW"):
+    x_min, y_min, x_max, y_max = bbox
+    if format == "CHW":
+        original_image[:, y_min:y_max, x_min:x_max] = cropped_image
+    elif format == "HWC":
+        original_image[y_min:y_max, x_min:x_max, :] = cropped_image
+    else:
+        raise ValueError(f"Unknown format: {format}")
+    return original_image
 
 def paste_image(backgroud_as_bytes, ):
     back_im = backgroud_as_bytes.copy()

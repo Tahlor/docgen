@@ -13,6 +13,10 @@ from docgen.utils.utils import *
 from docgen.bbox import BBox, BBoxNGon
 import logging
 import sys
+from typing import List, Tuple, Union, Optional
+import ctypes
+import warnings
+
 if sys.version_info >= (3, 8):
     from typing import Literal
 else:
@@ -33,17 +37,45 @@ class JSONEncoder(json.JSONEncoder):
 
     def default(self, obj):
         if hasattr(obj, "toJSON"):
-            return super().encode(obj.toJSON())
+            #return super().encode(obj.toJSON()) # this encodes 2x, e.g. (1,2,3,4) -> "[1,2,3,4]" -> '"[1,2,3,4]"'
+            return obj.toJSON()
+
         # WindowsPath
         elif isinstance(obj, Path):
-            return super().encode(str(obj))
-        #return super().encode(obj)
+            return str(obj)
+            #return super().encode(obj)
+
         return json.JSONEncoder.default(self, obj)
+
+class CustomDecoder(json.JSONDecoder):
+    """ Some of the early OCR JSONs encoded bbox's wrong, this will load them
+
+        # Example usage
+        json_data = '{"bbox": "[1,2,3]", "foo": "bar"}'
+        decoded = json.loads(json_data, cls=CustomDecoder)
+
+        print(decoded)  # Outputs: {'bbox': [1, 2, 3], 'foo': 'bar'}
+
+    """
+    def decode(self, s):
+        result = super().decode(s)
+        return self._decode(result)
+
+    def _decode(self, data):
+        if isinstance(data, str):
+            return data
+        elif isinstance(data, list):
+            return [self._decode(v) for v in data]
+        elif isinstance(data, dict):
+            if "bbox" in data and isinstance(data["bbox"], str):
+                data["bbox"] = json.loads(data["bbox"])
+            return {k: self._decode(v) for k, v in data.items()}
+        return data
 
 
 def load_json(path):
     with Path(path).open() as ff:
-        ocr = json.load(ff)
+        ocr = json.load(ff, cls=CustomDecoder)
     return ocr
 
 def save_json(path, arr):
@@ -73,7 +105,7 @@ def delete_extra_images(path):
 def ocr_dataset_to_coco(ocr_dict,
                         data_set_name="Synthetic Forms - Pre-alpha Release",
                         bbox_format_input:Literal['XYXY', 'XYWH']="XYXY",
-                        use_fine_grained_paragraph_categories:bool=True,
+                        use_fine_grained_paragraph_descriptions:bool=True,
                         exclude_cats=None):
     """
 
@@ -81,7 +113,7 @@ def ocr_dataset_to_coco(ocr_dict,
         ocr_dict:
         data_set_name:
         bbox_format_input:
-        use_fine_grained_paragraph_categories (bool): instead of outputting broad "paragraph" category,
+        use_fine_grained_paragraph_descriptions (bool): instead of outputting broad "paragraph" category,
                                 will output "paragraph","margin_note","page_title","paragraph_note", etc.
 
     Returns:
@@ -115,7 +147,19 @@ def ocr_dataset_to_coco(ocr_dict,
 
     category_id_counter = max([item["id"] for key, item in categories.items()])
 
-    def process_item(ocr_dict, img_idx, category, segmentation=[]):
+    def process_item(ocr_dict, img_idx, category, segmentation=[], info_dict=None):
+        """
+
+        Args:
+            ocr_dict:
+            img_idx:
+            category:
+            segmentation:
+            info_dict: other information to add to this annotation from parent
+
+        Returns:
+
+        """
         nonlocal ann_id_counter, categories, category_id_counter
 
         # add new categories as found
@@ -134,30 +178,46 @@ def ocr_dataset_to_coco(ocr_dict,
             "category_id": category_id,
             "segmentation": to_list(segmentation),
         }
+        if info_dict:
+            item.update(info_dict)
 
         ann_id_counter += 1
         if "text" in ocr_dict:
             item["text"] = ocr_dict["text"]
+            if "text_decode_vocab" in ocr_dict:
+                item["text_decode_vocab"] = ocr_dict["text_decode_vocab"]
         return item
 
-    def nested(img_id, dict, keyword):
+    def nested(img_id, dict, keyword, info_dict_for_children=None):
+        """
+
+        Args:
+            img_id:
+            dict:
+            keyword:
+            parent_section_description: page_header, margin_note, title, etc.
+
+        Returns:
+
+        """
         level = hierarchy.index(keyword)
         segmentation_list = []
         items = dict[keyword+"s"] # NOTE: the OCR dataset is hierarchal, uses a list of paragraphs
         category = keyword
 
-        if use_fine_grained_paragraph_categories and "category" in dict:
+        if use_fine_grained_paragraph_descriptions and "category" in dict:
             category = dict["category"]
+            info_dict_for_children = {"root":category}
 
         if items:
-            for item in items:
+            for i, item in enumerate(items):
                 if level < len(hierarchy) - 1:
-                    child_seg, child_seg_list = nested(img_id, item, hierarchy[level+1])
+                    child_seg, child_seg_list = nested(img_id, item, hierarchy[level+1], info_dict_for_children=info_dict_for_children)
                 else:
                     child_seg = child_seg_list = [BBox.box_4pt(to_xyxy(item["bbox"]))]
 
 
-                annotation = process_item(item, img_id, category=category, segmentation=child_seg_list)
+                annotation = process_item(item, img_id, category=category, segmentation=child_seg_list, info_dict=info_dict_for_children)
 
                 # Including every word massively inflates the COCO dataset size
                 if not (exclude_cats and category in exclude_cats):
@@ -259,13 +319,14 @@ def coco_dataset(dict_list, output_path):
                     cat_id_counter += 1
 
                 for box in image_dict["localization"][key]:
-                    annotations.append({"image_id": id,
+                    out_dict = {"image_id": id,
                                         "bbox":BBox._get_XYWH(box["bbox"]),
                                         "text":box["text"],
                                         "category": f"{localization_level}",
                                         "id": ann_id_counter,
                                         "category_id": categories[localization_level]["id"],
-                    })
+                    }
+                    annotations.append(out_dict)
                     ann_id_counter+=1
 
     coco = {
@@ -290,19 +351,20 @@ def change_key_recursive(reference_dict, my_dict, old_key, new_key):
         elif isinstance(ref_val, dict):
             change_key_recursive(ref_val, my_dict[i], old_key, new_key)
 
-def draw_boxes_paragraph(ocr_format, background_img, origin=[0,0]):
+def draw_boxes_paragraph(ocr_format, background_img, origin=[0,0], color="red"):
     if ocr_format["paragraphs"]:
         for paragraph in ocr_format["paragraphs"]:
             for line in paragraph["lines"]:
                 for word in line["words"]:
-                    BBox._draw_box(BBox._offset_origin(word["bbox"], *origin), background_img)
-                BBox._draw_box(BBox._offset_origin(line["bbox"], *origin), background_img)
-            BBox._draw_box(BBox._offset_origin(paragraph["bbox"], *origin), background_img)
+                    BBox._draw_box(BBox._offset_origin(word["bbox"], *origin), background_img, color=colors["word"])
+                BBox._draw_box(BBox._offset_origin(line["bbox"], *origin), background_img, color=colors["line"])
+            BBox._draw_box(BBox._offset_origin(paragraph["bbox"], *origin), background_img, color=color)
     return background_img
 
 def draw_boxes_sections(ocr_format, background_img):
     for section in ocr_format["sections"]:
-        draw_boxes_paragraph(section, background_img)
+        color = colors[section["category"]] if section["category"] in colors else "red"
+        draw_boxes_paragraph(section, background_img, color=color)
     return background_img
 
 
@@ -313,7 +375,8 @@ colors = {"paragraph": "red",
           "page_title": "orange",
           "page": "purple",
           "section": "pink",
-          "margin_note": "gray",}
+          "margin_note": "gray",
+          "page_header": "brown",}
 
 # Just so we can visualize the box, in case it overlaps
 enlarge_box_by_pixels = {"page_title":2,
@@ -369,10 +432,11 @@ def draw_boxes_sections_COCO(coco_format,
                     bbox = BBox("ul", annotation["bbox"], format="XYWH")
                     if annotation["category"] in enlarge_box_by_pixels:
                         bbox.enlarge_box(enlarge_box_by_pixels[annotation["category"]])
-                    bbox.draw_box(background_img, color=color)
+                    bbox.draw_form_element(background_img, color=color)
                 if draw_segmentations:
                     for segment in annotation["segmentation"]:
                         BBox.draw_segmentation(segment, background_img, color=color)
+
     return background_img
 
 
@@ -408,13 +472,14 @@ def fix2(path):
     return dict
 
 
-def load_and_draw_and_display(image_path,
-                              dataset_dict=None,
-                              format:Literal['OCR', 'COCO']="OCR",
-                              category_id=None,
-                              draw_segmentations=False,
-                              draw_boxes=True,
-                              save_path=None,):
+def draw_gt_layout(image_path,
+                   dataset_dict=None,
+                   format:Literal['OCR', 'COCO']="OCR",
+                   category_id=None,
+                   draw_segmentations=False,
+                   draw_boxes=True,
+                   save_path=None,
+                   show=True):
     """ Will load a COCO/OCR format and display the image with the bounding boxes
 
     Args:
@@ -427,6 +492,10 @@ def load_and_draw_and_display(image_path,
     Returns:
 
     """
+    if not show and save_path is None:
+        logger.error("Must set show=True or provide save_path")
+        return
+
     if dataset_dict is None:
         dataset_dict = load_json(Path(image_path).parent / "OCR.json")
     elif isinstance(dataset_dict, (str, Path)):
@@ -440,7 +509,11 @@ def load_and_draw_and_display(image_path,
         img = img.convert("RGB")
 
     if format == "OCR":
-        out = draw_boxes_sections(dataset_dict[idx], img)
+        if draw_segmentations:
+            warnings.warn("draw_segmentations not supported for OCR format")
+            return
+        else:
+            out = draw_boxes_sections(dataset_dict[idx], img)
     elif format == "COCO":
         out = draw_boxes_sections_COCO(dataset_dict,
                                        category_id,
@@ -453,7 +526,8 @@ def load_and_draw_and_display(image_path,
         raise ValueError(f"format {format} not supported")
 
     #display(img)
-    out.show()
+    if show:
+        out.show()
     if save_path is not None:
         out.save(save_path)
 
@@ -559,7 +633,7 @@ def _test(path=r"C:\Users\tarchibald\github\data\synthetic\FRENCH_BMD_LAYOUTv0.0
 
     if False:
         p = "/home/taylor/anaconda3/DATASET_0021/0036011.jpg"
-        load_and_draw_and_display(p)
+        draw_gt_layout(p)
 
 
 ### FIX COCO JSONs
@@ -573,6 +647,14 @@ def fix_coords(coco_dict):
         ann["bbox"] = BBox("ul", ann["bbox"]).get_XYWH()
 
 def add_ids_to_json(coco):
+    """ A post-processing function if you forgot to add ids to a COCO json
+
+    Args:
+        coco:
+
+    Returns:
+
+    """
     coco_dict = load_json(coco)
     categories = {
         "section": {'supercategory': 'section', 'id': 1, 'name': 'section'},
@@ -613,6 +695,39 @@ def test_coco():
     p = draw_boxes_sections_COCO(coco, category_id="paragraph", draw_boxes=False, draw_segmentations=True, image_root=Path(path).parent)
     p.show()
     pass
+
+def get_adjusted_path(path: Union[str, Path]) -> str:
+    """
+    Get an adjusted path that uses UNC notation if necessary, i.e., the path is too long
+
+    Args:
+        path (Union[str, Path]): The original file or directory path.
+
+    Returns:
+        str: The adjusted path.
+    """
+    path_str = str(path)
+    if len(path_str) > 260:  # Windows max path length
+        return f"\\\\?\\{path_str}"
+    return path_str
+
+def get_short_path_name(long_name: Union[str, Path]) -> Optional[str]:
+    """
+    Get the short 8.3-style pathname.
+
+    Args:
+        long_name (Union[str, Path]): The original long file path.
+
+    Returns:
+        Optional[str]: The short path if it can be obtained, otherwise None.
+    """
+    buffer_size = 500
+    buffer = ctypes.create_unicode_buffer(buffer_size)
+    get_short_path_name_func = ctypes.windll.kernel32.GetShortPathNameW
+    if get_short_path_name_func(str(long_name), buffer, buffer_size):
+        return buffer.value
+    return None
+
 
 def test():
     root = Path("/home/taylor/anaconda3/DATASET_0021")

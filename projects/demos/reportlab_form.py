@@ -3,12 +3,12 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 import json
 from tqdm import tqdm
 from docgen.reportlab_tools.reportlab_generator import FormGenerator, filter_to_one_row
-from docgen.content.table_from_faker import TableDataFromFaker
+from textgen.table_from_faker import TableDataFromFaker
 from docgen.img_tools import convert_pdf_to_img_paths
 from hwgen.data.saved_handwriting_dataset import SavedHandwritingRandomAuthor
 from PIL import Image
 from docgen.pdf_edit import BoxFiller
-from docgen.rendertext.render_word import RenderImageTextPair
+from textgen.rendertext.render_word import RenderImageTextPair
 from docgen.bbox import BBox
 from copy import deepcopy
 from docgen.utils.utils import file_incrementer
@@ -76,7 +76,8 @@ class FormerFiller:
                 text = d["text"].strip().split(" ")
                 img_word_pairs = RenderImageTextPair(self.renderer, text, renderer_text_key="raw_text")
                 d["bbox"] = BBox._rescale(d["bbox"], scale_factors)
-                background_img, bbox_list = self.bf.fill_box(bbox=d["bbox"], img=background_img, img_text_pair_gen=img_word_pairs, error_mode="expand")
+                box_dict = self.bf.fill_box(bbox=d["bbox"], img=background_img, img_text_pair_gen=img_word_pairs, error_mode="expand")
+                background_img, bbox_list = box_dict["img"], box_dict["bbox_list"]
                 d["text"] = bbox_list[0].text
                 d["bbox"] = bbox_list[0].bbox
 

@@ -1,3 +1,6 @@
+import time
+from functools import wraps
+
 import threading
 import signal
 import os
@@ -210,8 +213,29 @@ class windows_timeout:
     def __exit__(self, type, value, traceback):
         self.timer.cancel()
 
+
+
+def time_function(func):
+    """Decorator to measure the execution time of a function.
+
+    Args:
+        func (Callable): The function to be timed.
+
+    Returns:
+        Callable: The wrapped function with timing functionality.
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        start_time = time.perf_counter()
+        result = func(*args, **kwargs)
+        end_time = time.perf_counter()
+        print(f"{func.__name__} executed in {end_time - start_time:.4f} seconds")
+        return result
+    return wrapper
+
+
 timeout = linux_timeout if os.name == 'posix' else windows_timeout
-print(timeout.__name__)
+
 if __name__ == '__main__':
     """
     

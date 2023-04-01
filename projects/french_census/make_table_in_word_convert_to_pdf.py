@@ -3,11 +3,11 @@ import sys
 
 import numpy.random
 from docgen import docx2pdf
-from docgen.content.table_from_faker import TableDataFromFaker
+from textgen.table_from_faker import TableDataFromFaker
 from docgen.docx_tools.docx_tools import *
 from docgen.utils.utils import *
 from docgen.pdf_edit import PDF
-from docgen.rendertext.render_word import RenderWordFont
+from textgen.rendertext.render_word import RenderWordFont
 from hwgen.data.saved_handwriting_dataset import SavedHandwriting
 from docgen.bbox import BBox
 from docgen.dataset_utils import coco_dataset

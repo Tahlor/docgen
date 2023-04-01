@@ -16,6 +16,7 @@ class LayoutDataset(Dataset):
     def __init__(self, layout_generator,
                  render_text_pairs,
                  length=100000,
+                 start_idx_offset=0,
                  degradation_function=None,
                  output_path=None,
                  *args,
@@ -24,6 +25,7 @@ class LayoutDataset(Dataset):
         self.layout_generator = layout_generator
         self.render_text_pairs = render_text_pairs
         self.length = length
+        self.start_idx_offset = start_idx_offset
         self.degradation_function = degradation_function
         self.output_path = output_path
 
@@ -32,7 +34,7 @@ class LayoutDataset(Dataset):
 
     @handler(testing=RAISE_ERRORS_ON_FAILED_ITERATION, return_on_fail=(None, None, None))
     def __getitem__(self, i):
-        name, ocr, image = self.layout_generator.make_one_image(i)
+        name, ocr, image = self.layout_generator.make_one_image(i+self.start_idx_offset)
 
         if self.degradation_function:
             image = self.degradation_function(image)
@@ -47,7 +49,7 @@ class LayoutDataset(Dataset):
 
 if __name__ == "__main__":
     from textgen.unigram_dataset import Unigrams
-    from docgen.rendertext.render_word import RenderImageTextPair
+    from textgen.rendertext.render_word import RenderImageTextPair
     from docgen.layoutgen.layoutgen import LayoutGenerator
 
     HWR_FILES = None # folder with handwriting .npy files

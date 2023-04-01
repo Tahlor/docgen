@@ -1,0 +1,86 @@
+workers: 0
+final_size: 448
+dataset_length: 10000
+drive_mappings:
+  "B:": "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle"
+output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/handwriting_with_background_DALLE"
+overwrite: false
+output_img_size: 448
+composite_function: composite_the_images_torch
+layout_sampler_kwargs:
+  default_min_layers: 2
+  default_max_layers: 2
+  number_of_layer_weights:
+    - 1.0
+
+datasets:
+  - name: handwriting_images
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      img_dirs:
+        #- "G:/s3/synthetic_data/FRENCH_BMD/v2.4.3_10k_french_with_fonts"
+        #- "G:/s3/synthetic_data/FRENCH_BMD/FRENCH_BMD_LAYOUTv2.1.0/1000"
+        - "B:/document_backgrounds/handwriting"
+      recursive: true
+    layer_contents: handwriting
+    sample_weight: 10
+    filters:
+      - RejectIfTooManyPixelsAreBelowThreshold:
+          threshold: 0.9
+          max_percent_of_pixels_allowed_below_threshold: 0.3
+    mask:
+      type: SoftMask
+      kwargs:
+        threshold: .6
+
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - ColorJitter
+        - RandomDistortions
+        - RuledSurfaceDistortions
+        #- Blur
+        #- ConditionalContrast
+      - ToTensor
+      - RandomResize:
+          min_scale: .8
+          max_scale: 1.2
+      - CropBorder:
+            border_size_rng: 200
+    composite_function:
+        type: CompositerTorch
+        method: torchmul
+
+  - name: background
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      img_dirs: 
+        - "B:/document_backgrounds/paper_only/white blank letter with imprints of text from the reverse side, as if some vestiges of the ink permeated through the paper, but impossible to read; full frame"
+#        - "B:/document_backgrounds/paper_only/white paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting"
+        - "B:/document_backgrounds/paper_only/aged blank letter with imprints of text from the reverse side, as if some vestiges of the ink permeated through the paper, but impossible to read; full frame"
+        - "B:/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frame"
+#        - "B:/document_backgrounds/paper_only/blank paper with a some random highlighter and marker marks, full frame"
+#        - "B:/document_backgrounds/paper_only/blank paper with mold damage, full frame"
+#        - "B:/document_backgrounds/paper_only/old blank paper with water or coffee stains, full frame"
+#        - "B:/document_backgrounds/paper_only/old paper with ink marks, crinkles, wrinkles, and imperfections and variable lighting"
+#        - "B:/document_backgrounds/paper_only/white blank letter with imprints of text from the reverse side, as if some vestiges of the ink permeated through the paper, but impossible to read; full frame"
+    layer_contents: noise
+    layer_position: 0 # background layer
+    sample_weight: 10
+    percent_overlap: 1
+    mask:
+      type: naivemask
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - ColorJitter
+        - RandomDistortions
+        - RuledSurfaceDistortions
+      - ToTensor
+      - RandomBottomLeftEdgeCrop
+      - RandomResize:
+          min_scale: .5
+          max_scale: 2
+          min_pixels: 768
+
+transforms_after_compositing:
