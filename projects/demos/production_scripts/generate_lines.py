@@ -3,7 +3,21 @@ from pathlib import Path
 from docgen.utils.utils import timeout
 import time
 import os
+# docker kill : 09cf725fba01
+# docker rm : 09cf725fba01
 
+# check if on ec2
+if os.path.exists("/HOST"):
+    DATASETS_PATH = Path("/HOST/home/ec2-user/docker/resources/datasets/")
+    HUGGING_FACE_DATASETS_CACHE = Path("~/.cache/huggingface/datasets/")
+    IMAGE_OUTPUT = Path("/HOST/home/ec2-user/docker/outputs")
+# if host is galois
+elif os.path.exists("/home/taylor"):
+    DATASETS_PATH = Path("/home/ec2-user/docker/resources/datasets")
+    HUGGING_FACE_DATASETS_CACHE = Path("~/.cache/huggingface/datasets")
+    IMAGE_OUTPUT = Path("/home/ec2-user/docker/outputs")
+
+preprocessed = ["en", "fr", "it", "de"]
 languages = {
      #"fr": "french",
      #"en": "english",
@@ -22,21 +36,24 @@ languages = {
      "pl": "polish",
 }
 
+# filter to processed
+languages = {k: v for k, v in languages.items() if k in preprocessed}
+
 def make_sys_link_for_wikipedia_files():
     # make sure the wikipedia files are in the right place
-    path = Path("/HOST/home/ec2-user/docker/wikipedia")
+    path = DATASETS_PATH
     path.mkdir(parents=True, exist_ok=True)
     # ln -s /HOST/home/ec2-user/docker/resources/wikipedia ~/.cache/huggingface/datasets
     # python command for symlink command above
-    os.symlink("~/.cache/huggingface/datasets/wikipedia", path)
+    os.symlink(HUGGING_FACE_DATASETS_CACHE, path)
 
 
 def check_if_done(path):
     # check if path has more than 100000 files
-    return len(list(path.glob("*"))) > 100000
+    return len(list(path.glob("*"))) >= 999999
 
 def run(language, abbreviation):
-    path = Path(f"/HOST/home/ec2-user/docker/outputs/{language}")
+    path = IMAGE_OUTPUT / language
     if check_if_done(path):
         print(f"{language} is done")
         return

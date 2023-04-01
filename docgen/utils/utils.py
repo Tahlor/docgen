@@ -211,7 +211,7 @@ class windows_timeout:
         self.timer.cancel()
 
 timeout = linux_timeout if os.name == 'posix' else windows_timeout
-print(timeout.__name__)
+
 if __name__ == '__main__':
     """
     

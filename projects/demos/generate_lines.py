@@ -1,6 +1,7 @@
 from time import sleep
 import os
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
+import datetime
 from docgen.dataset_utils import ocr_dataset_to_coco
 import math
 import traceback
@@ -105,15 +106,23 @@ class LineGenerator:
     def main(self):
 
         if self.args.wikipedia is not None:
+            preprocessed = ["en", "fr", "it", "de"]
+            if not Path(self.args.wikipedia).suffix[-2:] in preprocessed:
+                date, language = self.args.wikipedia.split(".")
+                current_year = str(datetime.datetime.now().year)
+                date = date.replace("2022", current_year)
+                dataset = load_dataset("wikipedia", date=date, language=language, beam_runner="DirectRunner")["train"]
+                return
+            else:
+                dataset = load_dataset("wikipedia", self.args.wikipedia)["train"]
             self.basic_text_dataset = WikipediaEncodedTextDataset(
-                dataset=load_dataset("wikipedia", self.args.wikipedia)["train"],
+                dataset=dataset,
                 vocabulary=set(self.args.vocab),  # set(self.model.netconverter.dict.keys())
                 exclude_chars=self.args.exclude_chars,
                 use_unidecode=True,
                 min_chars=self.args.min_chars,
                 max_chars=self.args.max_chars,
             )
-
         elif self.args.unigrams is not None:
             basic_text_dataset = Unigrams(
                 csv_file=self.args.unigrams,

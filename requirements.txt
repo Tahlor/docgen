@@ -17,6 +17,7 @@ unidecode
 reportlab
 easydict
 ocrodeg @ git+https://github.com/NVlabs/ocrodeg
+mwparserfromhell
 
 # IF REPO IS PUBLIC
 #hwgen @ https://github.ancestry.com/tarchibald/hwgen/archive/master.zip
