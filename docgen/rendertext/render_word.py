@@ -7,7 +7,7 @@ import numpy as np
 from docgen.rendertext.utils import img_f
 import argparse
 from cv2 import resize
-from docgen.utils import *
+from docgen.utils.utils import *
 from PIL import Image
 import sys
 if sys.version_info >= (3, 8):
@@ -202,7 +202,11 @@ class RenderImageTextPair:
     """ TODO: MOVE to textgen
 
     """
-    def __init__(self, renderer, textgen, renderer_text_key=None, renderer_img_key="image"):
+    def __init__(self, renderer,
+                 textgen,
+                 renderer_text_key,
+                 renderer_img_key="image",
+                 ):
         self.renderer = renderer
         self.textgen = textgen
         self.renderer_text_key = renderer_text_key
@@ -241,7 +245,7 @@ class RenderImageTextPair:
 
     def __getitem__(self,i):
         d = self.renderer.render_word(self.textgen[i])
-        return d[self.renderer_img_key], d[self.text_gen_key]
+        return d[self.renderer_img_key], d[self.renderer_text_key]
 
 
 if __name__ == '__main__':

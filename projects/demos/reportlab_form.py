@@ -11,7 +11,7 @@ from docgen.pdf_edit import BoxFiller
 from docgen.rendertext.render_word import RenderImageTextPair
 from docgen.bbox import BBox
 from copy import deepcopy
-from docgen.utils import file_incrementer
+from docgen.utils.utils import file_incrementer
 from docgen.dataset_utils import JSONEncoder
 
 class FormerFiller:
@@ -74,7 +74,7 @@ class FormerFiller:
                 if d["category"] != "field":
                     continue
                 text = d["text"].strip().split(" ")
-                img_word_pairs = RenderImageTextPair(self.renderer, text)
+                img_word_pairs = RenderImageTextPair(self.renderer, text, renderer_text_key="raw_text")
                 d["bbox"] = BBox._rescale(d["bbox"], scale_factors)
                 background_img, bbox_list = self.bf.fill_box(bbox=d["bbox"], img=background_img, img_text_pair_gen=img_word_pairs, error_mode="expand")
                 d["text"] = bbox_list[0].text
@@ -88,7 +88,11 @@ class FormerFiller:
     def main(self, output_path="./output", number_of_form_types=10, copies_of_each_form=10, test_set_ration=0.1):
         output_path = file_incrementer(output_path, create_dir=True)
         master_output = {}
-        for form_type in tqdm(range(number_of_form_types)):
+        total = number_of_form_types * copies_of_each_form
+        pbar = tqdm(total=total)
+        for form_type in range(number_of_form_types):
+            output_path_form_type = output_path / f"{form_type:03.0f}"
+            output_path_form_type.mkdir(exist_ok=True)
             ocr_dict, background_img, scale_factors = self.generate_form()
             output = master_output[form_type] = {}
             for variation in range(copies_of_each_form):
@@ -96,7 +100,7 @@ class FormerFiller:
                     out_img, out_ocr = background_img, ocr_dict
                 else:
                     out_img, out_ocr = self.fill_form(deepcopy(ocr_dict), background_img.copy(), scale_factors)
-                name = f"{form_type:03.0f}_{variation:03.0f}"
+                name = f"{variation:03.0f}"
 
                 # if variation > copies_of_each_form * (1-test_set_ration):
                 #     output_path = output_path / "test"
@@ -105,10 +109,12 @@ class FormerFiller:
                 #     output_path = output_path / "train"
                 #     output_path.mkdir(exist_ok=True)
 
-                save_path = output_path / f"{name}.jpg"
+                save_path = output_path_form_type / f"{name}.jpg"
                 out_img.save(save_path)
                 out_ocr.update({"name": name, "path": save_path})
                 output[variation] = out_ocr
+                pbar.update(1)
+
         json_path = output_path / "output.json"
 
         with open(json_path, "w") as f:

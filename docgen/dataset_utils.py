@@ -9,7 +9,7 @@ import os
 import datetime
 import copy
 from PIL import Image
-from docgen.utils import *
+from docgen.utils.utils import *
 from docgen.bbox import BBox, BBoxNGon
 import logging
 import sys

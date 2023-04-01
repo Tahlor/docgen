@@ -31,7 +31,7 @@ def getWikiDataset():
     if '_text_data' not in globals():
         if not os.path.exists(os.path.join(cache_path,'dataset_info.json')):
             #_text_data = load_dataset("wikipedia", language="en", date="20220320", cache_dir=cache_path)['train']
-            _text_data = load_dataset('wikipedia', '20220301.en', cache_dir=cache_path)['train']
+            _text_data = load_dataset('wikipedia', '20220301.en', cache_dir=cache_path, beam_runner="DirectRunner")['train']
             _text_data.save_to_disk(cache_path)
         else:
             _text_data = load_from_disk(cache_path)

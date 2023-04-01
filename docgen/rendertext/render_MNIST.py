@@ -10,7 +10,7 @@ import numpy as np
 from docgen.rendertext.utils import img_f
 import argparse
 from cv2 import resize
-from docgen.utils import *
+from docgen.utils.utils import *
 from PIL import Image
 import sys
 if sys.version_info >= (3, 8):

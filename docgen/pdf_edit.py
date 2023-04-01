@@ -18,7 +18,7 @@ else:
     from typing_extensions import Literal
 from typing import List
 from docgen.bbox import BBox
-from docgen import utils
+from docgen.utils import utils
 from docgen.render_doc import *
 import logging
 

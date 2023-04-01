@@ -1,7 +1,9 @@
 from time import sleep
 import os
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
+import datetime
 from docgen.dataset_utils import ocr_dataset_to_coco
+import math
 import traceback
 from tqdm import tqdm
 import torch
@@ -13,14 +15,14 @@ from textgen.unigram_dataset import Unigrams
 from docgen.rendertext.render_word import RenderWordFont
 from hwgen.data.saved_handwriting_dataset import SavedHandwriting, SavedHandwritingRandomAuthor
 import numpy as np
-from docgen import utils
+from docgen.utils import utils
 from hwgen.data.utils import display
 from docgen.image_composition.utils import new_textbox_given_background, new_textbox_given_background_line
 from textgen.wikipedia_dataset import WikipediaEncodedTextDataset
 from hwgen.data.hw_generator import HWGenerator
 from datasets import load_dataset
 from torch.utils.data import DataLoader
-from docgen.utils import file_incrementer
+from docgen.utils.utils import file_incrementer
 from docgen.dataset_utils import load_json, draw_boxes_sections
 from docgen.pdf_edit import convert_to_ocr_format
 import argparse
@@ -33,14 +35,28 @@ import logging
 from hwgen.daemon import Daemon
 from textgen.basic_text_dataset import VOCABULARY
 from docgen.cuda_utils import try_try_again_factory
+from torch.nn import functional
+from docgen.utils.file_utils import get_last_file_in_collection_matching_base_path
 
-try_try_again = try_try_again_factory(debug=True)
 
 logger = logging.getLogger(__name__)
 ROOT = Path(__file__).parent.absolute()
-DEBUG = True
+DEBUG = False
 DEFAULT_DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #DEVICE = "cpu"
+TESTING = False
+try_try_again = try_try_again_factory(debug=DEBUG)
+
+if TESTING:
+    # set seeds
+    seed = 7
+    import random
+    import numpy as np
+    import torch
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
 
 class LineGenerator:
     def __init__(self, args=None):
@@ -49,20 +65,64 @@ class LineGenerator:
             args = parser.parse_args()
         else:
             args = parser.parse_args(shlex.split(args))
-        self.args = process_args(args)
+        self.args = self.process_args(args)
+
+    def process_args(self, args):
+        if not args.no_incrementer and not args.resume:
+            args.output_folder = file_incrementer(args.output_folder)
+        args.output_folder = Path(args.output_folder)
+        args.output_folder.mkdir(parents=True, exist_ok=True)
+        print(f"OUTPUT: {Path(args.output_folder).resolve()}")
+        args.last_idx = 0
+        if args.saved_handwriting_model is None and args.saved_handwriting_data is None:
+            raise ValueError("Must specify either saved handwriting model or saved handwriting data")
+        if args.unigrams is None and args.wikipedia is None:
+            warnings.warn("No text dataset specified, will try to use unigrams CSV resource (pulled from S3)")
+
+        # Set up paths
+        out = {"OCR": args.output_ocr_json, "COCO": args.output_coco_json, "TEXT": args.output_text_json}
+        for k, v in out.items():
+            if v is not None:
+                setattr(args, f"output_{k.lower()}_json", Path(v))
+                out[k].parent.mkdir(parents=True, exist_ok=True)
+            else:
+                setattr(args, f"output_{k.lower()}_json", args.output_folder / f"{k}.json")
+
+        if args.resume:
+            last_file = get_last_file_in_collection_matching_base_path(args.output_ocr_json)
+            if last_file:
+                if args.resume == -1:
+                    _ocr_dict = load_json(last_file)
+                    if _ocr_dict:
+                        args.last_idx = max(int(x) for x in _ocr_dict) + 1
+            else:
+                logger.warning("No OCR JSON files found in output folder, starting from scratch")
+
+        if isinstance(args.canvas_size, str):
+            args.canvas_size = make_tuple(args.canvas_size)
+
+        return args
 
     def main(self):
-        print(f"Vocab: {VOCABULARY}")
+
         if self.args.wikipedia is not None:
+            preprocessed = ["en", "fr", "it", "de"]
+            if not Path(self.args.wikipedia).suffix[-2:] in preprocessed:
+                date, language = self.args.wikipedia.split(".")
+                current_year = str(datetime.datetime.now().year)
+                date = date.replace("2022", current_year)
+                dataset = load_dataset("wikipedia", date=date, language=language, beam_runner="DirectRunner")["train"]
+                return
+            else:
+                dataset = load_dataset("wikipedia", self.args.wikipedia)["train"]
             self.basic_text_dataset = WikipediaEncodedTextDataset(
-                dataset=load_dataset("wikipedia", self.args.wikipedia)["train"],
-                vocabulary=set(VOCABULARY),  # set(self.model.netconverter.dict.keys())
-                exclude_chars="0123456789()+*;#:!/,.",
+                dataset=dataset,
+                vocabulary=set(self.args.vocab),  # set(self.model.netconverter.dict.keys())
+                exclude_chars=self.args.exclude_chars,
                 use_unidecode=True,
                 min_chars=self.args.min_chars,
                 max_chars=self.args.max_chars,
             )
-
         elif self.args.unigrams is not None:
             basic_text_dataset = Unigrams(
                 csv_file=self.args.unigrams,
@@ -75,7 +135,7 @@ class LineGenerator:
                            model=self.args.saved_handwriting_model,
                            device=self.args.device
                             )
-                , buffer_size=100,
+                , buffer_size=10000,
                 )
         self.renderer_daemon.start()
         self.next_word_iterator = self.get_next_word_iterator()
@@ -83,26 +143,45 @@ class LineGenerator:
                                    default_error_mode="expand",
                                    img_text_pair_gen=self.next_word_iterator)
 
-        if True:
-            for i in tqdm(range(self.args.count)):
-                self.create_line(i)
-        #except Exception as e:
-        else:
-            logger.exception(e)
-            warnings.warn(f"Only generated {i} out of {self.args.count} images")
+        def create_dataset_piece(start_idx, batch_size):
+            nonlocal next_img_idx
+            try:
+                for i in tqdm(range(start_idx, start_idx+batch_size)):
+                    self.create_line(next_img_idx)
+                    next_img_idx +=1
+            except Exception as e:
+                logger.exception(e)
+                warnings.warn(f"Only generated {i} out of {self.args.count} images")
+
+        self.reset_output_data_dict()
+        next_img_idx = self.args.last_idx
+        logger.info(f"Starting from index {next_img_idx}")
+        while next_img_idx < self.args.count:
+            create_dataset_piece(next_img_idx, min(self.args.save_frequency, self.args.count-next_img_idx))
+            number_of_zeros_fmt = f"0{int(math.log(self.args.count) // math.log(10)) + 1}d"
+            self.save_out_data_dict(f"_{next_img_idx:{number_of_zeros_fmt}}")
+            self.reset_output_data_dict()
 
         self.renderer_daemon.stop()
         self.renderer_daemon.join()
 
-        with self.args.output_ocr_json.open("w") as f:
-            json.dump(ocr_dict, f)
-        with self.args.output_text_json.open("w") as f:
-            out = {k:d['sections'][0]['paragraphs'][0]["lines"][0]["text"] for k,d in ocr_dict.items()}
+    def save_out_data_dict(self, suffix):
+        # add suffix to paths
+        OCR = self.args.output_ocr_json.with_name(self.args.output_ocr_json.stem + suffix + self.args.output_ocr_json.suffix)
+        TEXT = self.args.output_text_json.with_name(self.args.output_text_json.stem + suffix + self.args.output_text_json.suffix)
+        COCO = self.args.output_coco_json.with_name(self.args.output_coco_json.stem + suffix + self.args.output_coco_json.suffix)
+        logger.info(f"Saving to out {suffix}")
+        with OCR.open("w") as f:
+            json.dump(self.ocr_dict, f)
+        with TEXT.open("w") as f:
+            out = {k:d['sections'][0]['paragraphs'][0]["lines"][0]["text"] for k,d in self.ocr_dict.items()}
             json.dump(out, f)
-        coco = ocr_dataset_to_coco(ocr_dict, "French Lines - v0.0.1.0 Alpha", exclude_cats="word")
-        with self.args.output_coco_json.open("w") as f:
+        coco = ocr_dataset_to_coco(self.ocr_dict, f"French Lines - v0.1.0.0 - piece {suffix}", exclude_cats="word")
+        with COCO.open("w") as f:
             json.dump(coco, f)
-        return ocr_dict
+
+    def reset_output_data_dict(self):
+        self.ocr_dict = {}
 
     def get_next_word_iterator(self):
         item = self.renderer_daemon.queue.get()
@@ -126,24 +205,22 @@ class LineGenerator:
     def create_line(self, idx):
         """
         """
+        # if random.random() < .5:
+        #     raise Exception("Randomly failing to test try_try_again")
+
         def new_paragraph(shp, offset=None):
             scale = random.uniform(.7, 1.8)
             font_size = scale * 32
-            if self.args.max_lines > 1:
-                size, origin = new_textbox_given_background(shp, font_size=font_size)
-            else:
-                size, origin, font_size = new_textbox_given_background_line(shp,
+            size, origin, font_size, bbox = new_textbox_given_background_line(shp,
                                                                             font_size=font_size,
                                                                             minimum_width_percent=self.args.min_width)
-
             if not offset is None:
-                origin = origin[0] + offset[0], origin[1] + offset[1]
+                bbox.offset_origin(*offset)
 
-            box1, localization = self.BOX_FILLER.fill_box(bbox=[0, 0, *size],
+            box1, localization = self.BOX_FILLER.fill_box(bbox=bbox,
                                                      img=background_img,
                                                      )
-
-            ocr_format = convert_to_ocr_format(localization, origin_offset=origin, section=section)
+            ocr_format = convert_to_ocr_format(localization, section=section)
             return size, origin, box1, localization, ocr_format
 
         """
@@ -165,12 +242,11 @@ class LineGenerator:
         file_name = f"{idx:07.0f}"
         # draw_boxes_sections(ocr_out, background_img)
 
-        utils.save_image(background_img, OUTPUT_PATH / (file_name + ".jpg"))
+        utils.save_image(background_img, self.args.output_folder / (file_name + ".jpg"))
         # print(shape(background_img))
-        ocr_dict[file_name] = ocr_out
+        self.ocr_dict[file_name] = ocr_out
 
 def create_parser():
-    global ocr_dict, OUTPUT_OCR_JSON
     parser = argparse.ArgumentParser()
     parser.add_argument("--saved_handwriting_data",
                         action="store", const="sample", nargs="?",
@@ -183,15 +259,19 @@ def create_parser():
                         help="Path to unigram frequency file, if 'true' it will be downloaded from S3")
     parser.add_argument("--wikipedia", action="store", const="20220301.en", nargs="?",
                         help="20220301.en, 20220301.fr, etc.")
+    parser.add_argument("--vocab", default=VOCABULARY, type=str, help="The list of vocab tokens to use")
+    parser.add_argument("--exclude_chars", default="0123456789()+*;#:!/,.", type=str, help="Exclude these chars from the vocab")
     parser.add_argument("--batch_size", default=12, type=int, help="Batch size for processing")
     parser.add_argument("--count", default=100, type=int, help="Batch size for processing")
-    parser.add_argument("--resume", action="store_const", const=-1, help="Resuming from previous process")
-    parser.add_argument("--freq", default=5000, type=int, help="How often to update JSON GT file, in case generation is interrupted")
+    parser.add_argument('--resume', type=int, default=None, nargs='?', const=-1,
+                            help='An argument that can take a user specified value or -1')
+
+    parser.add_argument("--save_frequency", default=50000, type=int, help="How often to update JSON GT file, in case generation is interrupted")
     parser.add_argument("--output_folder", default=ROOT / "output", help="Path to output directory")
     parser.add_argument("--output_ocr_json", default=None, help="Path to output json (OCR format)")
     parser.add_argument("--output_text_json", default=None, help="Path to output json (just text transcriptions)")
     parser.add_argument("--output_coco_json", default=None, help="Path to output json (COCO format)")
-    parser.add_argument("--incrementer", default=True, help="Increment output folder")
+    parser.add_argument("--no_incrementer", action="store_true", help="DON'T increment output folder")
     parser.add_argument("--debug", action="store_true", help="Debugging mode")
     parser.add_argument("--display_output", action="store_true", help="Display sample output segmentation")
     parser.add_argument("--canvas_size", default=(1152, 48), type=str, help="Canvas size")
@@ -202,54 +282,6 @@ def create_parser():
     parser.add_argument("--min_width", default=.75, type=int, help="Minimum width of a textbox as a percent of document")
     parser.add_argument("--device", default=DEFAULT_DEVICE, help="cpu, cuda, cuda:0, etc.")
     return parser
-
-def process_args(args):
-    global ocr_dict, OUTPUT_PATH
-    print(args)
-    if args.incrementer:
-        args.output_folder = Path(file_incrementer(args.output_folder))
-    else:
-        args.output_folder = Path(args.output_folder)
-    args.output_folder.mkdir(parents=True, exist_ok=True)
-    OUTPUT_PATH = args.output_folder
-    print(f"OUTPUT: {Path(OUTPUT_PATH).resolve()}")
-    args.last_idx = 0
-    if args.saved_handwriting_model is None and args.saved_handwriting_data is None:
-        raise ValueError("Must specify either saved handwriting model or saved handwriting data")
-    if args.unigrams is None and args.wikipedia is None:
-        warnings.warn("No text dataset specified, will try to use unigrams CSV resource (pulled from S3)")
-
-    # Set up paths
-    out = {"OCR": args.output_ocr_json, "COCO": args.output_coco_json, "TEXT": args.output_text_json}
-    for k, v in out.items():
-        if v is not None:
-            setattr(args, f"output_{k.lower()}_json", Path(v))
-            out[k].parent.mkdir(parents=True, exist_ok=True)
-        else:
-            setattr(args, f"output_{k.lower()}_json", args.output_folder / f"{k}.json")
-
-    if isinstance(args.canvas_size, str):
-        args.canvas_size = make_tuple(args.canvas_size)
-
-    if args.resume:
-        ocr_dict = load_json(args.output_ocr_json)
-
-        if args.resume == -1:
-            args.last_idx = max(int(x) for x in ocr_dict) + 1
-        if args.incrementer:
-            warnings.warn("Incrementer is on, but resuming from previous process")
-            args.output_folder = file_incrementer(args.output_folder)
-    else:
-        if args.incrementer:
-            args.output_folder = file_incrementer(args.output_folder)
-
-        ocr_dict = {}
-
-    if args.debug:
-        DEBUG = True
-
-    return args
-
 
 def testing():
     output = ROOT / "output"

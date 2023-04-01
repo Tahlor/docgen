@@ -28,6 +28,7 @@ class BBox:
                  paragraph_index=None,
                  force_int=True,
                  img=None,
+                 font_size=None,
                  format:Literal['XYXY', 'XYWH']="XYXY",
                  height_ll=None):
         """
@@ -63,6 +64,7 @@ class BBox:
         self.text = text
         self.parent_bbox = parent_obj_bbox
         self.paragraph_index = paragraph_index
+        self.font_size = font_size
 
     def update_bbox(self, bbox, format:Literal['XYXY', 'XYWH']="XYXY", origin="ul"):
         if isinstance(bbox, tuple):
