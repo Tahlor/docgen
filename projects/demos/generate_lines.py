@@ -111,10 +111,10 @@ class LineGenerator:
                 date, language = self.args.wikipedia.split(".")
                 current_year = str(datetime.datetime.now().year)
                 date = date.replace("2022", current_year)
-                dataset = load_dataset("wikipedia", date=date, language=language, beam_runner="DirectRunner")["train"]
+                dataset = load_dataset("wikipedia", date=date, language=language, beam_runner="DirectRunner", data_dir=self.args.data_dir)["train"]
                 return
             else:
-                dataset = load_dataset("wikipedia", self.args.wikipedia)["train"]
+                dataset = load_dataset("wikipedia", self.args.wikipedia, data_dir=self.args.data_dir)["train"]
             self.basic_text_dataset = WikipediaEncodedTextDataset(
                 dataset=dataset,
                 vocabulary=set(self.args.vocab),  # set(self.model.netconverter.dict.keys())
@@ -259,6 +259,8 @@ def create_parser():
                         help="Path to unigram frequency file, if 'true' it will be downloaded from S3")
     parser.add_argument("--wikipedia", action="store", const="20220301.en", nargs="?",
                         help="20220301.en, 20220301.fr, etc.")
+    parser.add_argument("--data_dir", action="store", const=None, nargs="?",
+                        help="where to store the downloaded files")
     parser.add_argument("--vocab", default=VOCABULARY, type=str, help="The list of vocab tokens to use")
     parser.add_argument("--exclude_chars", default="0123456789()+*;#:!/,.", type=str, help="Exclude these chars from the vocab")
     parser.add_argument("--batch_size", default=12, type=int, help="Batch size for processing")

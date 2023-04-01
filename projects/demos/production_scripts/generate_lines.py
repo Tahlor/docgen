@@ -1,4 +1,4 @@
-from projects.demos.generate_lines import LineGenerator
+  GNU nano 6.2                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                prep_datasets.py *                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       from projects.demos.generate_lines import LineGenerator
 from pathlib import Path
 from docgen.utils.utils import timeout
 import time
@@ -9,13 +9,15 @@ import os
 # check if on ec2
 if os.path.exists("/HOST"):
     DATASETS_PATH = Path("/HOST/home/ec2-user/docker/resources/datasets/")
+    WIKIPEDIA = DATASETS_PATH / "wikipedia"
     HUGGING_FACE_DATASETS_CACHE = Path("~/.cache/huggingface/datasets/")
     IMAGE_OUTPUT = Path("/HOST/home/ec2-user/docker/outputs")
 # if host is galois
 elif os.path.exists("/home/taylor"):
-    DATASETS_PATH = Path("/home/ec2-user/docker/resources/datasets")
-    HUGGING_FACE_DATASETS_CACHE = Path("~/.cache/huggingface/datasets")
-    IMAGE_OUTPUT = Path("/home/ec2-user/docker/outputs")
+    DATASETS_PATH = Path("/media/data/1TB/datasets/synthetic/huggingface/datasets")
+    WIKIPEDIA = DATASETS_PATH / "wikipedia"
+    HUGGING_FACE_DATASETS_CACHE = None
+    IMAGE_OUTPUT = Path("/media/data/1TB/datasets/synthetic")
 
 preprocessed = ["en", "fr", "it", "de"]
 languages = {
@@ -37,7 +39,7 @@ languages = {
 }
 
 # filter to processed
-languages = {k: v for k, v in languages.items() if k in preprocessed}
+languages = {k: v for k, v in languages.items() if k not in preprocessed}
 
 def make_sys_link_for_wikipedia_files():
     # make sure the wikipedia files are in the right place
@@ -45,8 +47,8 @@ def make_sys_link_for_wikipedia_files():
     path.mkdir(parents=True, exist_ok=True)
     # ln -s /HOST/home/ec2-user/docker/resources/wikipedia ~/.cache/huggingface/datasets
     # python command for symlink command above
-    os.symlink(HUGGING_FACE_DATASETS_CACHE, path)
-
+    if not HUGGING_FACE_DATASETS_CACHE is None and HUGGING_FACE_DATASETS_CACHE.exists():
+        os.symlink(HUGGING_FACE_DATASETS_CACHE, path)
 
 def check_if_done(path):
     # check if path has more than 100000 files
@@ -58,12 +60,13 @@ def run(language, abbreviation):
         print(f"{language} is done")
         return
 
-    args = f""" 
+    args = f"""
      --output_folder {str(path)} \
      --batch_size 200  \
      --save_frequency 50000 \
      --saved_handwriting_model IAM \
      --wikipedia 20220301.{abbreviation} \
+     --data_dir {str(DATASETS_PATH)} \
      --canvas_size 1152,64 \
      --min_chars 8 \
      --max_chars 200 \
@@ -118,3 +121,4 @@ def test_downloading_wikipedia_using_huggingface_dataset_for_each_language():
 if __name__ == "__main__":
     for abbreviation, language in languages.items():
         run(language, abbreviation)
+
