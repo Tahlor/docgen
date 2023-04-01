@@ -1,4 +1,4 @@
-  GNU nano 6.2                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                prep_datasets.py *                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       from projects.demos.generate_lines import LineGenerator
+from projects.demos.generate_lines import LineGenerator
 from pathlib import Path
 from docgen.utils.utils import timeout
 import time
@@ -25,7 +25,7 @@ languages = {
      #"en": "english",
      "la": "latin",
      "de": "german",
-     "hun": "hungarian",
+     "hu": "hungarian",
      "es": "spanish",
      "it": "italian",
      "pt": "portuguese",
@@ -66,7 +66,7 @@ def run(language, abbreviation):
      --save_frequency 50000 \
      --saved_handwriting_model IAM \
      --wikipedia 20220301.{abbreviation} \
-     --data_dir {str(DATASETS_PATH)} \
+     --data_dir {str(WIKIPEDIA)} \
      --canvas_size 1152,64 \
      --min_chars 8 \
      --max_chars 200 \
