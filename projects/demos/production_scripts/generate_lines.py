@@ -26,7 +26,7 @@ def make_sys_link_for_wikipedia_files():
     # make sure the wikipedia files are in the right place
     path = Path("/HOST/home/ec2-user/docker/wikipedia")
     path.mkdir(parents=True, exist_ok=True)
-    # ln -s /HOST/home/ec2-user/docker/wikipedia "~/.cache/huggingface/datasets"
+    # ln -s /HOST/home/ec2-user/docker/resources/wikipedia ~/.cache/huggingface/datasets
     # python command for symlink command above
     os.symlink("~/.cache/huggingface/datasets/wikipedia", path)
 
