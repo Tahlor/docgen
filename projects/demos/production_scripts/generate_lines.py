@@ -12,20 +12,24 @@ if os.path.exists("/HOST"):
     WIKIPEDIA = DATASETS_PATH / "wikipedia"
     HUGGING_FACE_DATASETS_CACHE = Path("~/.cache/huggingface/datasets/")
     IMAGE_OUTPUT = Path("/HOST/home/ec2-user/docker/outputs")
+    batch_size = 200
+
 # if host is galois
 elif os.path.exists("/home/taylor"):
+    #  /home/taylor/.cache/huggingface/datasets/wikipedia/20230301.pl-21baa4c9bf4fe40f/2.0.0/aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559
     DATASETS_PATH = Path("/media/data/1TB/datasets/synthetic/huggingface/datasets")
     WIKIPEDIA = DATASETS_PATH / "wikipedia"
     HUGGING_FACE_DATASETS_CACHE = None
     IMAGE_OUTPUT = Path("/media/data/1TB/datasets/synthetic")
+    batch_size = 64
 
 preprocessed = ["en", "fr", "it", "de"]
 languages = {
      #"fr": "french",
      #"en": "english",
      "la": "latin",
-     "de": "german",
      "hu": "hungarian",
+     "de": "german",
      "es": "spanish",
      "it": "italian",
      "pt": "portuguese",
@@ -39,7 +43,7 @@ languages = {
 }
 
 # filter to processed
-languages = {k: v for k, v in languages.items() if k not in preprocessed}
+#languages = {k: v for k, v in languages.items() if k not in preprocessed}
 
 def make_sys_link_for_wikipedia_files():
     # make sure the wikipedia files are in the right place
@@ -62,11 +66,11 @@ def run(language, abbreviation):
 
     args = f"""
      --output_folder {str(path)} \
-     --batch_size 200  \
+     --batch_size {batch_size}  \
      --save_frequency 50000 \
      --saved_handwriting_model IAM \
      --wikipedia 20220301.{abbreviation} \
-     --data_dir {str(WIKIPEDIA)} \
+     --data_dir {str(DATASETS_PATH)} \
      --canvas_size 1152,64 \
      --min_chars 8 \
      --max_chars 200 \

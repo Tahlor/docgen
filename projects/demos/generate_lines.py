@@ -40,6 +40,9 @@ from docgen.utils.file_utils import get_last_file_in_collection_matching_base_pa
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
 ROOT = Path(__file__).parent.absolute()
 DEBUG = False
 DEFAULT_DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -66,6 +69,7 @@ class LineGenerator:
         else:
             args = parser.parse_args(shlex.split(args))
         self.args = self.process_args(args)
+        logger.info(f"Args: {self.args}")
 
     def process_args(self, args):
         if not args.no_incrementer and not args.resume:
@@ -111,10 +115,10 @@ class LineGenerator:
                 date, language = self.args.wikipedia.split(".")
                 current_year = str(datetime.datetime.now().year)
                 date = date.replace("2022", current_year)
-                dataset = load_dataset("wikipedia", date=date, language=language, beam_runner="DirectRunner", data_dir=self.args.data_dir)["train"]
-                return
+                dataset = load_dataset("wikipedia", date=date, language=language, beam_runner="DirectRunner",
+                                       cache_dir=self.args.data_dir)["train"]
             else:
-                dataset = load_dataset("wikipedia", self.args.wikipedia, data_dir=self.args.data_dir)["train"]
+                dataset = load_dataset("wikipedia", self.args.wikipedia, cache_dir=self.args.data_dir)["train"]
             self.basic_text_dataset = WikipediaEncodedTextDataset(
                 dataset=dataset,
                 vocabulary=set(self.args.vocab),  # set(self.model.netconverter.dict.keys())
