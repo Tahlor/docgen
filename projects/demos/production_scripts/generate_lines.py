@@ -1,11 +1,15 @@
+import torch
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+
 from projects.demos.generate_lines import LineGenerator
 from pathlib import Path
 from docgen.utils.utils import timeout
 import time
-import os
+
+
 # docker kill : 09cf725fba01
 # docker rm : 09cf725fba01
-os.environ["CUDA_VISIBLE_DEVICES"] = 1
 
 # if host is galois
 if os.path.exists("/HOST/home/taylor"):
@@ -14,7 +18,7 @@ if os.path.exists("/HOST/home/taylor"):
     WIKIPEDIA = DATASETS_PATH / "wikipedia"
     HUGGING_FACE_DATASETS_CACHE = "/HOST/home/taylor/.cache/huggingface/datasets"
     IMAGE_OUTPUT = Path("/HOST/media/data/1TB/datasets/synthetic")
-    batch_size = 64
+    batch_size = 72
     print("On Galois Docker")
 elif os.path.exists("/home/taylor"):
     #  /home/taylor/.cache/huggingface/datasets/wikipedia/20230301.pl-21baa4c9bf4fe40f/2.0.0/aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559
@@ -22,7 +26,7 @@ elif os.path.exists("/home/taylor"):
     WIKIPEDIA = DATASETS_PATH / "wikipedia"
     HUGGING_FACE_DATASETS_CACHE = None
     IMAGE_OUTPUT = Path("/media/data/1TB/datasets/synthetic")
-    batch_size = 64
+    batch_size = 72
     print("On Galois")
 # check if on ec2
 elif os.path.exists("/HOST"): # /HOST/etc/hostname
