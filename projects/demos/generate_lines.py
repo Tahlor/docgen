@@ -243,7 +243,7 @@ class LineGenerator:
         ocr_out["sections"].append(ocr_format)
         section += 1
 
-        file_name = f"{idx:07.0f}"
+        file_name = f"{idx:09.0f}"
         # draw_boxes_sections(ocr_out, background_img)
 
         utils.save_image(background_img, self.args.output_folder / (file_name + ".jpg"))

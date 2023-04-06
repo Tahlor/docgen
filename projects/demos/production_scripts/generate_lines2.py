@@ -9,7 +9,7 @@ from pathlib import Path
 from docgen.utils.utils import timeout
 import time
 
-
+galois_huggingface_cache = "/media/data/1TB/datasets/synthetic/huggingface/datasets"
 # docker kill : 09cf725fba01
 # docker rm : 09cf725fba01
 
@@ -18,7 +18,7 @@ if os.path.exists("/HOST/home/taylor"):
     #  /home/taylor/.cache/huggingface/datasets/wikipedia/20230301.pl-21baa4c9bf4fe40f/2.0.0/aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559
     DATASETS_PATH = Path("/HOST/media/data/1TB/datasets/synthetic/huggingface/datasets")
     WIKIPEDIA = DATASETS_PATH / "wikipedia"
-    HUGGING_FACE_DATASETS_CACHE = "/HOST/home/taylor/.cache/huggingface/datasets"
+    HUGGING_FACE_DATASETS_CACHE = Path("/HOST") / galois_huggingface_cache #"/HOST/home/taylor/.cache/huggingface/datasets"
     IMAGE_OUTPUT = Path("/HOST/media/data/1TB/datasets/synthetic")
     batch_size = 72 if DEVICE=="0" else 84
     print("On Galois Docker")
@@ -26,7 +26,7 @@ elif os.path.exists("/home/taylor"):
     #  /home/taylor/.cache/huggingface/datasets/wikipedia/20230301.pl-21baa4c9bf4fe40f/2.0.0/aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559
     DATASETS_PATH = Path("/media/data/1TB/datasets/synthetic/huggingface/datasets")
     WIKIPEDIA = DATASETS_PATH / "wikipedia"
-    HUGGING_FACE_DATASETS_CACHE = None
+    HUGGING_FACE_DATASETS_CACHE = galois_huggingface_cache
     IMAGE_OUTPUT = Path("/media/data/1TB/datasets/synthetic")
     batch_size = 72 if DEVICE=="0" else 84
     print("On Galois")

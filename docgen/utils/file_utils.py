@@ -3,6 +3,7 @@ import json
 import argparse
 import shlex
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 console_handler = logging.StreamHandler()
@@ -16,6 +17,8 @@ def get_collection_files_matching_base_path(base_path, exclude_base_path=False):
     base_path = Path(base_path)
     folder = base_path.parent
     file_name = base_path.stem
+
+    # already recursive
     matching_file_names = list(folder.glob(f"**/{file_name}*"))
     if exclude_base_path and base_path in matching_file_names:
         matching_file_names.remove(base_path)
@@ -25,10 +28,13 @@ def get_collection_files_matching_base_path(base_path, exclude_base_path=False):
         logger.info(f"No files found matching {str(base_path)}")
     return matching_file_names
 
-def get_last_file_in_collection_matching_base_path(base_path):
+def get_last_file_in_collection_matching_base_path(base_path, strip_to_numbers=True):
     """
     """
+    # strip non-numerics out of x using re.sub(r'\D', '', x)
     matching_files = get_collection_files_matching_base_path(base_path)
+    if strip_to_numbers:
+        matching_files = [int(re.sub(r'\D', '', f.stem)) for f in matching_files]
     if len(matching_files) == 0:
         return None
     else:
@@ -88,6 +94,8 @@ def create_parser():
     return parser
 
 def main(args=None):
+    """ Append a bunch of JSONs together into a single JSON
+    """
     parser = create_parser()
     if args is None:
         args = parser.parse_args()
