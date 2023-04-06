@@ -42,8 +42,8 @@ elif os.path.exists("/HOST"): # /HOST/etc/hostname
 
 preprocessed = ["en", "fr", "it", "de"]
 languages = {
-     #"fr": "french",
-     #"en": "english",
+     "fr": "french",
+     "en": "english",
      "la": "latin",
      "hu": "hungarian",
      "de": "german",
