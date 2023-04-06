@@ -116,9 +116,13 @@ class LineGenerator:
                 current_year = str(datetime.datetime.now().year)
                 date = date.replace("2022", current_year)
                 dataset = load_dataset("wikipedia", date=date, language=language, beam_runner="DirectRunner",
-                                       cache_dir=self.args.data_dir)["train"]
+                                       cache_dir=self.args.cache_dir)["train"]
             else:
-                dataset = load_dataset("wikipedia", self.args.wikipedia, cache_dir=self.args.data_dir)["train"]
+                dataset = load_dataset("wikipedia", self.args.wikipedia, cache_dir=self.args.cache_dir)["train"]
+
+            if self.args.prep_wikipedia_only:
+                return
+
             self.basic_text_dataset = WikipediaEncodedTextDataset(
                 dataset=dataset,
                 vocabulary=set(self.args.vocab),  # set(self.model.netconverter.dict.keys())
@@ -263,15 +267,14 @@ def create_parser():
                         help="Path to unigram frequency file, if 'true' it will be downloaded from S3")
     parser.add_argument("--wikipedia", action="store", const="20220301.en", nargs="?",
                         help="20220301.en, 20220301.fr, etc.")
-    parser.add_argument("--data_dir", action="store", const=None, nargs="?",
+    parser.add_argument("--cache_dir", action="store", const=None, nargs="?",
                         help="where to store the downloaded files")
     parser.add_argument("--vocab", default=VOCABULARY, type=str, help="The list of vocab tokens to use")
     parser.add_argument("--exclude_chars", default="0123456789()+*;#:!/,.", type=str, help="Exclude these chars from the vocab")
     parser.add_argument("--batch_size", default=12, type=int, help="Batch size for processing")
     parser.add_argument("--count", default=100, type=int, help="Batch size for processing")
-    parser.add_argument("--start_idx", default=0, type=int, help="Where to start generating from")
     parser.add_argument('--resume', type=int, default=None, nargs='?', const=-1,
-                            help='An argument that can take a user specified value or -1')
+                            help='What index to start geneating from; -1 will attempt to infer last index from last JSON')
 
     parser.add_argument("--save_frequency", default=50000, type=int, help="How often to update JSON GT file, in case generation is interrupted")
     parser.add_argument("--output_folder", default=ROOT / "output", help="Path to output directory")
@@ -288,6 +291,7 @@ def create_parser():
     parser.add_argument("--max_paragraphs", default=1, type=int, help="Max paragraphs in a document")
     parser.add_argument("--min_width", default=.75, type=int, help="Minimum width of a textbox as a percent of document")
     parser.add_argument("--device", default=DEFAULT_DEVICE, help="cpu, cuda, cuda:0, etc.")
+    parser.add_argument("--prep_wikipedia_only", action="store_true", help="download or prepare wikipedia data only without processing")
     return parser
 
 def testing():

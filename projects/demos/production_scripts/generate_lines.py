@@ -24,7 +24,7 @@ elif os.path.exists("/home/taylor"):
     #  /home/taylor/.cache/huggingface/datasets/wikipedia/20230301.pl-21baa4c9bf4fe40f/2.0.0/aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559
     DATASETS_PATH = Path("/media/data/1TB/datasets/synthetic/huggingface/datasets")
     WIKIPEDIA = DATASETS_PATH / "wikipedia"
-    HUGGING_FACE_DATASETS_CACHE = None
+    HUGGING_FACE_DATASETS_CACHE = DATASETS_PATH
     IMAGE_OUTPUT = Path("/media/data/1TB/datasets/synthetic")
     batch_size = 72
     print("On Galois")
@@ -61,6 +61,7 @@ languages = {
 #languages = {k: v for k, v in languages.items() if k not in preprocessed}
 
 def make_sys_link_for_wikipedia_files():
+    raise Exception("Not reliable, since we may or may not be on DOCKER, syslink might point to wrong place")
     # make sure the wikipedia files are in the right place
     path = DATASETS_PATH
     path.mkdir(parents=True, exist_ok=True)
@@ -85,7 +86,7 @@ def run(language, abbreviation):
      --save_frequency 50000 \
      --saved_handwriting_model IAM \
      --wikipedia 20220301.{abbreviation} \
-     --data_dir {str(DATASETS_PATH)} \
+     --cache_dir {str(HUGGING_FACE_DATASETS_CACHE)} \
      --canvas_size 1152,64 \
      --min_chars 8 \
      --max_chars 200 \
