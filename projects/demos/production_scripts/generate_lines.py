@@ -1,6 +1,6 @@
 import torch
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1;0'
 
 from projects.demos.generate_lines import LineGenerator
 from pathlib import Path
@@ -16,7 +16,7 @@ if os.path.exists("/HOST/home/taylor"):
     #  /home/taylor/.cache/huggingface/datasets/wikipedia/20230301.pl-21baa4c9bf4fe40f/2.0.0/aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559
     DATASETS_PATH = Path("/HOST/media/data/1TB/datasets/synthetic/huggingface/datasets")
     WIKIPEDIA = DATASETS_PATH / "wikipedia"
-    HUGGING_FACE_DATASETS_CACHE = "/HOST/home/taylor/.cache/huggingface/datasets"
+    HUGGING_FACE_DATASETS_CACHE = DATASETS_PATH
     IMAGE_OUTPUT = Path("/HOST/media/data/1TB/datasets/synthetic")
     batch_size = 72
     print("On Galois Docker")

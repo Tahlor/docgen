@@ -269,6 +269,7 @@ def create_parser():
     parser.add_argument("--exclude_chars", default="0123456789()+*;#:!/,.", type=str, help="Exclude these chars from the vocab")
     parser.add_argument("--batch_size", default=12, type=int, help="Batch size for processing")
     parser.add_argument("--count", default=100, type=int, help="Batch size for processing")
+    parser.add_argument("--start_idx", default=0, type=int, help="Where to start generating from")
     parser.add_argument('--resume', type=int, default=None, nargs='?', const=-1,
                             help='An argument that can take a user specified value or -1')
 
