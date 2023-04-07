@@ -94,11 +94,13 @@ class LineGenerator:
 
         if args.resume:
             last_file = get_last_file_in_collection_matching_base_path(args.output_ocr_json)
+            logger.info(f"Last file found: {last_file}")
             if last_file:
                 if args.resume == -1:
                     _ocr_dict = load_json(last_file)
                     if _ocr_dict:
                         args.last_idx = max(int(x) for x in _ocr_dict) + 1
+                        logger.info(f"Resuming from index {args.last_idx}")
             else:
                 logger.warning("No OCR JSON files found in output folder, starting from scratch")
 
@@ -337,7 +339,7 @@ def testing():
 if __name__ == "__main__":
     # ' --output_folder C:\\Users\\tarchibald\\github\\docgen\\projects\\demos\\output --batch_size 16  --freq 1  --saved_handwriting_model IAM --wikipedia 20220301.fr '
 
-    ocr_format = main()
+    ocr_format = LineGenerator().main()
 
     #testing()
 

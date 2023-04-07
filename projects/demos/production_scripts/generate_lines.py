@@ -1,10 +1,8 @@
 import torch
 import os
 DEVICE="0;1"
-os.environ['CUDA_VISIBLE_DEVICES'] = DEVICE
 
 END=2000000
-from projects.demos.generate_lines import LineGenerator
 from pathlib import Path
 from docgen.utils.utils import timeout
 import time
@@ -27,8 +25,10 @@ def determine_host():
     return host.lower().strip(), docker
 
 class Config:
-    def __init__(self, end_idx=END):
+    def __init__(self, end_idx=END, device=DEVICE):
         self.end_idx = end_idx
+        os.environ['CUDA_VISIBLE_DEVICES'] = DEVICE
+
         # if host is galois
         host, docker = determine_host()
         if host == "galois":
@@ -38,7 +38,7 @@ class Config:
                 self.WIKIPEDIA = self.DATASETS_PATH / "wikipedia"
                 self.HUGGING_FACE_DATASETS_CACHE = Path("/HOST") / galois_huggingface_cache.rstrip("/") #"/HOST/home/taylor/.cache/huggingface/datasets"
                 self.IMAGE_OUTPUT = Path("/HOST/media/data/1TB/datasets/synthetic")
-                self.batch_size = 72 if DEVICE=="0" else 84
+                self.batch_size = 72 if device=="0" else 84
                 print("On Galois Docker")
             else:
                 #  /home/taylor/.cache/huggingface/datasets/wikipedia/20230301.pl-21baa4c9bf4fe40f/2.0.0/aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559
@@ -46,7 +46,7 @@ class Config:
                 self.WIKIPEDIA = self.DATASETS_PATH / "wikipedia"
                 self.HUGGING_FACE_DATASETS_CACHE = galois_huggingface_cache
                 self.IMAGE_OUTPUT = Path("/media/data/1TB/datasets/synthetic")
-                self.batch_size = 72 if DEVICE=="0" else 84
+                self.batch_size = 72 if device=="0" else 84
                 print("On Galois")
         elif docker and "ec2" in host: # /HOST/etc/hostname
             self.DATASETS_PATH = Path("/HOST/home/ec2-user/docker/resources/datasets/")
@@ -91,6 +91,7 @@ class Config:
          """
 
         try:
+            from projects.demos.generate_lines import LineGenerator
             lg = LineGenerator(args)
             lg.main()
             # create s3 folder if not exists on next line
