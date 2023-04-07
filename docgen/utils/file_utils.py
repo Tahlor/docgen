@@ -1,4 +1,5 @@
 from pathlib import Path
+import warnings
 import json
 import argparse
 import shlex
@@ -15,11 +16,12 @@ def get_collection_files_matching_base_path(base_path, exclude_base_path=False):
     """
     """
     base_path = Path(base_path)
-    folder = base_path.parent
+    if not base_path.is_dir():
+        folder = base_path.parent
     file_name = base_path.stem
 
     # already recursive
-    matching_file_names = list(folder.glob(f"**/{file_name}*"))
+    matching_file_names = list(folder.rglob(f"**/{file_name}*"))
     if exclude_base_path and base_path in matching_file_names:
         matching_file_names.remove(base_path)
     if matching_file_names:
@@ -57,6 +59,9 @@ def append_json_files_in_collection_matching_base_path(base_path,
     matching_json_files = get_collection_files_matching_base_path(base_path, exclude_base_path)
     output_json = {}
     for f in matching_json_files:
+        if not f.is_file():
+            warnings.warn(f"{f} is not a file")
+            continue
         logger.info(f"Adding {f} to master dict")
         with Path(f).open("r") as f:
             new_dict = json.load(f)
@@ -88,7 +93,7 @@ def save_dict_as_json(dic, json_path):
 def create_parser():
     parser = argparse.ArgumentParser(add_help=False)
     # base_path name
-    parser.add_argument("--base_path", type=str, help="Path to output directory")
+    parser.add_argument("--base_path", type=str, help="Path to output file template")
     parser.add_argument("--exclude_base_path", action="store_true", help="Exclude the base path file from search")
     parser.add_argument("--dict_format", type=str, default="dict", help="Exclude the base path file from search")
     return parser
@@ -102,7 +107,11 @@ def main(args=None):
     else:
         args = parser.parse_args(shlex.split(args))
     json_dict = append_json_files_in_collection_matching_base_path(**vars(args))
-    save_dict_as_json(json_dict, args.base_path)
+    if json_dict:
+        args.base_path = Path(args.base_path).with_suffix(".json")
+        save_dict_as_json(json_dict, args.base_path)
+    else:
+        logger.info("No JSON files found")
 
 if __name__=="__main__":
     main()
