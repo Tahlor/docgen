@@ -1,41 +1,104 @@
 import torch
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '1;0'
+DEVICE="0;1"
+os.environ['CUDA_VISIBLE_DEVICES'] = DEVICE
 
+END=2000000
 from projects.demos.generate_lines import LineGenerator
 from pathlib import Path
 from docgen.utils.utils import timeout
 import time
 
-
+galois_huggingface_cache = "/media/data/1TB/datasets/synthetic/huggingface/datasets"
 # docker kill : 09cf725fba01
 # docker rm : 09cf725fba01
 
-# if host is galois
-if os.path.exists("/HOST/home/taylor"):
-    #  /home/taylor/.cache/huggingface/datasets/wikipedia/20230301.pl-21baa4c9bf4fe40f/2.0.0/aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559
-    DATASETS_PATH = Path("/HOST/media/data/1TB/datasets/synthetic/huggingface/datasets")
-    WIKIPEDIA = DATASETS_PATH / "wikipedia"
-    HUGGING_FACE_DATASETS_CACHE = DATASETS_PATH
-    IMAGE_OUTPUT = Path("/HOST/media/data/1TB/datasets/synthetic")
-    batch_size = 72
-    print("On Galois Docker")
-elif os.path.exists("/home/taylor"):
-    #  /home/taylor/.cache/huggingface/datasets/wikipedia/20230301.pl-21baa4c9bf4fe40f/2.0.0/aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559
-    DATASETS_PATH = Path("/media/data/1TB/datasets/synthetic/huggingface/datasets")
-    WIKIPEDIA = DATASETS_PATH / "wikipedia"
-    HUGGING_FACE_DATASETS_CACHE = DATASETS_PATH
-    IMAGE_OUTPUT = Path("/media/data/1TB/datasets/synthetic")
-    batch_size = 72
-    print("On Galois")
-# check if on ec2
-elif os.path.exists("/HOST"): # /HOST/etc/hostname
-    DATASETS_PATH = Path("/HOST/home/ec2-user/docker/resources/datasets/")
-    WIKIPEDIA = DATASETS_PATH / "wikipedia"
-    HUGGING_FACE_DATASETS_CACHE = Path("~/.cache/huggingface/datasets/")
-    IMAGE_OUTPUT = Path("/HOST/home/ec2-user/docker/outputs")
-    batch_size = 200
-    print("On EC2")
+class Config:
+    def __init__(self):
+        # if host is galois
+        if os.path.exists("/HOST/home/taylor"):
+            #  /home/taylor/.cache/huggingface/datasets/wikipedia/20230301.pl-21baa4c9bf4fe40f/2.0.0/aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559
+            self.DATASETS_PATH = Path("/HOST/media/data/1TB/datasets/synthetic/huggingface/datasets")
+            self.WIKIPEDIA = self.DATASETS_PATH / "wikipedia"
+            self.HUGGING_FACE_DATASETS_CACHE = Path("/HOST") / galois_huggingface_cache #"/HOST/home/taylor/.cache/huggingface/datasets"
+            self.IMAGE_OUTPUT = Path("/HOST/media/data/1TB/datasets/synthetic")
+            self.batch_size = 72 if DEVICE=="0" else 84
+            print("On Galois Docker")
+        elif os.path.exists("/home/taylor"):
+            #  /home/taylor/.cache/huggingface/datasets/wikipedia/20230301.pl-21baa4c9bf4fe40f/2.0.0/aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559
+            self.DATASETS_PATH = Path("/media/data/1TB/datasets/synthetic/huggingface/datasets")
+            self.WIKIPEDIA = self.DATASETS_PATH / "wikipedia"
+            self.HUGGING_FACE_DATASETS_CACHE = galois_huggingface_cache
+            self.IMAGE_OUTPUT = Path("/media/data/1TB/datasets/synthetic")
+            self.batch_size = 72 if DEVICE=="0" else 84
+            print("On Galois")
+        # check if on ec2
+        elif os.path.exists("/HOST"): # /HOST/etc/hostname
+            self.DATASETS_PATH = Path("/HOST/home/ec2-user/docker/resources/datasets/")
+            self.WIKIPEDIA = self.DATASETS_PATH / "wikipedia"
+            self.HUGGING_FACE_DATASETS_CACHE = Path("~/.cache/huggingface/datasets/")
+            self.IMAGE_OUTPUT = Path("/HOST/home/ec2-user/docker/outputs")
+            self.batch_size = 200
+            print("On EC2")
+
+    def make_sys_link_for_wikipedia_files(self):
+        raise Exception("Not reliable, since we may or may not be on DOCKER, syslink might point to wrong place")
+        # make sure the wikipedia files are in the right place
+        path = self.DATASETS_PATH
+        path.mkdir(parents=True, exist_ok=True)
+        # ln -s /HOST/home/ec2-user/docker/resources/wikipedia ~/.cache/huggingface/datasets
+        # python command for symlink command above
+        if not HUGGING_FACE_DATASETS_CACHE is None and HUGGING_FACE_DATASETS_CACHE.exists():
+            os.symlink(HUGGING_FACE_DATASETS_CACHE, path)
+
+    def run(self, language, abbreviation):
+        path = self.IMAGE_OUTPUT / language
+        if check_if_done(path):
+            print(f"{language} is done")
+            return
+
+        args = f"""
+         --output_folder {str(path)} \
+         --batch_size {self.batch_size}  \
+         --save_frequency 50000 \
+         --saved_handwriting_model IAM \
+         --wikipedia 20220301.{abbreviation} \
+         --cache_dir {str(self.HUGGING_FACE_DATASETS_CACHE)} \
+         --canvas_size 1152,64 \
+         --min_chars 8 \
+         --max_chars 200 \
+         --max_lines 1 \
+         --max_paragraphs 1 \
+         --count 1000000 \
+         --resume \
+         --no_incrementer
+         """
+
+        try:
+            lg = LineGenerator(args)
+            lg.main()
+            # create s3 folder if not exists on next line
+            # launch_background_rsync_task(path, f"s3://datascience-computervision-l3apps/HWR/synthetic-data/languages/{language}-lines/v1/")
+        except Exception as e:
+            print(e)
+            print(f"Failed to run {language}")
+
+    def test_downloading_wikipedia_using_huggingface_dataset_for_each_language(self):
+        """ Basically just ensures the language exists, does not preprocess it
+
+        Returns:
+
+        """
+        from datasets import load_dataset
+        for language, abbreviation in languages.items():
+            try:
+                with timeout(seconds=2):
+                    load_dataset("wikipedia", language, split="train")
+            except TimeoutError:
+                print(f"{language} successfully timed out")
+            except Exception as e:
+                print(e)
+                print(f"Failed to download {language}")
 
 
 preprocessed = ["en", "fr", "it", "de"]
@@ -60,51 +123,10 @@ languages = {
 # filter to processed
 #languages = {k: v for k, v in languages.items() if k not in preprocessed}
 
-def make_sys_link_for_wikipedia_files():
-    raise Exception("Not reliable, since we may or may not be on DOCKER, syslink might point to wrong place")
-    # make sure the wikipedia files are in the right place
-    path = DATASETS_PATH
-    path.mkdir(parents=True, exist_ok=True)
-    # ln -s /HOST/home/ec2-user/docker/resources/wikipedia ~/.cache/huggingface/datasets
-    # python command for symlink command above
-    if not HUGGING_FACE_DATASETS_CACHE is None and HUGGING_FACE_DATASETS_CACHE.exists():
-        os.symlink(HUGGING_FACE_DATASETS_CACHE, path)
 
 def check_if_done(path):
     # check if path has more than 100000 files
     return len(list(path.glob("*"))) >= 999999
-
-def run(language, abbreviation):
-    path = IMAGE_OUTPUT / language
-    if check_if_done(path):
-        print(f"{language} is done")
-        return
-
-    args = f"""
-     --output_folder {str(path)} \
-     --batch_size {batch_size}  \
-     --save_frequency 50000 \
-     --saved_handwriting_model IAM \
-     --wikipedia 20220301.{abbreviation} \
-     --cache_dir {str(HUGGING_FACE_DATASETS_CACHE)} \
-     --canvas_size 1152,64 \
-     --min_chars 8 \
-     --max_chars 200 \
-     --max_lines 1 \
-     --max_paragraphs 1 \
-     --count 1000000 \
-     --resume \
-     --no_incrementer
-     """
-
-    try:
-        lg = LineGenerator(args)
-        lg.main()
-        # create s3 folder if not exists on next line
-        # launch_background_rsync_task(path, f"s3://datascience-computervision-l3apps/HWR/synthetic-data/languages/{language}-lines/v1/")
-    except Exception as e:
-        print(e)
-        print(f"Failed to run {language}")
 
 
 def launch_background_rsync_task(path, destination):
@@ -126,19 +148,9 @@ def launch_background_rsync_task(path, destination):
     else: # launch process on host, not docker container
         subprocess.Popen(f"ssh -i /HOST/home/ec2-user/.ssh/id_rsa ")
 
-def test_downloading_wikipedia_using_huggingface_dataset_for_each_language():
-    from datasets import load_dataset
-    for language, abbreviation in languages.items():
-        try:
-            with timeout(seconds=2):
-                load_dataset("wikipedia", language, split="train")
-        except TimeoutError:
-            print(f"{language} successfully timed out")
-        except Exception as e:
-            print(e)
-            print(f"Failed to download {language}")
 
 if __name__ == "__main__":
+    config = Config()
     for abbreviation, language in languages.items():
-        run(language, abbreviation)
+        config.run(language, abbreviation)
 
