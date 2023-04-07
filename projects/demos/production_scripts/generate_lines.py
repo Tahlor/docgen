@@ -31,7 +31,7 @@ class Config:
         self.end_idx = end_idx
         # if host is galois
         host, docker = determine_host()
-        if host=="galois":
+        if host == "galois":
             if docker:
                 #  /home/taylor/.cache/huggingface/datasets/wikipedia/20230301.pl-21baa4c9bf4fe40f/2.0.0/aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559
                 self.DATASETS_PATH = Path("/HOST/media/data/1TB/datasets/synthetic/huggingface/datasets")
@@ -56,7 +56,7 @@ class Config:
             self.batch_size = 200
             print("On EC2")
         else:
-            raise Exception(f"Unknown host: {host} Docker: {docker}")
+            raise Exception(f"Unknown docker/host combo: {host} Docker: {docker}")
     def make_sys_link_for_wikipedia_files(self):
         raise Exception("Not reliable, since we may or may not be on DOCKER, syslink might point to wrong place")
         # make sure the wikipedia files are in the right place
