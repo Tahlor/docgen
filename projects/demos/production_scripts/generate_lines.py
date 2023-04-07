@@ -13,34 +13,50 @@ galois_huggingface_cache = "/media/data/1TB/datasets/synthetic/huggingface/datas
 # docker kill : 09cf725fba01
 # docker rm : 09cf725fba01
 
+def determine_host():
+    host_docker = "/HOST/etc/hostname"
+    host_normal = "/etc/hostname"
+    docker = Path(host_docker).exists()
+    if docker:
+        # read  host
+        with open(host_docker, "r") as f:
+            host = f.read()
+    else:
+        with open(host_normal, "r") as f:
+            host = f.read()
+    return host.lower().strip(), docker
+
 class Config:
-    def __init__(self):
+    def __init__(self, end_idx=END):
+        self.end_idx = end_idx
         # if host is galois
-        if os.path.exists("/HOST/home/taylor"):
-            #  /home/taylor/.cache/huggingface/datasets/wikipedia/20230301.pl-21baa4c9bf4fe40f/2.0.0/aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559
-            self.DATASETS_PATH = Path("/HOST/media/data/1TB/datasets/synthetic/huggingface/datasets")
-            self.WIKIPEDIA = self.DATASETS_PATH / "wikipedia"
-            self.HUGGING_FACE_DATASETS_CACHE = Path("/HOST") / galois_huggingface_cache #"/HOST/home/taylor/.cache/huggingface/datasets"
-            self.IMAGE_OUTPUT = Path("/HOST/media/data/1TB/datasets/synthetic")
-            self.batch_size = 72 if DEVICE=="0" else 84
-            print("On Galois Docker")
-        elif os.path.exists("/home/taylor"):
-            #  /home/taylor/.cache/huggingface/datasets/wikipedia/20230301.pl-21baa4c9bf4fe40f/2.0.0/aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559
-            self.DATASETS_PATH = Path("/media/data/1TB/datasets/synthetic/huggingface/datasets")
-            self.WIKIPEDIA = self.DATASETS_PATH / "wikipedia"
-            self.HUGGING_FACE_DATASETS_CACHE = galois_huggingface_cache
-            self.IMAGE_OUTPUT = Path("/media/data/1TB/datasets/synthetic")
-            self.batch_size = 72 if DEVICE=="0" else 84
-            print("On Galois")
-        # check if on ec2
-        elif os.path.exists("/HOST"): # /HOST/etc/hostname
+        host, docker = determine_host()
+        if host=="galois":
+            if docker:
+                #  /home/taylor/.cache/huggingface/datasets/wikipedia/20230301.pl-21baa4c9bf4fe40f/2.0.0/aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559
+                self.DATASETS_PATH = Path("/HOST/media/data/1TB/datasets/synthetic/huggingface/datasets")
+                self.WIKIPEDIA = self.DATASETS_PATH / "wikipedia"
+                self.HUGGING_FACE_DATASETS_CACHE = Path("/HOST") / galois_huggingface_cache.rstrip("/") #"/HOST/home/taylor/.cache/huggingface/datasets"
+                self.IMAGE_OUTPUT = Path("/HOST/media/data/1TB/datasets/synthetic")
+                self.batch_size = 72 if DEVICE=="0" else 84
+                print("On Galois Docker")
+            else:
+                #  /home/taylor/.cache/huggingface/datasets/wikipedia/20230301.pl-21baa4c9bf4fe40f/2.0.0/aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559
+                self.DATASETS_PATH = Path("/media/data/1TB/datasets/synthetic/huggingface/datasets")
+                self.WIKIPEDIA = self.DATASETS_PATH / "wikipedia"
+                self.HUGGING_FACE_DATASETS_CACHE = galois_huggingface_cache
+                self.IMAGE_OUTPUT = Path("/media/data/1TB/datasets/synthetic")
+                self.batch_size = 72 if DEVICE=="0" else 84
+                print("On Galois")
+        elif docker and "ec2" in host: # /HOST/etc/hostname
             self.DATASETS_PATH = Path("/HOST/home/ec2-user/docker/resources/datasets/")
             self.WIKIPEDIA = self.DATASETS_PATH / "wikipedia"
             self.HUGGING_FACE_DATASETS_CACHE = Path("~/.cache/huggingface/datasets/")
             self.IMAGE_OUTPUT = Path("/HOST/home/ec2-user/docker/outputs")
             self.batch_size = 200
             print("On EC2")
-
+        else:
+            raise Exception(f"Unknown host: {host} Docker: {docker}")
     def make_sys_link_for_wikipedia_files(self):
         raise Exception("Not reliable, since we may or may not be on DOCKER, syslink might point to wrong place")
         # make sure the wikipedia files are in the right place
@@ -53,7 +69,7 @@ class Config:
 
     def run(self, language, abbreviation):
         path = self.IMAGE_OUTPUT / language
-        if check_if_done(path):
+        if check_if_done(path, count=self.end_idx):
             print(f"{language} is done")
             return
 
@@ -69,7 +85,7 @@ class Config:
          --max_chars 200 \
          --max_lines 1 \
          --max_paragraphs 1 \
-         --count 1000000 \
+         --count {self.end_idx} \
          --resume \
          --no_incrementer
          """
@@ -124,9 +140,9 @@ languages = {
 #languages = {k: v for k, v in languages.items() if k not in preprocessed}
 
 
-def check_if_done(path):
+def check_if_done(path, count=1000000):
     # check if path has more than 100000 files
-    return len(list(path.glob("*"))) >= 999999
+    return len(list(path.glob("*"))) >= count
 
 
 def launch_background_rsync_task(path, destination):

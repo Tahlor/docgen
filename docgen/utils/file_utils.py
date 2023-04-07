@@ -36,7 +36,8 @@ def get_last_file_in_collection_matching_base_path(base_path, strip_to_numbers=T
     # strip non-numerics out of x using re.sub(r'\D', '', x)
     matching_files = get_collection_files_matching_base_path(base_path)
     if strip_to_numbers:
-        matching_files = [int(re.sub(r'\D', '', f.stem)) for f in matching_files]
+        # sort files by int(re.sub(r'\D', '', f.stem))
+        matching_files = sorted(matching_files, key=lambda f: int(re.sub(r'\D', '', f.stem)))
     if len(matching_files) == 0:
         return None
     else:

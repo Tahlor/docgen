@@ -10,7 +10,7 @@ languages = {
 }
 
 if __name__ == "__main__":
-    config = Config()
+    config = Config(end_idx=END)
     for abbreviation, language in languages.items():
         config.run(language, abbreviation)
 
