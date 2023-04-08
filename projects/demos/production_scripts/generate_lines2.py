@@ -1,5 +1,6 @@
 import os
 DEVICE = "0;1"
+DEVICE = "1"
 END=10000000
 #os.environ['CUDA_VISIBLE_DEVICES'] = DEVICE
 

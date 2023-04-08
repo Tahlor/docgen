@@ -93,16 +93,19 @@ class LineGenerator:
                 setattr(args, f"output_{k.lower()}_json", args.output_folder / f"{k}.json")
 
         if args.resume:
-            last_file = get_last_file_in_collection_matching_base_path(args.output_ocr_json)
-            logger.info(f"Last file found: {last_file}")
-            if last_file:
-                if args.resume == -1:
-                    _ocr_dict = load_json(last_file)
-                    if _ocr_dict:
-                        args.last_idx = max(int(x) for x in _ocr_dict) + 1
-                        logger.info(f"Resuming from index {args.last_idx}")
+            if args.resume > 0:
+                args.last_idx = args.resume
             else:
-                logger.warning("No OCR JSON files found in output folder, starting from scratch")
+                last_file = get_last_file_in_collection_matching_base_path(args.output_ocr_json)
+                logger.info(f"Last file found: {last_file}")
+                if last_file:
+                    if args.resume == -1:
+                        _ocr_dict = load_json(last_file)
+                        if _ocr_dict:
+                            args.last_idx = max(int(x) for x in _ocr_dict) + 1
+                            logger.info(f"Resuming from index {args.last_idx}")
+                else:
+                    logger.warning("No OCR JSON files found in output folder, starting from scratch")
 
         if isinstance(args.canvas_size, str):
             args.canvas_size = make_tuple(args.canvas_size)
