@@ -25,8 +25,14 @@ def determine_host():
     return host.lower().strip(), docker
 
 class Config:
-    def __init__(self, end_idx=END, device=DEVICE):
+    def __init__(self, end_idx=END,
+                 device=DEVICE,
+                 output_override=None,
+                 start_idx=-1):
         self.end_idx = end_idx
+        self.start_idx = start_idx
+        self.device = device
+
         os.environ['CUDA_VISIBLE_DEVICES'] = DEVICE
 
         # if host is galois
@@ -36,8 +42,12 @@ class Config:
                 #  /home/taylor/.cache/huggingface/datasets/wikipedia/20230301.pl-21baa4c9bf4fe40f/2.0.0/aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559
                 self.DATASETS_PATH = Path("/HOST/media/data/1TB/datasets/synthetic/huggingface/datasets")
                 self.WIKIPEDIA = self.DATASETS_PATH / "wikipedia"
-                self.HUGGING_FACE_DATASETS_CACHE = Path("/HOST") / galois_huggingface_cache.rstrip("/") #"/HOST/home/taylor/.cache/huggingface/datasets"
-                self.IMAGE_OUTPUT = Path("/HOST/media/data/1TB/datasets/synthetic")
+                self.HUGGING_FACE_DATASETS_CACHE = Path("/HOST") / galois_huggingface_cache.lstrip("/") #"/HOST/home/taylor/.cache/huggingface/datasets"
+                if output_override:
+                    self.IMAGE_OUTPUT = Path(output_override)
+                else:
+                    self.IMAGE_OUTPUT = Path("/HOST/media/data/1TB/datasets/synthetic")
+
                 self.batch_size = 72 if device=="0" else 84
                 print("On Galois Docker")
             else:
@@ -86,10 +96,10 @@ class Config:
          --max_lines 1 \
          --max_paragraphs 1 \
          --count {self.end_idx} \
-         --resume \
+         --resume {self.start_idx if self.start_idx else -1}\
          --no_incrementer
          """
-
+        print(args)
         try:
             from projects.demos.generate_lines import LineGenerator
             lg = LineGenerator(args)
