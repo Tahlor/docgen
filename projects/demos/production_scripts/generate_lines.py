@@ -127,6 +127,7 @@ class Config:
                 print(f"Failed to download {language}")
 
 
+
 preprocessed = ["en", "fr", "it", "de"]
 languages = {
      #"fr": "french",
