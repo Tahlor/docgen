@@ -5,6 +5,7 @@ END=2000000
 from pathlib import Path
 from docgen.utils.utils import timeout
 import time
+import socket
 
 galois_huggingface_cache = "/media/data/1TB/datasets/synthetic/huggingface/datasets"
 # docker kill : 09cf725fba01
@@ -14,24 +15,30 @@ def determine_host():
     host_docker = "/HOST/etc/hostname"
     host_normal = "/etc/hostname"
     docker = Path(host_docker).exists()
+
     if docker:
         # read  host
         with open(host_docker, "r") as f:
             host = f.read()
     else:
-        with open(host_normal, "r") as f:
-            host = f.read()
+        if Path(host_normal).exists():
+            with open(host_normal, "r") as f:
+                host = f.read()
+        else:
+            host = socket.gethostname()
+
     return host.lower().strip(), docker
 
 class Config:
     def __init__(self, end_idx=END,
                  device=DEVICE,
                  output_override=None,
-                 start_idx=-1):
+                 start_idx=-1,
+                 style_data_split="train"):
         self.end_idx = end_idx
         self.start_idx = start_idx
         self.device = device
-
+        self.style_data_split = style_data_split
         os.environ['CUDA_VISIBLE_DEVICES'] = self.device
 
         # if host is galois
@@ -64,6 +71,12 @@ class Config:
             self.IMAGE_OUTPUT = Path("/HOST/home/ec2-user/docker/outputs")
             self.batch_size = 200
             print("On EC2")
+        elif host=="pw01ayjg":
+            self.HUGGING_FACE_DATASETS_CACHE = None
+            self.IMAGE_OUTPUT = Path("/mnt/g/synthetic_data/one_line")
+            self.device = "0"
+            self.batch_size = 24
+            print("On Ancestry Laptop (Windows)")
         else:
             raise Exception(f"Unknown docker/host combo: {host} Docker: {docker}")
     def make_sys_link_for_wikipedia_files(self):
@@ -97,6 +110,7 @@ class Config:
          --count {self.end_idx} \
          --resume {self.start_idx if self.start_idx else -1}\
          --no_incrementer
+         --style_data_split {self.style_data_split}
          """
         print(args)
         try:
@@ -130,7 +144,7 @@ class Config:
 
 preprocessed = ["en", "fr", "it", "de"]
 languages = {
-     #"fr": "french",
+     "fr": "french",
      #"en": "english",
      "la": "latin",
      "hu": "hungarian",

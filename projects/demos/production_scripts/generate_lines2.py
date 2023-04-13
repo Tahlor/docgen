@@ -14,8 +14,9 @@ languages = {
 if __name__ == "__main__":
     config = Config(end_idx=END,
                     device=DEVICE,
-                    output_override="/HOST/media/data/1TB/datasets/synthetic",
-                    start_idx=6000000)
+                    output_override="/HOST/media/data/1TB/datasets/synthetic/training_styles",
+                    start_idx=-1,
+                    )
     for abbreviation, language in languages.items():
         config.run(language, abbreviation)
 

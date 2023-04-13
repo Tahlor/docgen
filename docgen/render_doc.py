@@ -365,11 +365,11 @@ class BoxFiller:
     def round(self, i):
         return int(round(i))
     def _get_from_joint(self, i):
-        img, text = self.img_text_pair_gen[i]
+        img, text, style = self.img_text_pair_gen[i]
         return self.convert_img_format(img), text
 
     def _get_from_joint_iterator(self, i):
-        img, text = next(self.img_text_pair_gen)
+        img, text, style = next(self.img_text_pair_gen)
         return self.convert_img_format(img), text
 
     def _get_from_separate(self, i):

@@ -146,7 +146,8 @@ class LineGenerator:
                            next_text_dataset=self.basic_text_dataset,
                            batch_size=self.args.batch_size,
                            model=self.args.saved_handwriting_model,
-                           device=self.args.device
+                           device=self.args.device,
+                           data_split=self.args.style_data_split,
                             )
                 , buffer_size=10000,
                 )
@@ -203,7 +204,7 @@ class LineGenerator:
                 if 0 in item["word_imgs"][i].shape:
                     continue # kind of a bug, it's an empty image e.g. \n or something
 
-                yield item["word_imgs"][i], item["text_list"][i]
+                yield item["word_imgs"][i], item["text_list"][i], item["author_id"][i]
             while True:
                 try:
                     item = self.renderer_daemon.queue.get()
@@ -268,6 +269,7 @@ def create_parser():
                         action="store", const="IAM", nargs="?",
                         help="Path to HWR model, OR 'CVL' or 'IAM'",
                         )
+    parser.add_argument("--style_data_split", default="all", type=str, help="train, test, or all")
     parser.add_argument("--unigrams", action="store_const", const=True,
                         help="Path to unigram frequency file, if 'true' it will be downloaded from S3")
     parser.add_argument("--wikipedia", action="store", const="20220301.en", nargs="?",
