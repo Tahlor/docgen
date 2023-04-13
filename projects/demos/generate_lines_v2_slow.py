@@ -247,11 +247,14 @@ def process_batch(d, renderer, args):
         if not offset is None:
             origin = origin[0]+offset[0], origin[1]+offset[1]
 
-        box1, localization = BOX_FILLER.fill_box(bbox=[0,0,*size],
+        box_dict = BOX_FILLER.fill_box(bbox=[0,0,*size],
                                                  word_img_gen=sample["word_imgs"],
                                                  text_gen=sample["text"].split(" "),
                                                  img=background_img,
                                                  )
+        image = box_dict["img"]
+        localization = box_dict["bbox_list"]
+        styles = box_dict["styles"]
 
         ocr_format = convert_to_ocr_format(localization, origin_offset=origin, section=section)
         return size, origin, box1, localization, ocr_format

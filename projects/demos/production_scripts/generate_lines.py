@@ -1,11 +1,11 @@
 import torch
 import os
 DEVICE="0;1"
-
 END=2000000
 from pathlib import Path
 from docgen.utils.utils import timeout
 import time
+import socket
 
 galois_huggingface_cache = "/media/data/1TB/datasets/synthetic/huggingface/datasets"
 # docker kill : 09cf725fba01
@@ -15,19 +15,31 @@ def determine_host():
     host_docker = "/HOST/etc/hostname"
     host_normal = "/etc/hostname"
     docker = Path(host_docker).exists()
+
     if docker:
         # read  host
         with open(host_docker, "r") as f:
             host = f.read()
     else:
-        with open(host_normal, "r") as f:
-            host = f.read()
+        if Path(host_normal).exists():
+            with open(host_normal, "r") as f:
+                host = f.read()
+        else:
+            host = socket.gethostname()
+
     return host.lower().strip(), docker
 
 class Config:
-    def __init__(self, end_idx=END, device=DEVICE):
+    def __init__(self, end_idx=END,
+                 device=DEVICE,
+                 output_override=None,
+                 start_idx=-1,
+                 style_data_split="train"):
         self.end_idx = end_idx
-        os.environ['CUDA_VISIBLE_DEVICES'] = DEVICE
+        self.start_idx = start_idx
+        self.device = device
+        self.style_data_split = style_data_split
+        os.environ['CUDA_VISIBLE_DEVICES'] = self.device
 
         # if host is galois
         host, docker = determine_host()
@@ -36,9 +48,13 @@ class Config:
                 #  /home/taylor/.cache/huggingface/datasets/wikipedia/20230301.pl-21baa4c9bf4fe40f/2.0.0/aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559
                 self.DATASETS_PATH = Path("/HOST/media/data/1TB/datasets/synthetic/huggingface/datasets")
                 self.WIKIPEDIA = self.DATASETS_PATH / "wikipedia"
-                self.HUGGING_FACE_DATASETS_CACHE = Path("/HOST") / galois_huggingface_cache.rstrip("/") #"/HOST/home/taylor/.cache/huggingface/datasets"
-                self.IMAGE_OUTPUT = Path("/HOST/media/data/1TB/datasets/synthetic")
-                self.batch_size = 72 if device=="0" else 84
+                self.HUGGING_FACE_DATASETS_CACHE = Path("/HOST") / galois_huggingface_cache.lstrip("/") #"/HOST/home/taylor/.cache/huggingface/datasets"
+                if output_override:
+                    self.IMAGE_OUTPUT = Path(output_override)
+                else:
+                    self.IMAGE_OUTPUT = Path("/HOST/media/data/1TB/datasets/synthetic")
+
+                self.batch_size = 72 if self.device=="0" else 84
                 print("On Galois Docker")
             else:
                 #  /home/taylor/.cache/huggingface/datasets/wikipedia/20230301.pl-21baa4c9bf4fe40f/2.0.0/aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559
@@ -46,7 +62,7 @@ class Config:
                 self.WIKIPEDIA = self.DATASETS_PATH / "wikipedia"
                 self.HUGGING_FACE_DATASETS_CACHE = galois_huggingface_cache
                 self.IMAGE_OUTPUT = Path("/media/data/1TB/datasets/synthetic")
-                self.batch_size = 72 if device=="0" else 84
+                self.batch_size = 72 if self.device=="0" else 84
                 print("On Galois")
         elif docker and "ec2" in host: # /HOST/etc/hostname
             self.DATASETS_PATH = Path("/HOST/home/ec2-user/docker/resources/datasets/")
@@ -55,6 +71,13 @@ class Config:
             self.IMAGE_OUTPUT = Path("/HOST/home/ec2-user/docker/outputs")
             self.batch_size = 200
             print("On EC2")
+        elif host=="pw01ayjg":
+            self.HUGGING_FACE_DATASETS_CACHE = None
+            #self.IMAGE_OUTPUT = Path("/mnt/g/synthetic_data/one_line")
+            self.IMAGE_OUTPUT = Path(r"G:\synthetic_data\one_line")
+            self.device = "0"
+            self.batch_size = 24
+            print("On Ancestry Laptop (Windows)")
         else:
             raise Exception(f"Unknown docker/host combo: {host} Docker: {docker}")
     def make_sys_link_for_wikipedia_files(self):
@@ -74,7 +97,7 @@ class Config:
             return
 
         args = f"""
-         --output_folder {str(path)} \
+         --output_folder "{str(path)}" \
          --batch_size {self.batch_size}  \
          --save_frequency 50000 \
          --saved_handwriting_model IAM \
@@ -86,10 +109,11 @@ class Config:
          --max_lines 1 \
          --max_paragraphs 1 \
          --count {self.end_idx} \
-         --resume \
+         --resume {self.start_idx if self.start_idx else -1}\
          --no_incrementer
+         --style_data_split {self.style_data_split}
          """
-
+        print(args)
         try:
             from projects.demos.generate_lines import LineGenerator
             lg = LineGenerator(args)
@@ -118,10 +142,11 @@ class Config:
                 print(f"Failed to download {language}")
 
 
+
 preprocessed = ["en", "fr", "it", "de"]
 languages = {
-     #"fr": "french",
-     #"en": "english",
+     "fr": "french",
+     "en": "english",
      "la": "latin",
      "hu": "hungarian",
      "de": "german",

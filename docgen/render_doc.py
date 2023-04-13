@@ -286,7 +286,7 @@ class BoxFiller:
             self.channels
     """
     def __init__(self,
-                 img_text_pair_gen=None,
+                 img_text_word_dict=None,
                  word_img_gen=None,
                  text_gen=None,
                  channels=3,
@@ -298,11 +298,12 @@ class BoxFiller:
                  default_max_lines=sys.maxsize,
                  default_error_mode="ignore",
                  word_img_format="auto",
+                 terminate_on_new_style=True
                  ):
         """ Initiate the BoxFiller object
 
         Args:
-            img_text_pair_gen: A generator that yields (image, text) pairs
+            img_text_word_dict: A generator that yields a dict with at least {img: PIL.Image, text: the text of the word}
             word_img_gen: A list/generator of word images
             text_gen: A list/generator of text
             channels: Number of channels in the images
@@ -318,10 +319,10 @@ class BoxFiller:
         """
         self.word_img_format = word_img_format
 
-        self.img_text_pair_gen, self.word_img_gen, self.text_gen = img_text_pair_gen, word_img_gen, text_gen
+        self.img_text_pair_gen, self.word_img_gen, self.text_gen = img_text_word_dict, word_img_gen, text_gen
 
         if self.img_text_pair_gen is not None or self.word_img_gen is not None or self.text_gen is not None:
-            self.setup_content_gen(img_text_pair_gen,word_img_gen,text_gen)
+            self.setup_content_gen(img_text_word_dict, word_img_gen, text_gen)
 
         self.channels = channels
         self.slope_sd = slope_sd
@@ -331,6 +332,7 @@ class BoxFiller:
         self.default_max_words = default_max_words
         self.default_max_lines = default_max_lines
         self.default_error_mode = default_error_mode
+        self.styles = set()
 
     def setup_content_gen(self, img_text_pair_gen, word_img_gen, text_gen):
         if img_text_pair_gen is None and word_img_gen is None:
@@ -365,11 +367,17 @@ class BoxFiller:
     def round(self, i):
         return int(round(i))
     def _get_from_joint(self, i):
-        img, text = self.img_text_pair_gen[i]
+        word_dict = self.img_text_pair_gen[i]
+        img, text = word_dict["img"], word_dict["text"]
+        if "style" in word_dict:
+            self.styles.add(word_dict["style"])
         return self.convert_img_format(img), text
 
     def _get_from_joint_iterator(self, i):
-        img, text = next(self.img_text_pair_gen)
+        word_dict = next(self.img_text_pair_gen)
+        img, text = word_dict["img"], word_dict["text"]
+        if "style" in word_dict:
+            self.styles.add(word_dict["style"])
         return self.convert_img_format(img), text
 
     def _get_from_separate(self, i):
@@ -467,6 +475,7 @@ class BoxFiller:
         Returns:
 
         """
+        self.styles = set()
         if not isinstance(bbox, BBox):
             bbox = BBox("ul", bbox, format="XYXY")
         self.bbox = bbox
@@ -757,7 +766,11 @@ class BoxFiller:
         self.gen_box_layout()
         self.paste_images()
 
-        return self.img, self.bbox_list
+        return {
+                "img":self.img,
+                "bbox_list": self.bbox_list,
+                "styles":self.styles
+                }
 
     def randomly_fill_box_with_words(self, bbox, *args, **kwargs):
         """ Fill a box with words, randomly rotating and scaling them, used for paragraph note boxes
@@ -810,7 +823,11 @@ class BoxFiller:
 
         self.paste_images()
 
-        return self.img, self.bbox_list
+        return {
+                "img":self.img,
+                "bbox_list": self.bbox_list,
+                "styles":self.styles
+                }
 
     def paste_images(self):
 

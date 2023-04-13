@@ -41,7 +41,7 @@ def get_last_file_in_collection_matching_base_path(base_path, strip_to_numbers=T
     if len(matching_files) == 0:
         return None
     else:
-        return sorted(matching_files)[-1]
+        return (matching_files)[-1]
 
 def append_json_files_in_collection_matching_base_path(base_path,
                                                        exclude_base_path,

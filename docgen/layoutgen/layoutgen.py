@@ -421,7 +421,7 @@ class LayoutGenerator:
         self.img_text_pair_gen = img_text_pair_gen
 
 
-        self.filler = BoxFiller(img_text_pair_gen=self.img_text_pair_gen,
+        self.filler = BoxFiller(img_text_word_dict=self.img_text_pair_gen,
                                 word_img_gen=self.word_img_gen,
                                 text_gen=self.text_gen,
                                 random_word_idx=True)
@@ -776,12 +776,19 @@ class LayoutGenerator:
                     doc_box.update_bbox(doc_box.bbox_writable, format="XYXY")
                     self.blank_page = False
             if doc_box.category == "paragraph_note":
-                image, localization = self.filler.randomly_fill_box_with_words(doc_box,
+                box_dict = self.filler.randomly_fill_box_with_words(doc_box,
                                                                                max_words=random.randint(1,10),
                                                                                **kwargs)
+                image = box_dict["img"]
+                localization = box_dict["bbox_list"]
+                styles = box_dict["styles"]
 
             else:
-                image, localization = self.filler.fill_box(doc_box, **kwargs)
+                box_dict = self.filler.fill_box(doc_box, **kwargs)
+                image = box_dict["img"]
+                localization = box_dict["bbox_list"]
+                styles = box_dict["styles"]
+
 
             composite_images2(background_image, image, doc_box.bbox_writable[0:2])
             doc_box.bbox_list = localization
