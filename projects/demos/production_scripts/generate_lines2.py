@@ -16,6 +16,7 @@ if __name__ == "__main__":
                     device=DEVICE,
                     output_override="/HOST/media/data/1TB/datasets/synthetic/training_styles",
                     start_idx=-1,
+                    style_data_split="train"
                     )
     for abbreviation, language in languages.items():
         config.run(language, abbreviation)

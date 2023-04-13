@@ -1,8 +1,6 @@
 #!/bin/bash
-
-WAIT=120
-GPU_THRESHOLD=40
-program="./generate_lines_OTHERGPU.py"
+idle_seconds=200
+program=$1
 gpu_index=0
 if ! [ -f $program ] ; then
     echo "File $program does not exist"
@@ -11,80 +9,52 @@ if ! [ -f $program ] ; then
     gpu_index=1
 fi
 
-cpu_threshold=40
+_base=$(basename "$program" .py)
+LOG_FILE="./LOG_${_base}.log"
 
 echod() {
   local current_time=$(date '+%Y-%m-%d %H:%M:%S')
   echo "[$current_time] $@"
 }
 
-# Get power usage of GPU
-is_gpu_power_draw_above() {
-    local gpu_index="{$1:-$gpu_index}"
-    local threshold_power_level="{$2:-$GPU_THRESHOLD}"
-    local power_draw
 
-    # Get power draw of the specified GPU in watts
-    power_draw=$(nvidia-smi -i "$gpu_index" --query-gpu=power.draw --format=csv,noheader,nounits | awk '{print $1}')
-
-    # Check if the power draw is above the specified power level
-    awk -v pd="$power_draw" -v tpl="$threshold_power_level" 'BEGIN {if (pd > tpl) exit 0; else exit 1;}'
-    return $?
-}
-
-is_cpu_usage_above() {
-  local pid="${1:-$PID}" # Use 'local' keyword to restrict the scope of the variable
-  #local cpu_usage=$(pidstat -p $pid | tail -1 | awk '{print $4}') # Extract CPU usage and ensure you're getting the correct line
-  local cpu_percent=$(ps -p $pid -o %cpu --no-headers)
-  echod "CPU: $cpu_percent%"
-  awk -v usage="$cpu_percent" -v threshold="$cpu_threshold" 'BEGIN {exit !(usage > threshold)}'
-  return $?
-}
-
-start() {
-  return
+restart() {
   pkill -f python
   sleep 3
 
   echod "Starting $program"
-  nohup python $program &
+  if [ -f $LOG_FILE.old ]; then
+    mv $LOG_FILE.old $LOG_FILE.old.old
+  fi
+  if [ -f $LOG_FILE ]; then
+    mv $LOG_FILE $LOG_FILE.old
+  fi
+  nohup python $program > $LOG_FILE 2>&1 &
   PID=$!
   echod "PID: $PID"
-  echod "Started new process, waiting 600 seconds before evaluating"
-  sleep 600 # give it a headstart to set up model, download, etc.
+  echod "Started $program using GPU $gpu_index"
+  sleep 60
 }
 
-# START IT
-start
+restart
 
 while true; do
-    if ! is_gpu_power_draw_above "$gpu_index" "$GPU_THRESHOLD"; then
-        echod "GPU power usage is under 40W, this is a warning, checking again in 3 minutes"
+  last_modified=$(stat -c %Y "$LOG_FILE")
+  current_time=$(date +%s)
+  diff_seconds=$((current_time - last_modified))
 
-        usage=$(cpu_usage $PID)
-        echod "CPU Usage: $usage%"
+  # Parse the log file for date and time
+  #  last_timestamp=$(grep -o -E "(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})" "$LOG_FILE" | tail -1)
+  #  current_time=$(date "+%Y-%m-%d %H:%M:%S")
+  #  diff_seconds=$(($(date -d "$current_time" +%s) - $(date -d "$last_timestamp" +%s)))
 
-        if is_cpu_usage_above; then
-          echod "CPU usage for PID $PID is over the threshold ($cpu_threshold%), waiting 30 seconds and starting over"
-          sleep 30
-          continue
-        fi
 
-        sleep 180
-        if ! is_gpu_power_draw_above; then
-          echod "GPU power usage is under 40W AGAIN, killing it"
+  # Check if the difference is more significant than your threshold, e.g., 300 seconds (5 minutes)
+  if [ "$diff_seconds" -gt $idle_seconds ]; then
+    echod "Model is hanging. Restarting..."
+    restart
+  fi
 
-          pkill -f "$program"
-          kill -9 $PID
-          pkill -f python
-          sleep 5
-
-          start
-        fi
-    else
-        echod "GPU power usage is over 40W, seems to be running"
-    fi
-
-    echod "Sleeping for $WAIT..."
-    sleep $WAIT
+  sleep 60
 done
+

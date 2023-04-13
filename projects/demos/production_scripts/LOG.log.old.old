@@ -1,0 +1,46 @@
+/synthetic_docs/docgen/docgen/utils/utils.py:19: UserWarning: Failed to import win32com
+  warnings.warn("Failed to import win32com")
+No files found matching /HOST/media/data/1TB/datasets/synthetic/spanish/OCR.json
+INFO:docgen.utils.file_utils:No files found matching /HOST/media/data/1TB/datasets/synthetic/spanish/OCR.json
+INFO:projects.demos.generate_lines:Last file found: None
+WARNING:projects.demos.generate_lines:No OCR JSON files found in output folder, starting from scratch
+INFO:projects.demos.generate_lines:Args: Namespace(batch_size=84, cache_dir='/HOST/media/data/1TB/datasets/synthetic/huggingface/datasets', canvas_size=(1152, 64), count=1000000, debug=False, device=device(type='cuda'), display_output=False, exclude_chars='0123456789()+*;#:!/,.', last_idx=0, max_chars=200, max_lines=1, max_paragraphs=1, min_chars=8, min_width=0.75, no_incrementer=True, output_coco_json=PosixPath('/HOST/media/data/1TB/datasets/synthetic/spanish/COCO.json'), output_folder=PosixPath('/HOST/media/data/1TB/datasets/synthetic/spanish'), output_ocr_json=PosixPath('/HOST/media/data/1TB/datasets/synthetic/spanish/OCR.json'), output_text_json=PosixPath('/HOST/media/data/1TB/datasets/synthetic/spanish/TEXT.json'), prep_wikipedia_only=False, resume=-1, save_frequency=50000, saved_handwriting_data=None, saved_handwriting_model='IAM', unigrams=None, vocab='Only thewigsofrcvdampbkuq.A-210xT5\'MDL,RYHJ"ISPWENj&BC93VGFKz();#:!7U64Q8?+*ZX/\n', wikipedia='20220301.es')
+WARNING:datasets.builder:Using custom data configuration 20230301.es-date=20230301,language=es
+INFO:apache_beam.typehints.native_type_compatibility:Using Any for unsupported type: typing.Sequence[~T]
+INFO:apache_beam.io.gcp.bigquery:No module named google.cloud.bigquery_storage_v1. As a result, the ReadFromBigQuery transform *CANNOT* be used with `method=DIRECT_READ`.
+On Galois Docker
+
+         --output_folder /HOST/media/data/1TB/datasets/synthetic/spanish          --batch_size 84           --save_frequency 50000          --saved_handwriting_model IAM          --wikipedia 20220301.es          --cache_dir /HOST/media/data/1TB/datasets/synthetic/huggingface/datasets          --canvas_size 1152,64          --min_chars 8          --max_chars 200          --max_lines 1          --max_paragraphs 1          --count 1000000          --resume -1         --no_incrementer
+         
+OUTPUT: /HOST/media/data/1TB/datasets/synthetic/spanish
+Downloading and preparing dataset wikipedia/20230301.es to /HOST/media/data/1TB/datasets/synthetic/huggingface/datasets/wikipedia/20230301.es-date=20230301,language=es/2.0.0/aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559...
+Downloading data files:   0%|          | 0/1 [00:00<?, ?it/s]Downloading data files: 100%|██████████| 1/1 [00:00<00:00, 7002.18it/s]
+Extracting data files:   0%|          | 0/1 [00:00<?, ?it/s]Extracting data files: 100%|██████████| 1/1 [00:00<00:00, 2096.10it/s]
+Downloading data files:   0%|          | 0/1 [00:00<?, ?it/s]Downloading data files: 100%|██████████| 1/1 [00:00<00:00, 1876.65it/s]
+INFO:root:Default Python SDK image for environment is apache/beam_python3.8_sdk:2.44.0
+INFO:apache_beam.runners.portability.fn_api_runner.translations:==================== <function annotate_downstream_side_inputs at 0x7fcc5cfe3670> ====================
+INFO:apache_beam.runners.portability.fn_api_runner.translations:==================== <function fix_side_input_pcoll_coders at 0x7fcc5cfe3790> ====================
+INFO:apache_beam.runners.portability.fn_api_runner.translations:==================== <function pack_combiners at 0x7fcc5cfe3ca0> ====================
+INFO:apache_beam.runners.portability.fn_api_runner.translations:==================== <function lift_combiners at 0x7fcc5cfe3d30> ====================
+INFO:apache_beam.runners.portability.fn_api_runner.translations:==================== <function expand_sdf at 0x7fcc5cfe3ee0> ====================
+INFO:apache_beam.runners.portability.fn_api_runner.translations:==================== <function expand_gbk at 0x7fcc5cfe3f70> ====================
+INFO:apache_beam.runners.portability.fn_api_runner.translations:==================== <function sink_flattens at 0x7fcc5cfe50d0> ====================
+INFO:apache_beam.runners.portability.fn_api_runner.translations:==================== <function greedily_fuse at 0x7fcc5cfe5160> ====================
+INFO:apache_beam.runners.portability.fn_api_runner.translations:==================== <function read_to_impulse at 0x7fcc5cfe51f0> ====================
+INFO:apache_beam.runners.portability.fn_api_runner.translations:==================== <function impulse_to_input at 0x7fcc5cfe5280> ====================
+INFO:apache_beam.runners.portability.fn_api_runner.translations:==================== <function sort_stages at 0x7fcc5cfe54c0> ====================
+INFO:apache_beam.runners.portability.fn_api_runner.translations:==================== <function add_impulse_to_dangling_transforms at 0x7fcc5cfe55e0> ====================
+INFO:apache_beam.runners.portability.fn_api_runner.translations:==================== <function setup_timer_mapping at 0x7fcc5cfe5430> ====================
+INFO:apache_beam.runners.portability.fn_api_runner.translations:==================== <function populate_data_channel_coders at 0x7fcc5cfe5550> ====================
+INFO:apache_beam.runners.worker.statecache:Creating state cache with size 104857600
+INFO:apache_beam.runners.portability.fn_api_runner.worker_handlers:Created Worker handler <apache_beam.runners.portability.fn_api_runner.worker_handlers.EmbeddedWorkerHandler object at 0x7fcc5cf2b490> for environment ref_Environment_default_environment_1 (beam:env:embedded_python:v1, b'')
+INFO:datasets_modules.datasets.wikipedia.aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559.wikipedia:generating examples from = /HOST/media/data/1TB/datasets/synthetic/huggingface/datasets/downloads/765281c2ea7e503ba2b99febcd5c20569ef202b5f4f9f2db617e191834f5b626
+INFO:datasets_modules.datasets.wikipedia.aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559.wikipedia:generating examples from = /HOST/media/data/1TB/datasets/synthetic/huggingface/datasets/downloads/f1b9727ac124847fc5eb85806f5b15e51b90f35eee83a16b0a5212bbaa1c98b8
+INFO:datasets_modules.datasets.wikipedia.aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559.wikipedia:generating examples from = /HOST/media/data/1TB/datasets/synthetic/huggingface/datasets/downloads/245fdbb5779905e070bed2e63a70ab67da0f862a5591055aa63ce8ad41b7ca19
+INFO:datasets_modules.datasets.wikipedia.aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559.wikipedia:generating examples from = /HOST/media/data/1TB/datasets/synthetic/huggingface/datasets/downloads/dfec9abb92d153ed10d2dd7d35e4855d5709b1262830ddc4ceee8cec3873f915
+INFO:datasets_modules.datasets.wikipedia.aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559.wikipedia:generating examples from = /HOST/media/data/1TB/datasets/synthetic/huggingface/datasets/downloads/8dba732ea6f0dc967723f483a94edd6f3e4565bd406ca7a780f102b1b77ca8d9
+INFO:datasets_modules.datasets.wikipedia.aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559.wikipedia:generating examples from = /HOST/media/data/1TB/datasets/synthetic/huggingface/datasets/downloads/5826766966d2ccac4983c01861ab6a9d593e045f64c43851f5a2447cc439f89c
+INFO:datasets_modules.datasets.wikipedia.aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559.wikipedia:generating examples from = /HOST/media/data/1TB/datasets/synthetic/huggingface/datasets/downloads/5e98fad4021e15521370ca3d20fdf04677e8f3362e0f7424315cc63addf690fa
+INFO:datasets_modules.datasets.wikipedia.aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559.wikipedia:generating examples from = /HOST/media/data/1TB/datasets/synthetic/huggingface/datasets/downloads/f09ab71162c604eada0596fdb3f6d36e9369f36943fe27e431069d924265e331
+INFO:datasets_modules.datasets.wikipedia.aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559.wikipedia:generating examples from = /HOST/media/data/1TB/datasets/synthetic/huggingface/datasets/downloads/bb955a0552804abed76df2c1c3d7f340496b991e99600ff698f76285f85a6bdc
+INFO:datasets_modules.datasets.wikipedia.aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559.wikipedia:generating examples from = /HOST/media/data/1TB/datasets/synthetic/huggingface/datasets/downloads/811d2f1ee92e633fa152aa128376fe87f93785a6ac0951c819140f3b53e118ba
