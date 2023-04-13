@@ -76,7 +76,8 @@ class FormerFiller:
                 text = d["text"].strip().split(" ")
                 img_word_pairs = RenderImageTextPair(self.renderer, text, renderer_text_key="raw_text")
                 d["bbox"] = BBox._rescale(d["bbox"], scale_factors)
-                background_img, bbox_list = self.bf.fill_box(bbox=d["bbox"], img=background_img, img_text_pair_gen=img_word_pairs, error_mode="expand")
+                box_dict = self.bf.fill_box(bbox=d["bbox"], img=background_img, img_text_pair_gen=img_word_pairs, error_mode="expand")
+                background_img, bbox_list = box_dict["img"], box_dict["bbox_list"]
                 d["text"] = bbox_list[0].text
                 d["bbox"] = bbox_list[0].bbox
 

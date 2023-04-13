@@ -73,7 +73,8 @@ class Config:
             print("On EC2")
         elif host=="pw01ayjg":
             self.HUGGING_FACE_DATASETS_CACHE = None
-            self.IMAGE_OUTPUT = Path("/mnt/g/synthetic_data/one_line")
+            #self.IMAGE_OUTPUT = Path("/mnt/g/synthetic_data/one_line")
+            self.IMAGE_OUTPUT = Path(r"G:\synthetic_data\one_line")
             self.device = "0"
             self.batch_size = 24
             print("On Ancestry Laptop (Windows)")
@@ -96,7 +97,7 @@ class Config:
             return
 
         args = f"""
-         --output_folder {str(path)} \
+         --output_folder "{str(path)}" \
          --batch_size {self.batch_size}  \
          --save_frequency 50000 \
          --saved_handwriting_model IAM \
@@ -145,7 +146,7 @@ class Config:
 preprocessed = ["en", "fr", "it", "de"]
 languages = {
      "fr": "french",
-     #"en": "english",
+     "en": "english",
      "la": "latin",
      "hu": "hungarian",
      "de": "german",

@@ -20,4 +20,3 @@ if __name__ == "__main__":
                     )
     for abbreviation, language in languages.items():
         config.run(language, abbreviation)
-

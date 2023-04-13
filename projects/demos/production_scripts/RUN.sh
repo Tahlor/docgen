@@ -2,7 +2,7 @@
 idle_seconds=200
 program=$1
 gpu_index=0
-if ! [ -f $program ] ; then
+if ! [ $program ] || ! [ -f $program ] ; then
     echo "File $program does not exist"
     program="./generate_lines2.py"
     echo "Using $program"
