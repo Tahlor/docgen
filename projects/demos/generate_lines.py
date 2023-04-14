@@ -136,6 +136,7 @@ class LineGenerator:
                 use_unidecode=True,
                 min_chars=self.args.min_chars,
                 max_chars=self.args.max_chars,
+                decode_vocabulary="default_expanded" if not self.args.no_text_decode_vocab else None,
             )
         elif self.args.unigrams is not None:
             basic_text_dataset = Unigrams(
@@ -185,19 +186,29 @@ class LineGenerator:
         OCR = self.args.output_ocr_json.with_name(self.args.output_ocr_json.stem + suffix + self.args.output_ocr_json.suffix)
         TEXT = self.args.output_text_json.with_name(self.args.output_text_json.stem + suffix + self.args.output_text_json.suffix)
         COCO = self.args.output_coco_json.with_name(self.args.output_coco_json.stem + suffix + self.args.output_coco_json.suffix)
-        logger.info(f"Saving to out {suffix}")
+        logger.info(f"Saving out to {suffix}")
         with OCR.open("w") as f:
             json.dump(self.ocr_dict, f)
-        with TEXT.open("w") as f:
-            out = {k:
-                {"text":d['sections'][0]['paragraphs'][0]["lines"][0]["text"],
-                 "style": d['sections'][0]["style"],
-                 }
-                   for k,d in self.ocr_dict.items()}
-            json.dump(out, f)
-        coco = ocr_dataset_to_coco(self.ocr_dict, f"French Lines - v0.1.0.0 - piece {suffix}", exclude_cats="word")
+        self.dump_text_json(TEXT)
+        coco = ocr_dataset_to_coco(self.ocr_dict, f"{self.args.wikipedia} Lines - v0.1.0.0 - piece {suffix}", exclude_cats="word")
         with COCO.open("w") as f:
             json.dump(coco, f)
+
+    def dump_text_json(self, TEXT):
+        with TEXT.open("w") as f:
+            if self.args.no_text_decode_vocab:
+                out = {k: {"text": d['sections'][0]['paragraphs'][0]["lines"][0]["text"],
+                           "style": d['sections'][0]["style"],
+                           }
+                       for k, d in self.ocr_dict.items()}
+            else:
+                out = {k:
+                           {"text": d['sections'][0]['paragraphs'][0]["lines"][0]["text"],
+                            "text_decode_vocab": d['sections'][0]['paragraphs'][0]["lines"][0]["text_decode_vocab"],
+                            "style": d['sections'][0]["style"],
+                            }
+                       for k, d in self.ocr_dict.items()}
+            json.dump(out, f)
 
     def reset_output_data_dict(self):
         self.ocr_dict = {}
@@ -211,7 +222,8 @@ class LineGenerator:
                 # yield item["word_imgs"][i], item["text_list"][i], item["author_id"][i]
                 yield {"img": item["word_imgs"][i],
                        "text": item["text_list"][i],
-                       "style": item["author_id"]
+                       "style": item["author_id"],
+                       "text_decode_vocab": item["text_list_decode_vocab"][i]
                        }
             while True:
                 try:
@@ -246,8 +258,9 @@ class LineGenerator:
             localization = box_dict["bbox_list"]
             styles = box_dict["styles"]
 
-            ocr_format = convert_to_ocr_format(localization, section=section)
+            ocr_format = convert_to_ocr_format(localization, section=section, text_decode_vocab=not self.args.no_text_decode_vocab)
             ocr_format["style"] = tuple(styles)
+
             return size, origin, image, localization, ocr_format
 
         """
@@ -290,6 +303,8 @@ def create_parser():
     parser.add_argument("--cache_dir", action="store", const=None, nargs="?",
                         help="where to store the downloaded files")
     parser.add_argument("--vocab", default=VOCABULARY, type=str, help="The list of vocab tokens to use")
+    parser.add_argument("--no_text_decode_vocab", action="store_true", help="Don't save out text with alternate vocabulary")
+
     parser.add_argument("--exclude_chars", default="0123456789()+*;#:!/,.", type=str, help="Exclude these chars from the vocab")
     parser.add_argument("--batch_size", default=12, type=int, help="Batch size for processing")
     parser.add_argument("--count", default=100, type=int, help="Batch size for processing")
