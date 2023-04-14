@@ -4,7 +4,7 @@ program=$1
 gpu_index=0
 if ! [ $program ] || ! [ -f $program ] ; then
     echo "File $program does not exist"
-    program="./generate_lines2.py"
+    program="./english.py"
     echo "Using $program"
     gpu_index=1
 fi
@@ -19,7 +19,7 @@ echod() {
 
 
 restart() {
-  pkill -f python
+  pkill -f $program
   sleep 3
 
   echod "Starting $program"

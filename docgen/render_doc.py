@@ -166,7 +166,11 @@ def shape(item):
     elif isinstance(item, PpmImagePlugin.PpmImageFile) or isinstance(item, Image.Image):
         return item.size
 
-def convert_to_ocr_format(localization, box="bbox", origin_offset=(0,0), section=0):
+def convert_to_ocr_format(localization,
+                          box="bbox",
+                          origin_offset=(0,0),
+                          section=0,
+                          text_decode_vocab=True):
     """ A localization is a list of BBox objects, which contain the pararaph, line, and word indices
         This function converts this list of BBox objects to a format to a OCR-like format
         {"paragraphs:[{lines:[{words:[...], "bbox":[bbox_for_all_lines]}, "bbox":[bbox_for_all_paragraphs]}
@@ -176,6 +180,7 @@ def convert_to_ocr_format(localization, box="bbox", origin_offset=(0,0), section
         box:
         origin_offset:
         section:
+        text_decode_vocab: if BBox's have a text_decode_vocab attribute, then include them in the OCR
 
     Returns:
 
@@ -184,17 +189,20 @@ def convert_to_ocr_format(localization, box="bbox", origin_offset=(0,0), section
     def start_next_line(line=None):
         nonlocal current_line_num
         if line:
-            current_line_num = word.line_number
+            current_line_num = word_BBbox.line_number
             line[box] = BBox.get_maximal_box(line[box])
             line["text"] = " ".join(line["text"])
+            if "text_decode_vocab" in line:
+                line["text_decode_vocab"] = " ".join(line["text_decode_vocab"])
             current_paragraph_dict["lines"].append(line)
             current_paragraph_dict[box].append(line[box])
-        return {box: [], "text": [], "words": []}
+        out = {box: [], "text": [], "words": []}
+        return out
 
     def start_next_paragraph(paragraph=None):
         nonlocal current_paragraph
         if paragraph:
-            current_paragraph = word.paragraph_index
+            current_paragraph = word_BBbox.paragraph_index
             paragraph[box] = BBox.get_maximal_box(paragraph[box])
             ocr_dict_page["paragraphs"].append(paragraph)
             ocr_dict_page[box].append(paragraph[box])
@@ -206,26 +214,33 @@ def convert_to_ocr_format(localization, box="bbox", origin_offset=(0,0), section
     current_line_num = 0
     current_paragraph = 0
 
-    for word in localization:
+    for word_BBbox in localization:
 
         # Start new line
-        if word.line_number!=current_line_num:
+        if word_BBbox.line_number!=current_line_num:
             current_line_dict = start_next_line(current_line_dict)
 
         # Start a new paragraph
-        if word.paragraph_index>current_paragraph:
+        if word_BBbox.paragraph_index>current_paragraph:
             current_paragraph_dict = start_next_paragraph(current_paragraph_dict)
 
-        current_line_dict["text"].append(word.text)
-        current_word = {box: word.offset_origin(origin_offset[0],
+        current_line_dict["text"].append(word_BBbox.text)
+
+
+        if hasattr(word_BBbox, "text_decode_vocab") and text_decode_vocab:
+            if "text_decode_vocab" not in current_line_dict:
+                current_line_dict["text_decode_vocab"] = []
+            current_line_dict["text_decode_vocab"].append(word_BBbox.text_decode_vocab)
+
+        current_word = {box: word_BBbox.offset_origin(origin_offset[0],
                                                 origin_offset[1]).bbox,
-                        "text": word.text,
+                        "text": word_BBbox.text,
                         "id": [section,
                                current_paragraph,
-                               word.line_number,
-                               word.line_word_index]}
+                               word_BBbox.line_number,
+                               word_BBbox.line_word_index]}
         current_line_dict["words"].append(current_word)
-        current_line_dict[box].append(word.bbox)
+        current_line_dict[box].append(word_BBbox.bbox)
 
     # Finish
     start_next_line(current_line_dict)
@@ -367,21 +382,31 @@ class BoxFiller:
     def round(self, i):
         return int(round(i))
     def _get_from_joint(self, i):
+        """ Should have at least img and text keys
+
+        Args:
+            i:
+
+        Returns:
+
+        """
         word_dict = self.img_text_pair_gen[i]
-        img, text = word_dict["img"], word_dict["text"]
+        word_dict["img"] = self.convert_img_format(word_dict["img"])
         if "style" in word_dict:
             self.styles.add(word_dict["style"])
-        return self.convert_img_format(img), text
+        return word_dict
 
     def _get_from_joint_iterator(self, i):
         word_dict = next(self.img_text_pair_gen)
-        img, text = word_dict["img"], word_dict["text"]
+        word_dict["img"]  = self.convert_img_format( word_dict["img"])
         if "style" in word_dict:
             self.styles.add(word_dict["style"])
-        return self.convert_img_format(img), text
+        return word_dict
 
     def _get_from_separate(self, i):
-        return self.convert_img_format(self.word_img_gen[i]), self.text_gen[i]
+        return {"img":self.convert_img_format(self.word_img_gen[i]),
+                "text":self.text_gen[i]
+                }
 
     def convert_img_format(self, img):
         if self.word_img_format == "auto":
@@ -410,7 +435,11 @@ class BoxFiller:
             i = self.input_word_idx
         i = i % self.dataset_length
 
-        img, self.last_word_text = self._get_word(i)
+        word_dict = self._get_word(i)
+        img, self.last_word_text = word_dict["img"], word_dict["text"]
+
+        if "text_decode_vocab" in word_dict:
+            self.last_word_text_decode_vocab = word_dict["text_decode_vocab"]
 
         to_font_size_factor = self.font_size / height(img) if self.font_size else 1
         if self.bbox.height < self.y1 + self.font_size*1.2:
@@ -530,6 +559,7 @@ class BoxFiller:
 
         self.last_word_img = None
         self.last_word_text = ""
+        self.last_word_text_decode_vocab = ""
         self.tab_spaces = 5
         if error_mode is not None:
             self.error_mode = error_mode # skip+, ignore, expand, terminate
@@ -655,7 +685,7 @@ class BoxFiller:
             self.words_used += 1
             self.x1s.append(self.x1)
             self.y2s.append(y2)
-            self.bbox_list.append(BBox("ul",
+            new_box = BBox("ul",
                                        (self.x1, self.y1, x2, y2),
                                        line_index=self.line_idx,
                                        line_word_index=self.line_word_idx,
@@ -664,7 +694,10 @@ class BoxFiller:
                                        paragraph_index=self.paragraph_idx,
                                        img=next_word_img
                                        )
-                                  )
+            if self.last_word_text_decode_vocab:
+                new_box.text_decode_vocab = self.last_word_text_decode_vocab
+
+            self.bbox_list.append(new_box)
 
             # Set for next iteration
             self.x1 = x2 + horizontal_space
