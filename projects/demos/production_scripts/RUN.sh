@@ -1,13 +1,14 @@
 #!/bin/bash
+# Example: ./RUN.sh ./french.py
 idle_seconds=200
 program=$1
 gpu_index=0
 if ! [ $program ] || ! [ -f $program ] ; then
     echo "File $program does not exist"
     program="./english.py"
-    echo "Using $program"
     gpu_index=1
 fi
+echo "Using $program"
 
 _base=$(basename "$program" .py)
 LOG_FILE="./LOG_${_base}.log"
@@ -19,7 +20,7 @@ echod() {
 
 
 restart() {
-  pkill -f $program
+  pkill -f "python $program"
   sleep 3
 
   echod "Starting $program"
