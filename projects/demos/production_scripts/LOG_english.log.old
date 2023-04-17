@@ -1,0 +1,4 @@
+/synthetic_docs/docgen/docgen/utils/utils.py:19: UserWarning: Failed to import win32com
+  warnings.warn("Failed to import win32com")
+On Galois Docker
+english is done

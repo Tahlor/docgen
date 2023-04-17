@@ -1,0 +1,38 @@
+/synthetic_docs/docgen/docgen/utils/utils.py:19: UserWarning: Failed to import win32com
+  warnings.warn("Failed to import win32com")
+No files found matching /HOST/media/data/1TB/datasets/synthetic/NEW_VERSION/french/OCR.json
+INFO:docgen.utils.file_utils:No files found matching /HOST/media/data/1TB/datasets/synthetic/NEW_VERSION/french/OCR.json
+INFO:projects.demos.generate_lines:Last file found: None
+WARNING:projects.demos.generate_lines:No OCR JSON files found in output folder, starting from scratch
+INFO:projects.demos.generate_lines:Args: Namespace(batch_size=72, cache_dir='/HOST/media/data/1TB/datasets/synthetic/huggingface/datasets', canvas_size=(1152, 64), count=5000000, debug=False, device=device(type='cuda'), display_output=False, exclude_chars='0123456789()+*;#:!/,.', last_idx=0, max_chars=200, max_lines=1, max_paragraphs=1, min_chars=8, min_width=0.75, no_incrementer=True, no_text_decode_vocab=False, output_coco_json=PosixPath('/HOST/media/data/1TB/datasets/synthetic/NEW_VERSION/french/COCO.json'), output_folder=PosixPath('/HOST/media/data/1TB/datasets/synthetic/NEW_VERSION/french'), output_ocr_json=PosixPath('/HOST/media/data/1TB/datasets/synthetic/NEW_VERSION/french/OCR.json'), output_text_json=PosixPath('/HOST/media/data/1TB/datasets/synthetic/NEW_VERSION/french/TEXT.json'), prep_wikipedia_only=False, resume=-1, save_frequency=50000, saved_handwriting_data=None, saved_handwriting_model='IAM', style_data_split='all', unigrams=None, vocab='Only thewigsofrcvdampbkuq.A-210xT5\'MDL,RYHJ"ISPWENj&BC93VGFKz();#:!7U64Q8?+*ZX/\n', wikipedia='20220301.fr')
+WARNING:datasets.builder:Found cached dataset wikipedia (/HOST/media/data/1TB/datasets/synthetic/huggingface/datasets/wikipedia/20220301.fr/2.0.0/aa542ed919df55cc5d3347f42dd4521d05ca68751f50dbc32bae2a7f1e167559)
+On Galois Docker
+
+         --output_folder "/HOST/media/data/1TB/datasets/synthetic/NEW_VERSION/french"          --batch_size 72           --save_frequency 50000          --saved_handwriting_model IAM          --wikipedia 20220301.fr          --cache_dir /HOST/media/data/1TB/datasets/synthetic/huggingface/datasets          --canvas_size 1152,64          --min_chars 8          --max_chars 200          --max_lines 1          --max_paragraphs 1          --count 5000000          --resume -1         --no_incrementer
+         --style_data_split all
+         
+         
+OUTPUT: /HOST/media/data/1TB/datasets/synthetic/NEW_VERSION/french
+  0%|          | 0/1 [00:00<?, ?it/s]100%|██████████| 1/1 [00:00<00:00, 158.22it/s]
+INFO:root:Final path: /opt/venv/lib/python3.8/site-packages/hwgen/resources/models
+INFO:root:/opt/venv/lib/python3.8/site-packages/hwgen/resources/models already exists, not downloading
+INFO:root:Final path: /opt/venv/lib/python3.8/site-packages/hwgen/resources/models
+/opt/venv/lib/python3.8/site-packages/torchvision/models/_utils.py:208: UserWarning: The parameter 'pretrained' is deprecated since 0.13 and may be removed in the future, please use 'weights' instead.
+  warnings.warn(
+/opt/venv/lib/python3.8/site-packages/torchvision/models/_utils.py:223: UserWarning: Arguments other than a weight enum or `None` for 'weights' are deprecated since 0.13 and may be removed in the future. The current behavior is equivalent to passing `weights=ResNet18_Weights.IMAGENET1K_V1`. You can also use `weights=ResNet18_Weights.DEFAULT` to get the most up-to-date weights.
+  warnings.warn(msg)
+/opt/venv/lib/python3.8/site-packages/torchvision/models/_utils.py:223: UserWarning: Arguments other than a weight enum or `None` for 'weights' are deprecated since 0.13 and may be removed in the future. The current behavior is equivalent to passing `weights=None`.
+  warnings.warn(msg)
+/opt/venv/lib/python3.8/site-packages/torchvision/models/inception.py:43: FutureWarning: The default weight initialization of inception_v3 will be changed in future releases of torchvision. If you wish to keep the old behavior (which leads to long initialization times due to scipy/scipy#11299), please set init_weights=True.
+  warnings.warn(
+/synthetic_docs/hwgen/hwgen/data/utils.py:143: UserWarning: No sample text file '/hwgen/data/files/mytext.txt' found. Using default text.
+  warnings.warn("No sample text file '/hwgen/data/files/mytext.txt' found. Using default text.")
+INFO:projects.demos.generate_lines:Starting from index 0
+(2) Loading model...
+TRGAN device: cuda
+initialize network with N02
+initialize network with N02
+initialize network with N02
+/opt/venv/lib/python3.8/site-packages/hwgen/resources/models/iam_model.pth : Model loaded Successfully
+(1) Loading style and style text next_text_dataset files...
+  0%|          | 0/50000 [00:00<?, ?it/s]  0%|          | 1/50000 [00:03<49:27:45,  3.56s/it]  0%|          | 20/50000 [00:03<1:49:39,  7.60it/s]  0%|          | 44/50000 [00:03<42:12, 19.72it/s]    0%|          | 72/50000 [00:03<22:02, 37.76it/s]  0%|          | 102/50000 [00:03<13:34, 61.24it/s]  0%|          | 131/50000 [00:04<09:33, 86.95it/s]  0%|          | 158/50000 [00:04<07:24, 112.24it/s]  0%|          | 185/50000 [00:04<06:01, 137.74it/s]  0%|          | 211/50000 [00:06<27:36, 30.06it/s]   0%|          | 230/50000 [00:06<22:05, 37.55it/s]  1%|          | 258/50000 [00:06<15:36, 53.12it/s]  1%|          | 288/50000 [00:06<11:14, 73.71it/s]  1%|          | 316/50000 [00:07<08:39, 95.59it/s]  1%|          | 343/50000 [00:07<06:59, 118.27it/s]  1%|          | 370/50000 [00:07<05:49, 142.08it/s]  1%|          | 398/50000 [00:07<04:57, 166.53it/s]  1%|          | 425/50000 [00:07<04:25, 187.03it/s]  1%|          | 452/50000 [00:09<25:47, 32.01it/s]   1%|          | 482/50000 [00:10<18:22, 44.90it/s]  1%|          | 512/50000 [00:10<13:28, 61.23it/s]  1%|          | 542/50000 [00:10<10:08, 81.25it/s]  1%|          | 571/50000 [00:10<07:58, 103.27it/s]  1%|          | 600/50000 [00:10<06:26, 127.78it/s]  1%|▏         | 629/50000 [00:10<05:23, 152.69it/s]  1%|▏         | 657/50000 [00:10<04:41, 175.49it/s]  1%|▏         | 685/50000 [00:13<26:36, 30.89it/s]   1%|▏         | 713/50000 [00:13<19:35, 41.92it/s]  1%|▏         | 741/50000 [00:13<14:38, 56.06it/s]  2%|▏         | 769/50000 [00:13<11:09, 73.56it/s]  2%|▏         | 798/50000 [00:13<08:36, 95.18it/s]  2%|▏         | 828/50000 [00:13<06:46, 120.85it/s]  2%|▏         | 857/50000 [00:13<05:36, 146.22it/s]  2%|▏         | 886/50000 [00:14<04:46, 171.30it/s]  2%|▏         | 914/50000 [00:16<25:37, 31.93it/s]   2%|▏         | 942/50000 [00:16<18:55, 43.22it/s]  2%|▏         | 971/50000 [00:16<14:02, 58.19it/s]  2%|▏         | 1001/50000 [00:16<10:33, 77.38it/s]  2%|▏         | 1028/50000 [00:17<08:24, 97.11it/s]  2%|▏         | 1055/50000 [00:17<06:50, 119.15it/s]  2%|▏         | 1082/50000 [00:17<05:46, 141.01it/s]  2%|▏         | 1108/50000 [00:17<05:10, 157.36it/s]  2%|▏         | 1133/50000 [00:20<27:41, 29.42it/s]   2%|▏         | 1160/50000 [00:20<20:13, 40.25it/s]  2%|▏         | 1189/50000 [00:20<14:40, 55.42it/s]  2%|▏         | 1217/50000 [00:20<11:07, 73.12it/s]  2%|▏         | 1245/50000 [00:20<08:39, 93.89it/s]  3%|▎         | 1273/50000 [00:20<06:55, 117.39it/s]  3%|▎         | 1300/50000 [00:20<05:47, 140.12it/s]  3%|▎         | 1326/50000 [00:23<26:23, 30.74it/s]   3%|▎         | 1345/50000 [00:23<21:27, 37.78it/s]  3%|▎         | 1372/50000 [00:23<15:34, 52.03it/s]  3%|▎         | 1402/50000 [00:23<11:15, 71.95it/s]  3%|▎         | 1429/50000 [00:23<08:47, 92.07it/s]  3%|▎         | 1456/50000 [00:23<07:04, 114.47it/s]  3%|▎         | 1484/50000 [00:23<05:48, 139.12it/s]  3%|▎         | 1510/50000 [00:23<05:02, 160.49it/s]  3%|▎         | 1540/50000 [00:23<04:18, 187.33it/s]

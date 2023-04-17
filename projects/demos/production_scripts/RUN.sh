@@ -2,7 +2,7 @@
 # Example: ./RUN.sh ./french.py
 idle_seconds=200
 program=$1
-gpu_index=0
+gpu_index=${2:-0}
 if ! [ $program ] || ! [ -f $program ] ; then
     echo "File $program does not exist"
     program="./english.py"
