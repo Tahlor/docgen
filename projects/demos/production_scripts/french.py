@@ -12,7 +12,7 @@ languages = {
      "de": "german",
      "la": "latin",
      "hu": "hungarian",
-     "es": "spanish",
+     #"es": "spanish",
 }
 
 if __name__ == "__main__":
