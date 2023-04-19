@@ -17,6 +17,8 @@ credentials*
 *.swp
 *deprecated/
 projects/*/*_output_*
+*.log
+*.out
 
 # C extensions
 *.so
