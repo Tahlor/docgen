@@ -27,7 +27,8 @@ class FindJONS:
         self.ocr_labels = {}
         self.max_json_count = self.args.json_count
         self.write_mode = "w" if self.args.overwrite else "a"
-
+        self.compression = "lzf"
+        
     def parse_args(self, args=None):
         parser = argparse.ArgumentParser()
         parser.add_argument("input_folder", help="Path to the folder containing the JSON files")
@@ -99,41 +100,39 @@ class FindJONS:
         logger.info("Deleting existing datasets (if any)...")
         for dataset in "text", "ocr", "coco":
             if dataset in hf.keys():
-                del hf["metadata"][dataset]
+                del hf["labels"][dataset]
 
-    def add_dict_to_hdf5(self, dataset, data_dict):
-        for key, value in data_dict.items():
-            key = str_to_int(key)
-            dataset[key] = json.dumps(value)
-
-    def create_dataset_for_each_key_in_label_dict(self, hf, data_dict):
-        datasets = next(iter(data_dict.values())).keys()
-        dataset_ref_dict = {}
-        for dataset_name in datasets: # text, style, text_decode_vocab
-            if dataset_name in hf.keys():
-                dataset = hf.get(dataset_name)
-            else:
-                # Create dataset if it doesn't exist
-                size = max(len(data_dict), self.img_count)
-                dataset = hf.create_dataset(dataset_name, shape=(size,),
-                                           dtype=h5py.special_dtype(vlen=str), compression='lzf')
-            dataset_ref_dict[dataset_name] = dataset
-
-        for key, value in data_dict.items():
-            key = str_to_int(key)
-            for dataset_name in datasets:
-                dataset = dataset_ref_dict[dataset_name]
-                try:
-                    if isinstance(value[dataset_name], (list,tuple)):
-                        dataset[key] = json.dumps(value[dataset_name])
-                    else:
-                        dataset[key] = value[dataset_name]
-                except Exception as e:
-                    print(f"Error: {e}")
-                    print(f"key: {key}, value: {value}, dataset_name: {dataset_name}")
 
     def save_as_npy(self, json_dict, name):
         np.save(name, np.array(json_dict))
+
+    def text_label_hdf5(self):
+        # Convert dictionary into lists
+        style_list = []
+        text_list = []
+        text_decode_vocab_list = []
+        max_text_len = 0
+        logger.info("Converting dictionary into lists")
+        for idx in tqdm(sorted(self.text_labels.keys())):
+            value = self.text_labels[idx]
+            style = value['style']
+            if isinstance(style, list):
+                style = ','.join(style)  # Convert list to string separated by commas
+            style_list.append(style)
+            text_list.append(value['text'])
+            text_decode_vocab_list.append(value['text_decode_vocab'].encode('utf-8'))
+            max_text_len = max(max_text_len, len(value['text']), len(value['text_decode_vocab']))
+
+
+        # Create an HDF5 file
+        logger.info(f"Creating an HDF5 file @ {self.args.output_hdf5}, with {self.img_count} images, max_text_len={max_text_len}")
+        with h5py.File(self.args.output_hdf5, self.write_mode) as hf:
+            #self.delete_existing_datasets(hf)
+
+            # Create datasets for style, text, and text_decode_vocab lists
+            hf.create_dataset('style', data=style_list, dtype='S24', compression=self.compression)
+            hf.create_dataset('text', data=text_list, dtype=f'S{max_text_len}', compression=self.compression)
+            hf.create_dataset('text_decode_vocab', data=text_decode_vocab_list, dtype=f'S{max_text_len}', compression=self.compression)
 
     def main(self):
         self.parse_files()
@@ -148,19 +147,7 @@ class FindJONS:
         self.save_as_npy(self.ocr_labels, output_folder / f"ocr_labels.npy")
         self.save_as_npy(self.coco_labels, output_folder / f"coco_labels.npy")
 
-        with h5py.File(self.args.output_hdf5, self.write_mode) as hf:
-            if not "labels" in hf:
-                label_group = hf.create_group("labels")
-            else:
-                label_group = hf["labels"]
-
-            self.delete_existing_datasets(hf)
-
-            logger.info("Saving TEXT labels as HDF5 datasets...")
-            self.create_dataset_for_each_key_in_label_dict(label_group, self.text_labels)
-            #self.create_dataset_for_each_key_in_label_dict(label_group, self.ocr_labels)
-            #self.coco_dump(label_group, "coco", self.coco_labels)
-
+        self.text_label_hdf5()
 
 
 if __name__ == "__main__":

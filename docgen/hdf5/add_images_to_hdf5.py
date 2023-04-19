@@ -1,3 +1,4 @@
+import sys
 import shlex
 import argparse
 import json
@@ -102,5 +103,8 @@ class HDF5Maker:
 if __name__ == "__main__":
     args = fr"'G:\synthetic_data\one_line\french' french.hdf5 --grayscale --overwrite"
     args += " --count 5000000"
+    if sys.argv[1:]:
+        args = None
+
     hf = HDF5Maker(args)
     hf.main2()
