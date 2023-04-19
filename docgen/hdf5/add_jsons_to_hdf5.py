@@ -20,7 +20,7 @@ logger.addHandler(logging.StreamHandler())
 class FindJONS:
     def __init__(self, args=None):
         self.args = self.parse_args(args)
-        self.max_jsons = self.args.max_jsons
+        self.img_count = self.args.img_count
         self.text_labels = {}
         self.coco_labels = {}
         self.ocr_labels = {}
@@ -31,7 +31,7 @@ class FindJONS:
         parser = argparse.ArgumentParser()
         parser.add_argument("input_folder", help="Path to the folder containing the JSON files")
         parser.add_argument("output_hdf5", help="Path to the output HDF5 file")
-        parser.add_argument("--max_jsons", type=int, default=None, help="Maximum number of files to process")
+        parser.add_argument("--img_count", type=int, default=None, help="Maximum number of files to process")
         parser.add_argument("--overwrite", action="store_true", help="Overwrite the output HDF5 file if it already exists")
 
         if args is None:
@@ -75,7 +75,7 @@ class FindJONS:
         file_count = 0
         for file in tqdm(Path(self.args.input_folder).iterdir()):
 
-            if self.max_jsons and file_count >= self.max_jsons:
+            if self.img_count and file_count >= self.img_count:
                 break
 
             if not file.name.endswith(".json"):
@@ -135,8 +135,14 @@ class FindJONS:
 
 
 if __name__ == "__main__":
-    args = fr"'G:\synthetic_data\one_line\french' french.hdf5"
-    args += " --max_jsons 1000"
+    if True:
+        "/media/data/1TB/datasets/synthetic/NEW_VERSION/latin /media/data/1TB/datasets/synthetic/NEW_VERSION/latin.h5  --img_count 5000000"
+        args = "/media/data/1TB/datasets/synthetic/NEW_VERSION/latin"
+        args += "/media/data/1TB/datasets/synthetic/NEW_VERSION/latin.h5"
+        args += " --img_count 5000000"
+    else:
+        args = fr"'G:\synthetic_data\one_line\french' french.hdf5"
+        args += " --img_count 1000"
 
     hf = FindJONS(args)
     hf.main()
