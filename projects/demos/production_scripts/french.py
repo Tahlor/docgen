@@ -5,7 +5,7 @@ END=5000000
 #os.environ['CUDA_VISIBLE_DEVICES'] = DEVICE
 
 import torch
-from projects.demos.production_scripts.generate_line_manager import Config
+from projects.demos.production_scripts.generate_line_production_manager import Config
 
 languages = {
      "fr": "french",

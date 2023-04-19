@@ -28,6 +28,9 @@ class FindJONS:
         self.max_json_count = self.args.json_count
         self.write_mode = "w" if self.args.overwrite else "a"
         self.compression = "lzf"
+        self.skip_coco = self.args.skip_coco
+        self.skip_text_ocr = self.args.skip_text_ocr
+        self.npy_folder = self.args.npy_folder
         
     def parse_args(self, args=None):
         parser = argparse.ArgumentParser()
@@ -36,6 +39,9 @@ class FindJONS:
         parser.add_argument("--img_count", type=int, default=None, help="Maximum number of files to process")
         parser.add_argument("--json_count", type=int, default=None, help="Maximum number of files to process")
         parser.add_argument("--overwrite", action="store_true", help="Overwrite the output HDF5 file if it already exists")
+        parser.add_argument("--skip_coco", action="store_true", help="Skip COCO JSON files")
+        parser.add_argument("--skip_text_ocr", action="store_true", help="Only process COCO JSON files")
+        parser.add_argument("--npy_folder", type=str, default=None, help="Path to the folder containing the JSON files")
 
         if args is None:
             args = parser.parse_args()
@@ -88,12 +94,12 @@ class FindJONS:
             with open(file_path, "r") as f:
                 data = json.load(f)
 
-            if file_path.stem.startswith("TEXT_"):
+            if file_path.stem.startswith("TEXT_") and not self.skip_text_ocr:
                 file_count += 1
                 self.append_dicts(self.text_labels, data)
-            elif file_path.stem.startswith("OCR_"):
+            elif file_path.stem.startswith("OCR_") and not self.skip_text_ocr:
                 self.append_dicts(self.ocr_labels, data)
-            elif file_path.stem.startswith("COCO_"):
+            elif file_path.stem.startswith("COCO_") and not self.skip_coco:
                 self.append_dicts(self.coco_labels, data, coco=True)
 
     def delete_existing_datasets(self, hf):
@@ -104,63 +110,95 @@ class FindJONS:
 
 
     def save_as_npy(self, json_dict, name):
+        logger.info(f"Saving {name} as npy")
         np.save(name, np.array(json_dict))
 
     def text_label_hdf5(self):
-        # Convert dictionary into lists
-        style_list = []
-        text_list = []
-        text_decode_vocab_list = []
-        max_text_len = 0
+        # default dict of lists
+        from collections import defaultdict
+        master_dict = defaultdict(list)
+        length_dict = defaultdict(int)
+
         logger.info("Converting dictionary into lists")
         for idx in tqdm(sorted(self.text_labels.keys())):
             value = self.text_labels[idx]
-            style = value['style']
-            if isinstance(style, list):
-                style = ','.join(style)  # Convert list to string separated by commas
-            style_list.append(style)
-            text_list.append(value['text'])
-            text_decode_vocab_list.append(value['text_decode_vocab'].encode('utf-8'))
-            max_text_len = max(max_text_len, len(value['text']), len(value['text_decode_vocab']))
+
+            for key in value:
+                if key == 'text_decode_vocab':
+                    master_dict[key].append(value[key].encode('utf-8'))
+                elif key == 'style':
+                    if isinstance(value[key], list):
+                        master_dict[key].append(','.join(value[key]))
+                    else:
+                        master_dict[key].append(value[key])
+                else:
+                    master_dict[key].append(value[key])
+
+                length_dict[key] = max(length_dict[key], len(str(value[key])))
 
 
         # Create an HDF5 file
-        logger.info(f"Creating an HDF5 file @ {self.args.output_hdf5}, with {self.img_count} images, max_text_len={max_text_len}")
-        with h5py.File(self.args.output_hdf5, self.write_mode) as hf:
-            #self.delete_existing_datasets(hf)
+        if not self.skip_text_ocr:
+            logger.info(f"Creating an HDF5 file @ {self.args.output_hdf5}, with {self.img_count} images, max_text_len={length_dict}")
+            with h5py.File(self.args.output_hdf5, self.write_mode) as hf:
+                #self.delete_existing_datasets(hf)
 
-            # Create datasets for style, text, and text_decode_vocab lists
-            hf.create_dataset('style', data=style_list, dtype='S24', compression=self.compression)
-            hf.create_dataset('text', data=text_list, dtype=f'S{max_text_len}', compression=self.compression)
-            hf.create_dataset('text_decode_vocab', data=text_decode_vocab_list, dtype=f'S{max_text_len}', compression=self.compression)
+                # Create datasets for style, text, and text_decode_vocab lists
+                for key in master_dict.keys():
+                    hf.create_dataset(key, data=master_dict[key], dtype=f'S{length_dict[key]}', compression=self.compression)
+        else:
+            logger.info(f"Not creating an HDF5 file @ {self.args.output_hdf5} because --skip_text_ocr is set")
 
-    def main(self):
-        self.parse_files()
+    def load_npy(self):
+        logger.info("Loading npy files...")
+        folder = Path(self.args.npy_folder)
+        self.text_labels = np.load(folder / "text_labels.npy", allow_pickle=True).item()
+        # self.coco_dict = np.load(folder / "coco_labels.npy", allow_pickle=True).item()
+        # self.ocr_dict = np.load(folder / "ocr_labels.npy", allow_pickle=True).item()
+        self.img_count = len(self.text_labels)
 
+    def create_npy_files(self):
         root = Path(self.args.output_hdf5).parent
         language = Path(self.args.output_hdf5).stem + "_labels"
         output_folder = (root / language)
         output_folder.mkdir(parents=True, exist_ok=True)
 
-        logger.info("Saving labels as npy files...")
         self.save_as_npy(self.text_labels, output_folder / f"text_labels.npy")
         self.save_as_npy(self.ocr_labels, output_folder / f"ocr_labels.npy")
         self.save_as_npy(self.coco_labels, output_folder / f"coco_labels.npy")
+
+    def main(self):
+        if self.args.npy_folder:
+            self.load_npy()
+        else:
+            self.parse_files()
+            self.save_as_npy(self.text_labels, "text_labels.npy")
 
         self.text_label_hdf5()
 
 
 if __name__ == "__main__":
-    if True:
+    args = []
+    if False:
         "/media/data/1TB/datasets/synthetic/NEW_VERSION/latin /media/data/1TB/datasets/synthetic/NEW_VERSION/latin.h5  --img_count 5000000"
-        args = "/media/data/1TB/datasets/synthetic/NEW_VERSION/latin"
-        args += "/media/data/1TB/datasets/synthetic/NEW_VERSION/latin.h5"
+        args = " /media/data/1TB/datasets/synthetic/NEW_VERSION/latin"
+        args += " /media/data/1TB/datasets/synthetic/NEW_VERSION/latin.h5"
         args += " --img_count 5000000"
         args += " --json_count 2"
         args += " --overwrite"
-    else:
+    elif False:
         args = fr"'G:\synthetic_data\one_line\french' french.hdf5"
         args += " --img_count 1000"
+    else:
+        language = "latin"
+        count = 5000000 if language != "english" else 10000000
+        args.append(f"/media/data/1TB/datasets/synthetic/NEW_VERSION/{language}")
+        args.append(f" /media/data/1TB/datasets/synthetic/NEW_VERSION/{language}.h5")
+        args.append(f" --npy_folder '/media/data/1TB/datasets/synthetic/NEW_VERSION/{language}_labels'")
+        args.append(f" --img_count {count}")
+
+    args = " ".join(args)
+
     if sys.argv[1:]:
         args = None
 

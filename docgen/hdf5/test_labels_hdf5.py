@@ -9,3 +9,7 @@ with h5py.File('data.h5', 'r') as hf:
         print(hf[a_group_key][0:4])
 
 
+
+with h5py.File(file, 'r') as f:
+    #return len(f['images'])
+    return len(f['labels'])
