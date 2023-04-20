@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import os
 import warnings
+import socket
 
 re_digit = re.compile(r'\D', re.IGNORECASE)
 def str_to_int(s):
@@ -31,6 +32,7 @@ class HDF5Maker:
             warnings.warn("Cannot convert to grayscale without processing images")
         self.img_count = self.args.img_count
         self.chunk_size = self.args.chunk_size
+        self.compression = self.args.compression
 
     def parse_args(self, args=None):
         parser = argparse.ArgumentParser()
@@ -42,7 +44,7 @@ class HDF5Maker:
         parser.add_argument("--overwrite", action="store_true", help="Overwrite the output HDF5 file if it already exists")
         parser.add_argument("--img_count", type=int, default=None, help="Total number of files to allocate space for in the HDF5 file.")
         parser.add_argument("--chunk_size", type=int, default=1024, help="Chunk size for the HDF5 file.")
-
+        parser.add_argument("--compression", type=str, default=None, help="Compression for the HDF5 file.")
 
         if args is None:
             args = parser.parse_args()
@@ -95,29 +97,55 @@ class HDF5Maker:
             yield batch
 
 
-    def main(self):
+    def add_processed_images_to_hdf5(self, f):
         img_shape = self.compute_img_size()
-        with h5py.File(self.args.output_hdf5, self.write_mode) as f:
-            # Determine the shape of the images
 
-            if self.img_count is None:
-                all_images = list(self.get_next_image(Path(self.args.input_folder)))
-                self.img_count = len(all_images)
+        if self.img_count is None:
+            all_images = list(self.get_next_image(Path(self.args.input_folder)))
+            self.img_count = len(all_images)
 
-            self.chunk_size = min(self.args.chunk_size, self.img_count)
+        self.chunk_size = min(self.args.chunk_size, self.img_count)
 
-            # Create datasets for images and metadata
+        # Create datasets for images and metadata
+        if not 'images' in f and self.enable_process_img:
             images = f.create_dataset('images', shape=(self.img_count, *img_shape),
-                                      dtype=np.uint8, chunks=(self.chunk_size, *img_shape), compression='lzf')
+                                      dtype=np.uint8, chunks=(self.chunk_size, *img_shape), compression=self.compression)
+        else:
+            images = f['images']
 
-            for i, img_path in tqdm(enumerate(self.get_next_image(Path(self.args.input_folder)))):
-                idx, img = self.load_img(img_path)
-                images[idx] = img
+        for i, img_path in tqdm(enumerate(self.get_next_image(Path(self.args.input_folder)))):
+            idx, img = self.load_img(img_path)
+            images[idx] = img
+
+    def add_raw_images_to_hdf5(self, f):
+        if "images" in f and isinstance(f["images"], h5py.Dataset):
+            print("Deleting old images dataset")
+            del f['images']
+        if not 'images' in f and not self.enable_process_img:
+            images = f.create_group('images')
+        else:
+            images = f['images']
+        for i, img_path in tqdm(enumerate(self.get_next_image(Path(self.args.input_folder)))):
+            idx, img = self.load_img(img_path)
+            images.create_dataset(str(idx), data=img, compression=self.compression)
+
+    def main(self):
+        with h5py.File(self.args.output_hdf5, self.write_mode) as f:
+            if self.enable_process_img:
+                self.add_processed_images_to_hdf5(f)
+            else:
+                self.add_raw_images_to_hdf5(f)
+
 
 
 def run():
-    args = fr"'G:\synthetic_data\one_line\latin' latin.hdf5 --overwrite"
-    args += " --img_count 5000000"
+    if socket.gethostname().lower() != "galois":
+        args = fr"'G:\synthetic_data\one_line\french' french.hdf5"
+        args += " --img_count 1000"
+    else:
+        args = fr"'/media/data/1TB/datasets/synthetic/NEW_VERSION/latin' '/media/data/1TB/datasets/synthetic/NEW_VERSION/latin.hdf5' "
+        args += " --img_count 5000000"
+
     if sys.argv[1:]:
         args = None
 
