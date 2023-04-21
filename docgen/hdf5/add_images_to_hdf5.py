@@ -65,8 +65,8 @@ class HDF5Maker:
     def read_img_as_binary(self, img_path):
         with open(img_path, 'rb') as img_f:
             binary_data = img_f.read()  # read the image as python binary
-            binary_data_np = np.asarray(binary_data)
-        return binary_data_np
+            #binary_data_np = np.asarray(binary_data)
+        return binary_data
 
     def load_img(self, img_path):
         idx = str_to_int(img_path.stem)
@@ -117,24 +117,77 @@ class HDF5Maker:
             idx, img = self.load_img(img_path)
             images[idx] = img
 
-    def add_raw_images_to_hdf5(self, f):
-        if "images" in f and isinstance(f["images"], h5py.Dataset):
-            print("Deleting old images dataset")
-            del f['images']
-        if not 'images' in f and not self.enable_process_img:
+    def add_raw_images_to_hdf5_each_as_dataset(self, f):
+        chunk_size=2500000
+        #chunk_size=100
+        if "images" in f:
+            if isinstance(f["images"], h5py.Dataset):
+                print("Deleting old images dataset")
+                del f['images']
+            else:
+                print("Deleting old images group")
+                del f['images']
+
+        if not 'images' in f:
             images = f.create_group('images')
         else:
             images = f['images']
+
+        other_groups = []
         for i, img_path in tqdm(enumerate(self.get_next_image(Path(self.args.input_folder)))):
             idx, img = self.load_img(img_path)
-            images.create_dataset(str(idx), data=img, compression=self.compression)
+            if str(idx) in images:
+                del images[str(idx)]
+            images.create_dataset(str(idx), data=np.array(img), compression=self.compression)
+
+            if i % chunk_size == 0 and i > 0:
+                group_idx = i // chunk_size + 1
+                key_name = f'images{group_idx}'
+                if key_name in f:
+                    del f[key_name]
+
+                images = f.create_group(key_name)
+                other_groups.append((images, key_name))
+
+        for other_group, other_group_name in other_groups:
+            f['images'].update(other_group)
+            del f[other_group_name]
+        print(len(f["images"]))
+        print(f.keys())
+
+
+    def add_raw_images_to_hdf5(self, f):
+        """ The problem right now is the NULL CHAR in the byte code, VLEN doesn't work with it
+            You might try replacing it and unreplacing it or something
+
+        Args:
+            f:
+
+        Returns:
+
+        """
+        if "images" in f and not isinstance(f["images"], h5py.Dataset):
+            print("Deleting old images dataset")
+            del f['images']
+
+        if not 'images' in f:
+            dt = h5py.special_dtype(vlen=bytes)
+            images = f.create_dataset("images", shape=(self.img_count,), dtype=dt)
+        else:
+            images = f['images']
+
+        for i, img_path in tqdm(enumerate(self.get_next_image(Path(self.args.input_folder)))):
+            idx, img = self.load_img(img_path)
+            images[idx] = img
+
 
     def main(self):
         with h5py.File(self.args.output_hdf5, self.write_mode) as f:
             if self.enable_process_img:
                 self.add_processed_images_to_hdf5(f)
             else:
-                self.add_raw_images_to_hdf5(f)
+                #self.add_raw_images_to_hdf5(f)
+                self.add_raw_images_to_hdf5_each_as_dataset(f)
 
 
 

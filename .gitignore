@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.h5
 
 projects/french_bmd/*output*/
 projects/demos/**output*/
