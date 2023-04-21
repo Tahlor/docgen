@@ -33,6 +33,9 @@ class HDF5Maker:
         self.img_count = self.args.img_count
         self.chunk_size = self.args.chunk_size
         self.compression = self.args.compression
+        self.enable_one_dataset = self.args.one_dataset
+        if self.enable_process_img and not self.enable_one_dataset:
+            warnings.warn("Storing processed images in ONE dataset")
 
     def parse_args(self, args=None):
         parser = argparse.ArgumentParser()
@@ -45,6 +48,7 @@ class HDF5Maker:
         parser.add_argument("--img_count", type=int, default=None, help="Total number of files to allocate space for in the HDF5 file.")
         parser.add_argument("--chunk_size", type=int, default=1024, help="Chunk size for the HDF5 file.")
         parser.add_argument("--compression", type=str, default=None, help="Compression for the HDF5 file.")
+        parser.add_argument("--one_dataset", action="store_true", help="Store all images in one dataset.")
 
         if args is None:
             args = parser.parse_args()
@@ -150,10 +154,10 @@ class HDF5Maker:
                 other_groups.append((images, key_name))
 
         for other_group, other_group_name in other_groups:
+            print(f"Updating {other_group_name}")
             f['images'].update(other_group)
+            print(f"Deleting {other_group_name}")
             del f[other_group_name]
-        print(len(f["images"]))
-        print(f.keys())
 
 
     def add_raw_images_to_hdf5(self, f):
@@ -171,14 +175,14 @@ class HDF5Maker:
             del f['images']
 
         if not 'images' in f:
-            dt = h5py.special_dtype(vlen=bytes)
+            dt = h5py.special_dtype(vlen=np.dtype('uint8'))
             images = f.create_dataset("images", shape=(self.img_count,), dtype=dt)
         else:
             images = f['images']
 
         for i, img_path in tqdm(enumerate(self.get_next_image(Path(self.args.input_folder)))):
             idx, img = self.load_img(img_path)
-            images[idx] = img
+            images[idx] = np.fromstring(img, dtype='uint8')
 
 
     def main(self):
@@ -186,9 +190,14 @@ class HDF5Maker:
             if self.enable_process_img:
                 self.add_processed_images_to_hdf5(f)
             else:
-                #self.add_raw_images_to_hdf5(f)
-                self.add_raw_images_to_hdf5_each_as_dataset(f)
+                if self.enable_one_dataset:
+                    self.add_raw_images_to_hdf5(f)
+                else:
+                    self.add_raw_images_to_hdf5_each_as_dataset(f)
 
+            print("Total images:")
+            print(len(f["images"]))
+            print(f.keys())
 
 
 def run():
