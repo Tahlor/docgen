@@ -113,7 +113,7 @@ class FindJONS:
         logger.info(f"Saving {name} as npy")
         np.save(name, np.array(json_dict))
 
-    def text_label_hdf5(self):
+    def save_text_labels_to_hdf5(self):
         # default dict of lists
         from collections import defaultdict
         master_dict = defaultdict(list)
@@ -168,34 +168,41 @@ class FindJONS:
         self.save_as_npy(self.coco_labels, output_folder / f"coco_labels.npy")
 
     def main(self):
-        if self.args.npy_folder:
+
+        if self.args.npy_folder and Path(self.args.npy_folder).exists() and (Path(self.args.npy_folder) / "text_labels.npy").exists():
             self.load_npy()
         else:
+            logger.info(f"Npy {self.args.npy_folder} not found, parsing files...")
             self.parse_files()
             self.save_as_npy(self.text_labels, "text_labels.npy")
 
-        self.text_label_hdf5()
+        self.save_text_labels_to_hdf5()
 
 
 if __name__ == "__main__":
     args = []
-    if False:
-        "/media/data/1TB/datasets/synthetic/NEW_VERSION/latin /media/data/1TB/datasets/synthetic/NEW_VERSION/latin.h5  --img_count 5000000"
-        args = " /media/data/1TB/datasets/synthetic/NEW_VERSION/latin"
-        args += " /media/data/1TB/datasets/synthetic/NEW_VERSION/latin.h5"
-        args += " --img_count 5000000"
-        args += " --json_count 2"
-        args += " --overwrite"
-    elif False:
-        args = fr"'G:\synthetic_data\one_line\french' french.hdf5"
-        args += " --img_count 1000"
-    else:
-        language = "latin"
-        count = 5000000 if language != "english" else 10000000
-        args.append(f"/media/data/1TB/datasets/synthetic/NEW_VERSION/{language}")
-        args.append(f" /media/data/1TB/datasets/synthetic/NEW_VERSION/{language}.h5")
-        args.append(f" --npy_folder '/media/data/1TB/datasets/synthetic/NEW_VERSION/{language}_labels'")
-        args.append(f" --img_count {count}")
+    import socket
+    if socket.gethostname().lower() == "galois":
+        if False:
+            "/media/data/1TB/datasets/synthetic/NEW_VERSION/latin /media/data/1TB/datasets/synthetic/NEW_VERSION/latin.h5  --img_count 5000000"
+            args = " /media/data/1TB/datasets/synthetic/NEW_VERSION/latin"
+            args += " /media/data/1TB/datasets/synthetic/NEW_VERSION/latin.h5"
+            args += " --img_count 5000000"
+            args += " --json_count 2"
+            args += " --overwrite"
+        elif False:
+            args = fr"'G:\synthetic_data\one_line\french' french.h5"
+            args += " --img_count 1000"
+        else:
+            language = "latin"
+            count = 5000000 if language != "english" else 10000000
+            args.append(f"/media/data/1TB/datasets/synthetic/NEW_VERSION/{language}")
+            args.append(f" /media/data/1TB/datasets/synthetic/NEW_VERSION/{language}.h5")
+            args.append(f" --npy_folder '/media/data/1TB/datasets/synthetic/NEW_VERSION/{language}_labels'")
+            args.append(f" --img_count {count}")
+    elif socket.gethostname().lower() == "pw01ayjg":
+        args.append(rf"G:/synthetic_data/one_line/english")
+        args.append(rf"G:/synthetic_data/one_line/english.h5")
 
     args = " ".join(args)
 

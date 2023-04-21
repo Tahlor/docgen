@@ -57,8 +57,15 @@ filename = rf"G:\synthetic_data\one_line\french\000000000.jpg"
 fin = open(filename, 'rb')
 binary_data = fin.read()
 
-with h5py.File('foo.hdf5', "w") as f:
+with h5py.File('foo.h5', "w") as f:
     dt = h5py.special_dtype(vlen=np.dtype('uint8'))
     dset = f.create_dataset('binary_data', (100, ), dtype=dt)
     # Save data string converted as a np array
     dset[0] = np.fromstring(binary_data, dtype='uint8')
+
+
+import h5py
+# "hungarian.h5", "french.h5", "spanish.h5"
+for h5 in ["latin.h5"]:
+    with h5py.File(h5, "r") as f:
+        print(f.keys())

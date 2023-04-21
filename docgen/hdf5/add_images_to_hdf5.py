@@ -182,7 +182,7 @@ class HDF5Maker:
 
         for i, img_path in tqdm(enumerate(self.get_next_image(Path(self.args.input_folder)))):
             idx, img = self.load_img(img_path)
-            images[idx] = np.fromstring(img, dtype='uint8')
+            images[idx] = np.frombuffer(img, dtype='uint8')
 
 
     def main(self):
@@ -202,10 +202,11 @@ class HDF5Maker:
 
 def run():
     if socket.gethostname().lower() != "galois":
-        args = fr"'G:\synthetic_data\one_line\french' french.hdf5"
+        args = fr"'G:\synthetic_data\one_line\french' french.h5"
         args += " --img_count 1000"
+        args += " --one_dataset"
     else:
-        args = fr"'/media/data/1TB/datasets/synthetic/NEW_VERSION/latin' '/media/data/1TB/datasets/synthetic/NEW_VERSION/latin.hdf5' "
+        args = fr"'/media/data/1TB/datasets/synthetic/NEW_VERSION/latin' '/media/data/1TB/datasets/synthetic/NEW_VERSION/latin.h5' "
         args += " --img_count 5000000"
 
     if sys.argv[1:]:

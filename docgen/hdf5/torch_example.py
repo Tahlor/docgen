@@ -70,7 +70,7 @@ class HDF5ImageDataset(Dataset):
 
 
 if __name__ == '__main__':
-    hdf5_dataset = HDF5ImageDataset('french.hdf5')
+    hdf5_dataset = HDF5ImageDataset('french.h5')
     dataloader = DataLoader(hdf5_dataset, batch_size=32, shuffle=True, num_workers=4)
     #dataloader = DataLoader(hdf5_dataset, batch_size=32, shuffle=True, num_workers=4,worker_init_fn=worker_init_fn,)
 
