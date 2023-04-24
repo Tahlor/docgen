@@ -29,7 +29,9 @@ class FindJONS:
         self.write_mode = "w" if self.args.overwrite else "a"
         self.compression = "lzf"
         self.skip_coco = self.args.skip_coco
-        self.skip_text_ocr = self.args.skip_text_ocr
+        self.skip_text = self.args.skip_text
+        self.skip_ocr = self.args.skip_ocr
+
         self.npy_folder = self.args.npy_folder
         
     def parse_args(self, args=None):
@@ -40,7 +42,9 @@ class FindJONS:
         parser.add_argument("--json_count", type=int, default=None, help="Maximum number of files to process")
         parser.add_argument("--overwrite", action="store_true", help="Overwrite the output HDF5 file if it already exists")
         parser.add_argument("--skip_coco", action="store_true", help="Skip COCO JSON files")
-        parser.add_argument("--skip_text_ocr", action="store_true", help="Only process COCO JSON files")
+        parser.add_argument("--skip_text", action="store_true", help="Skip TEXT JSON files")
+        parser.add_argument("--skip_ocr", action="store_true", help="Skip OCR JSON files")
+
         parser.add_argument("--npy_folder", type=str, default=None, help="Path to the folder containing the JSON files")
 
         if args is None:
@@ -94,10 +98,10 @@ class FindJONS:
             with open(file_path, "r") as f:
                 data = json.load(f)
 
-            if file_path.stem.startswith("TEXT_") and not self.skip_text_ocr:
+            if file_path.stem.startswith("TEXT_") and not self.skip_text:
                 file_count += 1
                 self.append_dicts(self.text_labels, data)
-            elif file_path.stem.startswith("OCR_") and not self.skip_text_ocr:
+            elif file_path.stem.startswith("OCR_") and not self.skip_ocr:
                 self.append_dicts(self.ocr_labels, data)
             elif file_path.stem.startswith("COCO_") and not self.skip_coco:
                 self.append_dicts(self.coco_labels, data, coco=True)
@@ -138,7 +142,7 @@ class FindJONS:
 
 
         # Create an HDF5 file
-        if not self.skip_text_ocr:
+        if not self.skip_text:
             logger.info(f"Creating an HDF5 file @ {self.args.output_hdf5}, with {self.img_count} images, max_text_len={length_dict}")
             with h5py.File(self.args.output_hdf5, self.write_mode) as hf:
                 #self.delete_existing_datasets(hf)
@@ -163,9 +167,14 @@ class FindJONS:
         output_folder = (root / language)
         output_folder.mkdir(parents=True, exist_ok=True)
 
-        self.save_as_npy(self.text_labels, output_folder / f"text_labels.npy")
-        self.save_as_npy(self.ocr_labels, output_folder / f"ocr_labels.npy")
-        self.save_as_npy(self.coco_labels, output_folder / f"coco_labels.npy")
+        if not self.skip_text:
+            self.save_as_npy(self.text_labels, output_folder / f"text_labels.npy")
+
+        if not self.skip_ocr:
+            self.save_as_npy(self.ocr_labels, output_folder / f"ocr_labels.npy")
+
+        if not self.skip_coco:
+            self.save_as_npy(self.coco_labels, output_folder / f"coco_labels.npy")
 
     def main(self):
 
@@ -174,7 +183,7 @@ class FindJONS:
         else:
             logger.info(f"Npy {self.args.npy_folder} not found, parsing files...")
             self.parse_files()
-            self.save_as_npy(self.text_labels, "text_labels.npy")
+            self.create_npy_files()
 
         self.save_text_labels_to_hdf5()
 

@@ -201,14 +201,18 @@ class HDF5Maker:
 
 
 def run():
-    if socket.gethostname().lower() != "galois":
-        args = fr"'G:\synthetic_data\one_line\french' french.h5"
-        args += " --img_count 1000"
-        args += " --one_dataset"
-    else:
-        args = fr"'/media/data/1TB/datasets/synthetic/NEW_VERSION/latin' '/media/data/1TB/datasets/synthetic/NEW_VERSION/latin.h5' "
-        args += " --img_count 5000000"
+    args = []
+    if socket.gethostname().lower() == "pw01ayjg":
+        #args.append(fr"'G:\synthetic_data\one_line\french' french.h5")
+        args.append(rf"G:/synthetic_data/one_line/english")
+        args.append(rf"G:/synthetic_data/one_line/english.h5")
+        #args.append(" --img_count 1000")
 
+    if socket.gethostname().lower() == "galois":
+        args.append(fr"'/media/data/1TB/datasets/synthetic/NEW_VERSION/latin' '/media/data/1TB/datasets/synthetic/NEW_VERSION/latin.h5' ")
+        args.append(" --img_count 5000000")
+
+    args = " ".join(args)
     if sys.argv[1:]:
         args = None
 
