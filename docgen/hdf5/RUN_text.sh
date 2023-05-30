@@ -4,8 +4,8 @@ program="./add_jsons_to_hdf5.py"
 
 # array of latin, french, german, spanish, hugarian
 #declare -a arr=("latin" "french" "german" "spanish" "hungarian")
-#declare -a arr=("french")
-declare -a arr=("french" "spanish" "hungarian")
+declare -a arr=("german")
+#declare -a arr=("french" "spanish" "hungarian")
 for i in "${arr[@]}"
 do
     echo "Processing $i"
