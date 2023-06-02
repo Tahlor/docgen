@@ -175,7 +175,9 @@ if __name__ == "__main__":
         input_folder = f"G:/s3/synthetic_data/one_line/english"
         args = f""" {input_folder} --output_folder . --overwrite
         """
-
+    elif socket.gethostname() == "Galois":
+        args = """/media/EVO970/data/synthetic/french_bmd_0092/ --output_folder . --overwrite --save_npy"""
+    
     if sys.argv[1:]:
         args = None
 
