@@ -1,3 +1,4 @@
+import socket
 import sys
 import shlex
 import argparse
@@ -19,7 +20,6 @@ logger.addHandler(logging.StreamHandler())
 class FindJONS:
     def __init__(self, args=None):
         self.args = self.parse_args(args)
-        self.img_count = self.args.img_count
         self.text_dict = {}
         self.coco_dict = {}
         self.ocr_dict = {}
@@ -28,14 +28,24 @@ class FindJONS:
         self.skip_coco = self.args.skip_coco
         self.skip_text = self.args.skip_text
         self.skip_ocr = self.args.skip_ocr
+        self.variants = "OCR", "TEXT", "COCO"
         self.do_save_npy = self.args.save_npy
+        self.overwrite = self.args.overwrite
+        self.check_outputs()
+
+    def check_outputs(self):
+        if not self.overwrite:
+            for v in self.variants:
+                if (self.args.output_folder / f"{v}.json").exists():
+                    logger.info(f"Output file {v}.json already exists")
+                    setattr(self, f"skip_{v.lower()}", True)
 
     def parse_args(self, args=None):
         parser = argparse.ArgumentParser()
-        parser.add_argument("input_folder", help="Path to the folder containing the JSON files")
-        parser.add_argument("--npy_folder", help="Path to the folder containing the NPY files", default=None)
-        parser.add_argument("--output_folder", default=None, help="Folder to save the JSON files")
-        parser.add_argument("--img_count", type=int, default=None, help="Maximum number of files to process")
+        parser.add_argument("input_folder", help="Path to the folder containing the JSON files", type=Path)
+        parser.add_argument("--input_npy_folder", help="Path to the folder containing the input NPY files",
+                            default=None, type=Path)
+        parser.add_argument("--output_folder", default=None, help="Folder to save the JSON files", type=Path)
         parser.add_argument("--json_count", type=int, default=None, help="Maximum number of files to process")
         parser.add_argument("--overwrite", action="store_true",
                             help="")
@@ -60,36 +70,38 @@ class FindJONS:
         if not coco:
             memory_labels.update(json_data)
             return
-        for key, value in json_data.items():
-            if key in memory_labels:
-                if isinstance(value, list):
-                    memory_labels[key].extend(json_data[key])
-                elif isinstance(value, dict):
-                    memory_labels[key].update(json_data[key])
+        else:
+            for key, value in json_data.items():
+                if key in memory_labels:
+                    if isinstance(value, list):
+                        if key == "category":
+                            memory_labels[key].extend(v for v in value if v not in memory_labels[key])
+                        else:
+                            memory_labels[key].extend(value)
+                    elif isinstance(value, dict):
+                        memory_labels[key].update(json_data[key])
 
+                    else:
+                        print(
+                            f"Warning: Duplicate key '{key}' with non-list and non-dict value found in COCO JSON. Skipping this entry.")
                 else:
-                    print(
-                        f"Warning: Duplicate key '{key}' with non-list and non-dict value found in COCO JSON. Skipping this entry.")
-            else:
-                memory_labels[key] = value
+                    memory_labels[key] = value
 
     def parse_files(self):
         # use pathlib
         file_count = 0
-        for file in tqdm(Path(self.args.input_folder).iterdir()):
-
+        logger.info("SKIPS: " + " ".join([f"{v}: {getattr(self, f'skip_{v.lower()}')}" for v in self.variants]))
+        #for file in tqdm(Path(self.args.input_folder).iterdir()):
+        for file in tqdm(Path(self.args.input_folder).glob("*.json")):
             if self.max_json_count and file_count >= self.max_json_count:
                 break
-
-            if not file.name.endswith(".json"):
-                continue
+            file_count += 1
 
             file_path = Path(os.path.join(self.args.input_folder, file))
             with open(file_path, "r") as f:
                 data = json.load(f)
 
             if file_path.stem.startswith("TEXT_") and not self.skip_text:
-                file_count += 1
                 self.append_dicts(self.text_dict, data)
             elif file_path.stem.startswith("OCR_") and not self.skip_ocr:
                 self.append_dicts(self.ocr_dict, data)
@@ -102,31 +114,37 @@ class FindJONS:
 
     def load_npy(self, folder=None):
         if folder is None:
-            folder = self.args.npy_folder
+            folder = self.args.input_npy_folder
         logger.info("Loading npy files...")
         folder = Path(folder)
         if (folder / "text_labels.npy").exists():
             self.text_dict = np.load(folder / "text_labels.npy", allow_pickle=True).item()
+            self.skip_text = True
+            logger.info("Loaded text_labels.npy, skipping TEXT JSON files")
         if (folder / "coco_labels.npy").exists():
             self.coco_dict = np.load(folder / "coco_labels.npy", allow_pickle=True).item()
+            self.skip_coco = True
+            logger.info("Loaded coco_labels.npy, skipping COCO JSON files")
         if (folder / "ocr_labels.npy").exists():
             self.ocr_dict = np.load(folder / "ocr_labels.npy", allow_pickle=True).item()
+            self.skip_ocr = True
+            logger.info("Loaded ocr_labels.npy, skipping OCR JSON files")
 
     def create_aggregate_npy_files(self):
 
-        if not self.skip_text:
+        if not self.skip_text and self.text_dict:
             self.save_as_npy(self.text_dict, self.args.output_folder / f"text_labels.npy")
 
-        if not self.skip_ocr:
+        if not self.skip_ocr and self.ocr_dict:
             self.save_as_npy(self.ocr_dict, self.args.output_folder / f"ocr_labels.npy")
 
-        if not self.skip_coco:
+        if not self.skip_coco and self.coco_dict:
             self.save_as_npy(self.coco_dict, self.args.output_folder / f"coco_labels.npy")
 
     def save_json(self, json_dict, path):
         logger.info(f"Saving {path}")
         with open(path, self.write_mode) as f:
-            json.dump(json_dict, f, indent=4)
+            json.dump(json_dict, f)
 
     def create_aggregate_jsons(self):
         if not self.skip_coco and self.coco_dict:
@@ -138,18 +156,29 @@ class FindJONS:
 
     def main(self):
         Path(self.args.output_folder).mkdir(exist_ok=True, parents=True)
+        if self.args.input_npy_folder:
+            self.load_npy()
 
         self.parse_files()
+        logger.info("Done parsing files")
         if self.do_save_npy:
             self.create_aggregate_npy_files()
+
         self.create_aggregate_jsons()
 
 
 if __name__ == "__main__":
     args = []
 
+    if socket.gethostname() == "PW01AYJG":
+        input_folder = f"/media/EVO970/data/synthetic/french_bmd_0092/"
+        input_folder = f"G:/s3/synthetic_data/one_line/english"
+        args = f""" {input_folder} --output_folder . --overwrite
+        """
+
     if sys.argv[1:]:
         args = None
+
 
     hf = FindJONS(args)
     hf.main()
