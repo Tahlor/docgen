@@ -148,6 +148,7 @@ class LineGenerator:
                            next_text_dataset=self.basic_text_dataset,
                            batch_size=self.args.batch_size,
                            model=self.args.saved_handwriting_model,
+                           model_path=self.args.saved_hw_model_folder,
                            device=self.args.device,
                            data_split=self.args.style_data_split,
                             )
@@ -295,6 +296,7 @@ def create_parser():
                         action="store", const="IAM", nargs="?",
                         help="Path to HWR model, OR 'CVL' or 'IAM'",
                         )
+    parser.add_argument("--saved_hw_model_folder", type=str, default=None, help="Use random author for each word")
     parser.add_argument("--style_data_split", default="all", type=str, help="train, test, or all")
     parser.add_argument("--unigrams", action="store_const", const=True,
                         help="Path to unigram frequency file, if 'true' it will be downloaded from S3")
@@ -366,13 +368,28 @@ def testing():
     --max_paragraphs 2
     """
 
+
     background_img, ocr_format = main(command3)
     return background_img, ocr_format
 
 if __name__ == "__main__":
     # ' --output_folder C:\\Users\\tarchibald\\github\\docgen\\projects\\demos\\output --batch_size 16  --freq 1  --saved_handwriting_model IAM --wikipedia 20220301.fr '
 
-    ocr_format = LineGenerator().main()
+    # galois french lines
+    # GENERATE NEW HANDWRITING ON THE FLY -- NEEDED FOR FRENCH
+    # --output_folder {output}
+    args = rf"""
+    --batch_size 16 
+    --saved_handwriting_model IAM
+    --wikipedia 20220301.fr
+    --max_lines 1
+    --max_chars 10
+    --min_chars 3
+    --canvas_size 1152,48
+    --saved_hw_model_folder /media/data/1TB/datasets/s3/HWR/synthetic-data/python-package-resources/handwriting-models 
+    """.replace("\n"," ")
+
+    ocr_format = LineGenerator(args=args).main()
 
     #testing()
 

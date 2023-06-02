@@ -23,6 +23,7 @@ from docgen.utils import utils
 import logging
 from PIL import Image
 import dill as pickle
+from multiprocessing import Process, Queue
 from collections.abc import Iterator
 
 logging.basicConfig(level=logging.INFO)
@@ -361,6 +362,10 @@ class BoxFiller:
             if isinstance(img_text_pair_gen, Iterator):
                 self._get_word = self._get_from_joint_iterator
                 self.dataset_length = sys.maxsize
+            elif isinstance(img_text_pair_gen, Queue):
+                self._get_word = self._get_from_joint_queue
+                self.dataset_length = sys.maxsize
+
             else:
                 self._get_word = self._get_from_joint
                 self.dataset_length = len(img_text_pair_gen)
@@ -398,6 +403,13 @@ class BoxFiller:
 
     def _get_from_joint_iterator(self, i):
         word_dict = next(self.img_text_pair_gen)
+        word_dict["img"]  = self.convert_img_format( word_dict["img"])
+        if "style" in word_dict:
+            self.styles.add(word_dict["style"])
+        return word_dict
+
+    def _get_from_joint_queue(self, i):
+        word_dict = self.img_text_pair_gen.get()
         word_dict["img"]  = self.convert_img_format( word_dict["img"])
         if "style" in word_dict:
             self.styles.add(word_dict["style"])

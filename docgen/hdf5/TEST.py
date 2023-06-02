@@ -65,7 +65,6 @@ with h5py.File('foo.h5', "w") as f:
 
 
 import h5py
-# "hungarian.h5", "french.h5", "spanish.h5"
-for h5 in ["latin.h5"]:
+for h5 in ["english.h5",  "hungarian.h5", "french.h5", "spanish.h5", "latin.h5"]:
     with h5py.File(h5, "r") as f:
         print(f.keys())

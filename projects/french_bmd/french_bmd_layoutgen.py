@@ -1,5 +1,7 @@
 TESTING = False # TESTING = disables error handling
 
+#from textgen.basic_text_dataset import BasicTextDataset
+
 if TESTING:
     # set seeds
     seed = 3
@@ -9,10 +11,12 @@ if TESTING:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+from hwgen.daemon import Daemon, Daemon2, Daemon3
 
 import os
+from time import sleep
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
-from config.parse_config import parse_config, DEFAULT_CONFIG
+from projects.french_bmd.config.parse_config import parse_config, DEFAULT_CONFIG
 from tqdm import tqdm
 from tqdm.contrib.concurrent import process_map
 import traceback
@@ -40,7 +44,7 @@ RESOURCES = Path(site.getsitepackages()[0]) / "docgen/resources"
 ROOT = Path(__file__).parent.absolute()
 
 
-def parser():
+def parser(args=None):
     global TESTING
     import argparse
     parser = argparse.ArgumentParser()
@@ -51,6 +55,7 @@ def parser():
     parser.add_argument("--renderer", default="saved", help="'saved' for saved handwriting, or 'novel' to generate novel handwriting")
     parser.add_argument("--saved_hw_files", type=str, default="sample", help="sample, eng_latest, or path to folder with npy\
                                                                     files of pregenerated handwriting, 1 per author style")
+    parser.add_argument("--saved_hw_model_folder", type=str, default=None, help="Use random author for each word")
     parser.add_argument("--saved_hw_model", type=str, default="IAM", help="CVL or IAM, will download from S3")
     parser.add_argument("--unigrams", type=str, default=None, help="Path to unigram file (list of words for text generation)")
     parser.add_argument("--overwrite", type=bool, default=False, help="Overwrite output directory if it exists")
@@ -64,7 +69,11 @@ def parser():
     parser.add_argument("--device", default=None, help="cpu, cuda, cuda:0, etc.")
     parser.add_argument("--TESTING", action="store_true", help="Enable testing mode")
 
-    args = parser.parse_args()
+    if args is not None:
+        import shlex
+        args = parser.parse_args(shlex.split(args))
+    else:
+        args = parser.parse_args()
 
     # disable warnings
     if not args.verbose:
@@ -116,6 +125,79 @@ def draw_layout(layout, image):
     image.show()
 
 
+class WordIterator:
+    def __init__(self, input_data_iterator, buffer_size=4000):
+        self.input_data_iterator = input_data_iterator
+        self.buffer_size = buffer_size
+        self.renderer_daemon = Daemon(self.input_data_iterator, buffer_size=self.buffer_size)
+        self.timeout = .2
+        self.renderer_daemon.start()
+
+    def restart_daemon_if_needed(self):
+        if not self.renderer_daemon.is_alive():
+            print("Daemon thread has died, restarting...")
+            old_daemon = self.renderer_daemon
+            self.renderer_daemon = Daemon(self.input_data_iterator, buffer_size=self.buffer_size)
+            self.renderer_daemon.start()
+            old_daemon.join()
+
+    def get_next_word_iterator(self):
+        failures = 0
+        while True:
+            item = None
+            try:
+                item = self.renderer_daemon.queue.get(block=True, timeout=self.timeout)
+            except Exception as e:
+                #logger.exception("Timeout waiting for next item")
+                failures += 1
+                if failures and failures % 10 == 0:
+                    logger.info(f"Timeout waiting for next item: {failures}")
+                    self.restart_daemon_if_needed()
+                continue
+
+            #print(item)
+            if item is not None:
+                failures = 0
+                for i in range(len(item["text_list"])):
+                    if 0 in item["word_imgs"][i].shape:
+                        continue  # kind of a bug, it's an empty image e.g. \n or something
+
+                    try:
+                        yield {"img": item["word_imgs"][i],
+                               "text": item["text_list"][i],
+                               "style": item["author_id"],
+                               "text_decode_vocab": item["text_list_decode_vocab"][i]
+                               }
+                    except Exception as e:
+                        #logger.exception(e)
+                        continue
+
+    def get_next_word_queue(self):
+        while True:
+            item = None
+            try:
+                item = self.renderer_daemon.queue.get(block=True, timeout=self.timeout)
+            except Exception as e:
+                #logger.exception("Timeout waiting for next item")
+                continue
+            #print(item)
+            if item is not None:
+                for i in range(len(item["text_list"])):
+                    if 0 in item["word_imgs"][i].shape:
+                        continue  # kind of a bug, it's an empty image e.g. \n or something
+
+                    try:
+                        yield {"img": item["word_imgs"][i],
+                               "text": item["text_list"][i],
+                               "style": item["author_id"],
+                               "text_decode_vocab": item["text_list_decode_vocab"][i]
+                               }
+                    except Exception as e:
+                        #logger.exception(e)
+                        continue
+
+
+
 def main(opts):
     global render_text_pair, lg
 
@@ -155,9 +237,11 @@ def main(opts):
     else:
         words_dataset = Unigrams(csv_file=opts.unigrams, newline_freq=0)
 
+    renderer_daemon = None
+
     def create_dataset():
-        nonlocal words_dataset
-        if opts.renderer_daemon == "saved":
+        nonlocal words_dataset, renderer_daemon
+        if opts.renderer == "saved":
             renderer = SavedHandwritingRandomAuthor(
                 format="PIL",
                 dataset_root=opts.saved_hw_files,
@@ -172,15 +256,20 @@ def main(opts):
                 random_next_article=True,)
 
             render_text_pair = RenderImageTextPair(renderer, words_dataset)
-        elif opts.renderer_daemon == "novel":
-            render_text_pair = HWGenerator(next_text_dataset=words_dataset,
+        elif opts.renderer == "novel":
+            render_text_pair_gen = HWGenerator(next_text_dataset=words_dataset,
                                    batch_size=opts.hw_batch_size,
                                    model=opts.saved_hw_model,
+                                   model_path=opts.saved_hw_model_folder,
                                    device=opts.device,
                                    style=opts.saved_hw_model,
                                    )
 
-
+            render_text_pair = WordIterator(render_text_pair_gen).get_next_word_iterator()
+            print("LOOPING")
+            for i in range(10):
+                x = next(render_text_pair)
+                print(i, x)
 
         # Create a LayoutGenerator object with the parsed parameters
         lg = LayoutGenerator(paragraph_template=paragraph_template,
@@ -204,6 +293,7 @@ def main(opts):
                                    batch_size=1, # no GPU usage, so no need to batch; "workers" is your parallelism!
                                    collate_fn=layout_dataset.collate_fn,
                                    num_workers=opts.workers)
+
         return layout_loader, layout_dataset
 
     layout_loader, layout_dataset = create_dataset()
@@ -213,33 +303,71 @@ def main(opts):
     import time
     start = time.time()
 
-    for batch in tqdm(layout_loader):
-        # batch size should just be 1
-        for name,data,img in batch:
-            ocr_dataset[name] = data
-            img.save(opts.output / f"{name}.jpg")
+    try:
+        for i, batch in tqdm(enumerate(layout_loader)):
+            if i and i % 1000 == 0:
+                ocr_dataset = save_out(ocr_dataset, i, opts)
+                ocr_dataset = {}
+            # batch size should just be 1
+
+            for name,data,img in batch:
+                ocr_dataset[name] = data
+                img.save(opts.output / f"{name}.jpg")
+    except Exception as e:
+        print(e)
+
+    save_out(ocr_dataset, i, opts)
+
+    if renderer_daemon:
+        renderer_daemon.stop()
+        renderer_daemon.join()
 
     stop = time.time()
     print("TIME: ", stop-start)
 
-
-    save_json(opts.ocr_path, ocr_dataset)
-    coco = ocr_dataset_to_coco(ocr_dataset, "French BMD Layout - v0.0.0.3 pre-Alpha", exclude_cats="word")
-    save_json(opts.coco_path, coco)
-
-    ## TEST LAST IMAGE - OCR AND COCO DATASET + BBOXS
-    name, d = next(iter(ocr_dataset.items()))
-    image_path = opts.output / f"{name}.jpg"
-
-    coco_seg = (image_path.parent / (image_path.stem+"_with_seg")).with_suffix(image_path.suffix)
-    coco_box = (image_path.parent / (image_path.stem+"_with_boxes")).with_suffix(image_path.suffix)
-
     if opts.display_output:
+        display_output(ocr_dataset)
+
+def save_out(ocr_dataset, i, opts):
+    logger.info(f"Saving out at {i}")
+    coco_path, ocr_path = add_suffix_to_path(opts.coco_path, i), add_suffix_to_path(opts.ocr_path, i)
+    save_json(ocr_path, ocr_dataset)
+    coco = ocr_dataset_to_coco(ocr_dataset, "French BMD Layout - v0.0.0.3 pre-Alpha", exclude_cats="word")
+    save_json(coco_path, coco)
+
+
+def add_suffix_to_path(path, index):
+    # use pathlib
+    path = Path(path)
+    return path.parent / (path.stem + f"_{index}" + path.suffix)
+
+
+def display_output(ocr_dataset):
+        ## TEST LAST IMAGE - OCR AND COCO DATASET + BBOXS
+        name, d = next(iter(ocr_dataset.items()))
+        image_path = opts.output / f"{name}.jpg"
+
+        coco_seg = (image_path.parent / (image_path.stem + "_with_seg")).with_suffix(image_path.suffix)
+        coco_box = (image_path.parent / (image_path.stem + "_with_boxes")).with_suffix(image_path.suffix)
+
         load_and_draw_and_display(image_path, opts.ocr_path)
         load_and_draw_and_display(image_path, opts.coco_path, format="COCO", draw_boxes=True, draw_segmentations=False
                                    , save_path=coco_box)
         load_and_draw_and_display(image_path, opts.coco_path, format="COCO", draw_boxes=False, draw_segmentations=True, save_path=coco_seg)
 
 if __name__ == "__main__":
-    opts = parser()
+    args = """
+      --config ./config/default.yaml 
+      --count 20000
+      --renderer novel
+      --output /media/EVO970/data/synthetic/french_bmd/ 
+      --saved_hw_model_folder /media/data/1TB/datasets/s3/HWR/synthetic-data/python-package-resources/handwriting-models 
+      --wikipedia 20220301.fr
+      --saved_hw_model IAM
+      --hw_batch_size 64
+      --workers 0
+    """
+    #       --workers 0
+
+    opts = parser(args)
     main(opts)
