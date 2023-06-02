@@ -8,7 +8,6 @@ import numpy as np
 from pathlib import Path
 import os
 import logging
-from docgen.hdf5.add_images_to_hdf5 import str_to_int
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,12 +28,12 @@ class FindJONS:
         self.skip_coco = self.args.skip_coco
         self.skip_text = self.args.skip_text
         self.skip_ocr = self.args.skip_ocr
-        self.do_save_npy = self.args.do_save_npy
+        self.do_save_npy = self.args.save_npy
 
     def parse_args(self, args=None):
         parser = argparse.ArgumentParser()
         parser.add_argument("input_folder", help="Path to the folder containing the JSON files")
-        parser.add_argument("--output_folder", help="Folder to save the JSON files")
+        parser.add_argument("--output_folder", default=None, help="Folder to save the JSON files")
         parser.add_argument("--img_count", type=int, default=None, help="Maximum number of files to process")
         parser.add_argument("--json_count", type=int, default=None, help="Maximum number of files to process")
         parser.add_argument("--overwrite", action="store_true",
@@ -48,6 +47,12 @@ class FindJONS:
             args = parser.parse_args()
         else:
             args = parser.parse_args(shlex.split(args))
+
+        if args.output_folder is None:
+            args.output_folder = args.input_folder
+
+        if args.output_folder is None:
+            args.output_folder = args.input_folder
         return args
 
     def append_dicts(self, memory_labels, json_data, coco=False):
@@ -102,33 +107,41 @@ class FindJONS:
         # self.ocr_dict = np.load(folder / "ocr_labels.npy", allow_pickle=True).item()
         self.img_count = len(self.text_labels)
 
-    def create_npy_files(self):
-        root = Path(self.args.output_folder).parent
-        language = Path(self.args.output_folder).stem + "_labels"
-        output_folder = (root / language)
-        output_folder.mkdir(parents=True, exist_ok=True)
+    def create_aggregate_npy_files(self):
 
-        if self.do_save_npy:
-            if not self.skip_text:
-                self.save_as_npy(self.text_labels, output_folder / f"text_labels.npy")
-    
-            if not self.skip_ocr:
-                self.save_as_npy(self.ocr_labels, output_folder / f"ocr_labels.npy")
-    
-            if not self.skip_coco:
-                self.save_as_npy(self.coco_labels, output_folder / f"coco_labels.npy")
+        if not self.skip_text:
+            self.save_as_npy(self.text_labels, self.args.output_folder / f"text_labels.npy")
+
+        if not self.skip_ocr:
+            self.save_as_npy(self.ocr_labels, self.args.output_folder / f"ocr_labels.npy")
+
+        if not self.skip_coco:
+            self.save_as_npy(self.coco_labels, self.args.output_folder / f"coco_labels.npy")
+
+    def save_json(self, json_dict, path):
+        logger.info(f"Saving {path}")
+        with open(path, self.write_mode) as f:
+            json.dump(json_dict, f, indent=4)
+
+    def create_aggregate_jsons(self):
+        if not self.skip_coco and self.coco_labels:
+            self.save_json(self.coco_labels, self.args.output_folder / f"COCO.json")
+        if not self.skip_ocr and self.ocr_labels:
+            self.save_json(self.ocr_labels, self.args.output_folder / f"OCR.json")
+        if not self.skip_text and self.text_labels:
+            self.save_json(self.text_labels, self.args.output_folder / f"TEXT.json")
 
     def main(self):
-
+        Path(self.args.output_folder).mkdir(exist_ok=True, parents=True)
         if self.args.npy_folder and Path(self.args.npy_folder).exists() and (
                 Path(self.args.npy_folder) / "text_labels.npy").exists():
             self.load_npy()
         else:
             logger.info(f"Npy {self.args.npy_folder} not found, parsing files...")
             self.parse_files()
-            self.create_npy_files()
-
-        self.save_text_labels_to_hdf5()
+            if self.do_save_npy:
+                self.create_aggregate_npy_files()
+        self.create_aggregate_jsons()
 
 
 if __name__ == "__main__":

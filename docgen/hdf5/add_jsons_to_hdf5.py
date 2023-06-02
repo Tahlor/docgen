@@ -17,6 +17,10 @@ logger = logging.getLogger(__name__)
 # log to stdout
 logger.addHandler(logging.StreamHandler())
 
+"""
+SHOULD BE REFACTORED TO USE "docgen\\datasets\\utils\\combine_jsons.py"
+"""
+
 
 class FindJONS:
     def __init__(self, args=None):
