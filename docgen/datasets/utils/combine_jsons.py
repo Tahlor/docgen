@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
 
 
-class FindJONS:
+class FindJSONS:
     def __init__(self, args=None):
         self.args = self.parse_args(args)
         self.text_dict = {}
@@ -182,6 +182,6 @@ if __name__ == "__main__":
         args = None
 
 
-    hf = FindJONS(args)
+    hf = FindJSONS(args)
     hf.main()
 

@@ -138,6 +138,8 @@ def ocr_dataset_to_coco(ocr_dict,
         ann_id_counter += 1
         if "text" in ocr_dict:
             item["text"] = ocr_dict["text"]
+            if "text_decode_vocab" in ocr_dict:
+                item["text_decode_vocab"] = ocr_dict["text_decode_vocab"]
         return item
 
     def nested(img_id, dict, keyword):
@@ -259,13 +261,16 @@ def coco_dataset(dict_list, output_path):
                     cat_id_counter += 1
 
                 for box in image_dict["localization"][key]:
-                    annotations.append({"image_id": id,
+                    out_dict = {"image_id": id,
                                         "bbox":BBox._get_XYWH(box["bbox"]),
                                         "text":box["text"],
                                         "category": f"{localization_level}",
                                         "id": ann_id_counter,
                                         "category_id": categories[localization_level]["id"],
-                    })
+                    }
+                    # if 'text_decode_vocab' in box:
+                    #     out_dict['text_decode_vocab'] = box['text_decode_vocab']
+                    annotations.append(out_dict)
                     ann_id_counter+=1
 
     coco = {
