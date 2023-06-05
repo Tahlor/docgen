@@ -1,3 +1,5 @@
+import socket
+
 TESTING = False # TESTING = disables error handling
 
 #from textgen.basic_text_dataset import BasicTextDataset
@@ -11,7 +13,7 @@ if TESTING:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-from hwgen.daemon import Daemon, Daemon2, Daemon3
+from hwgen.daemon import Daemon
 
 import os
 from time import sleep
@@ -33,6 +35,7 @@ import multiprocessing
 from docgen.layoutgen.layout_dataset import LayoutDataset
 from torch.utils.data import DataLoader
 from hwgen.data.hw_generator import HWGenerator
+from textgen.basic_text_dataset import VOCABULARY, ALPHA_VOCABULARY
 import torch
 import site
 
@@ -68,6 +71,8 @@ def parser(args=None):
     parser.add_argument("--verbose", action="store_true", help="Display warnings etc.")
     parser.add_argument("--device", default=None, help="cpu, cuda, cuda:0, etc.")
     parser.add_argument("--TESTING", action="store_true", help="Enable testing mode")
+    parser.add_argument("--vocab", default=VOCABULARY, type=str, help="The list of vocab tokens to use")
+    parser.add_argument("--exclude_chars", default="0123456789()+*;#:!/,.", type=str, help="Exclude these chars from the vocab")
 
     if args is not None:
         import shlex
@@ -195,11 +200,14 @@ class WordIterator:
                     except Exception as e:
                         #logger.exception(e)
                         continue
+    def stop(self):
+        self.renderer_daemon.stop()
+        self.renderer_daemon.join()
 
 
 
 def main(opts):
-    global render_text_pair, lg
+    global lg
 
     # Read the YAML file and parse the parameters
     config_dict = parse_config(opts.config)
@@ -215,32 +223,31 @@ def main(opts):
     if opts.wikipedia is not None:
         from datasets import load_dataset
         from textgen.wikipedia_dataset import WikipediaEncodedTextDataset, WikipediaWord
-        from textgen.basic_text_dataset import VOCABULARY, ALPHA_VOCABULARY
 
         words_dataset = WikipediaEncodedTextDataset(
             use_unidecode=True,
             shuffle_articles=True,
             random_starting_word=True,
             dataset=load_dataset("wikipedia", opts.wikipedia)["train"],
-            vocabulary=set(ALPHA_VOCABULARY),  # set(self.model.netconverter.dict.keys())
-            exclude_chars="",
-            symbol_replacement_dict = {
-                "}": ")",
-                 "{": "(",
-                 "]": ")",
-                 "[": "(",
-                 "–": "-",
-                 " ()": "",
-                 "\n":" "
-            }
+            vocabulary=set(opts.vocab),  # set(self.model.netconverter.dict.keys())
+            exclude_chars=opts.exclude_chars,
+            # symbol_replacement_dict = {
+            #     "}": ")",
+            #      "{": "(",
+            #      "]": ")",
+            #      "[": "(",
+            #      "–": "-",
+            #      " ()": "",
+            #      "\n":" "
+            # },
+            decode_vocabulary="default_expanded",
         )
     else:
         words_dataset = Unigrams(csv_file=opts.unigrams, newline_freq=0)
 
-    renderer_daemon = None
-
+    render_text_pair = daemon_iterator = None
     def create_dataset():
-        nonlocal words_dataset, renderer_daemon
+        nonlocal words_dataset, render_text_pair, daemon_iterator
         if opts.renderer == "saved":
             renderer = SavedHandwritingRandomAuthor(
                 format="PIL",
@@ -260,16 +267,16 @@ def main(opts):
             render_text_pair_gen = HWGenerator(next_text_dataset=words_dataset,
                                    batch_size=opts.hw_batch_size,
                                    model=opts.saved_hw_model,
-                                   model_path=opts.saved_hw_model_folder,
+                                   resource_folder=opts.saved_hw_model_folder,
                                    device=opts.device,
                                    style=opts.saved_hw_model,
                                    )
 
-            render_text_pair = WordIterator(render_text_pair_gen).get_next_word_iterator()
+            daemon_iterator = WordIterator(render_text_pair_gen)
+            render_text_pair = daemon_iterator.get_next_word_iterator()
             print("LOOPING")
-            for i in range(10):
-                x = next(render_text_pair)
-                print(i, x)
+            x = next(render_text_pair)
+            print(x)
 
         # Create a LayoutGenerator object with the parsed parameters
         lg = LayoutGenerator(paragraph_template=paragraph_template,
@@ -308,19 +315,23 @@ def main(opts):
             if i and i % 1000 == 0:
                 ocr_dataset = save_out(ocr_dataset, i, opts)
                 ocr_dataset = {}
-            # batch size should just be 1
 
+            # batch size should just be 1 since there is no GPU acceleration on LayoutGeneration
+            # using multiple workers allows for parallelization, but it doesn't work with the Daemon
             for name,data,img in batch:
                 ocr_dataset[name] = data
                 img.save(opts.output / f"{name}.jpg")
     except Exception as e:
         print(e)
 
+    # Stop Daemon if needed
+    try:
+        daemon_iterator.stop()
+    except Exception as e:
+        print(f"Couldn't stop daemon, {e}")
+
     save_out(ocr_dataset, i, opts)
 
-    if renderer_daemon:
-        renderer_daemon.stop()
-        renderer_daemon.join()
 
     stop = time.time()
     print("TIME: ", stop-start)
@@ -356,18 +367,32 @@ def display_output(ocr_dataset):
         load_and_draw_and_display(image_path, opts.coco_path, format="COCO", draw_boxes=False, draw_segmentations=True, save_path=coco_seg)
 
 if __name__ == "__main__":
-    args = """
-      --config ./config/default.yaml 
-      --count 20000
-      --renderer novel
-      --output /media/EVO970/data/synthetic/french_bmd/ 
-      --saved_hw_model_folder /media/data/1TB/datasets/s3/HWR/synthetic-data/python-package-resources/handwriting-models 
-      --wikipedia 20220301.fr
-      --saved_hw_model IAM
-      --hw_batch_size 64
-      --workers 0
-    """
-    #       --workers 0
+    if socket.gethostname() == "PW01AYJG":
+        args = """
+          --config ./config/default.yaml 
+          --count 1
+          --renderer novel
+          --output  /mnt/g/s3/synthetic_data/FRENCH_BMD
+          --wikipedia 20220301.fr
+          --saved_hw_model IAM
+          --hw_batch_size 8
+          --workers 0
+        """
+
+    elif socket.gethostname() == "Galois":
+        args = """
+          --config ./config/default.yaml 
+          --count 100000
+          --renderer novel
+          --output /media/EVO970/data/synthetic/french_bmd/ 
+          --saved_hw_model_folder /media/data/1TB/datasets/s3/HWR/synthetic-data/python-package-resources/handwriting-models 
+          --wikipedia 20220301.fr
+          --saved_hw_model IAM
+          --hw_batch_size 64
+          --workers 0
+        """
+    else:
+        args = None
 
     opts = parser(args)
     main(opts)

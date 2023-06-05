@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
 
 
-class FindJONS:
+class FindJSONS:
     def __init__(self, args=None):
         self.args = self.parse_args(args)
         self.text_dict = {}
@@ -181,12 +181,17 @@ if __name__ == "__main__":
         args = f""" {input_folder} --output_folder . --overwrite
         """
     elif socket.gethostname() == "Galois":
+<<<<<<< HEAD
         input_folder = f"/media/EVO970/data/synthetic/french_bmd_0092/singles"
         args =f"{input_folder} --output_folder . --overwrite --save_npy"
+=======
+        args = """/media/EVO970/data/synthetic/french_bmd_0092/ --output_folder . --overwrite --save_npy"""
+    
+>>>>>>> 20653919ea8ca5ac368766594a6e50a73b6ce184
     if sys.argv[1:]:
         args = None
 
 
-    hf = FindJONS(args)
+    hf = FindJSONS(args)
     hf.main()
 
