@@ -9,6 +9,7 @@ import numpy as np
 from pathlib import Path
 import os
 import logging
+import re
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ class FindJONS:
         self.do_save_npy = self.args.save_npy
         self.overwrite = self.args.overwrite
         self.check_outputs()
-
+        self.skip_no_number = True # skip file if no idx number, assumed to be aggregate
     def check_outputs(self):
         if not self.overwrite:
             for v in self.variants:
@@ -95,6 +96,10 @@ class FindJONS:
         for file in tqdm(Path(self.args.input_folder).glob("*.json")):
             if self.max_json_count and file_count >= self.max_json_count:
                 break
+            # if no number before suffix using regex, skip
+            if not re.match(r".*_[0-9]+\.json", file.name) and self.skip_no_number:
+                logger.info("Skipping file without number suffix: " + file.name)
+                continue
             file_count += 1
 
             file_path = Path(os.path.join(self.args.input_folder, file))
@@ -175,7 +180,9 @@ if __name__ == "__main__":
         input_folder = f"G:/s3/synthetic_data/one_line/english"
         args = f""" {input_folder} --output_folder . --overwrite
         """
-
+    elif socket.gethostname() == "Galois":
+        input_folder = f"/media/EVO970/data/synthetic/french_bmd_0092/singles"
+        args =f"{input_folder} --output_folder . --overwrite --save_npy"
     if sys.argv[1:]:
         args = None
 

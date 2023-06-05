@@ -30,12 +30,12 @@ mwparserfromhell
 # IF REPO IS LOCAL
 #-e ../hwgen
 
-synthetictextgen @ git+ssh://git@github.com/tahlor/synthetic_text_gen@galois#egg=synthetictextgen
-hwgen @ git+ssh://git@github.com/tahlor/hwgen@galois#egg=hwgen
-textgen @ git+ssh://git@github.com/tahlor/textgen@galois#egg=textgen
-Faker @ git+ssh://git@github.com/tahlor/Faker@galois#egg=Faker
-docdegrade @ git+ssh://git@github.com/tahlor/docdegrade@galois#egg=docdegrade
-download_resources @ git+ssh://git@github.com/tahlor/download_resources@galois#egg=download_resources
+#synthetictextgen @ git+ssh://git@github.com/tahlor/synthetic_text_gen@galois#egg=synthetictextgen
+#hwgen @ git+ssh://git@github.com/tahlor/hwgen@galois#egg=hwgen
+#textgen @ git+ssh://git@github.com/tahlor/textgen@galois#egg=textgen
+#Faker @ git+ssh://git@github.com/tahlor/Faker@galois#egg=Faker
+#docdegrade @ git+ssh://git@github.com/tahlor/docdegrade@galois#egg=docdegrade
+#download_resources @ git+ssh://git@github.com/tahlor/download_resources@galois#egg=download_resources
 
 # reportlab
 #conda install -c conda-forge poppler
