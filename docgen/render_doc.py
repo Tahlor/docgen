@@ -362,10 +362,9 @@ class BoxFiller:
             if isinstance(img_text_pair_gen, Iterator):
                 self._get_word = self._get_from_joint_iterator
                 self.dataset_length = sys.maxsize
-            elif isinstance(img_text_pair_gen, Queue):
-                self._get_word = self._get_from_joint_queue
-                self.dataset_length = sys.maxsize
-
+            # elif isinstance(img_text_pair_gen, Queue):
+            #     self._get_word = self._get_from_joint_queue
+            #     self.dataset_length = sys.maxsize
             else:
                 self._get_word = self._get_from_joint
                 self.dataset_length = len(img_text_pair_gen)
@@ -396,6 +395,9 @@ class BoxFiller:
 
         """
         word_dict = self.img_text_pair_gen[i]
+        if isinstance(word_dict, (tuple, list)):
+            word_dict = {"img": word_dict[0],
+                         "text": word_dict[1]}
         word_dict["img"] = self.convert_img_format(word_dict["img"])
         if "style" in word_dict:
             self.styles.add(word_dict["style"])
@@ -459,7 +461,8 @@ class BoxFiller:
         else:
             decimal_percent = self.size_variation_gen() * to_font_size_factor
         self.last_word_img = self.rescale(img, decimal_percent)
-        return self.last_word_img, self.last_word_text
+        return {"img":self.last_word_img,
+                "text":self.last_word_text}
 
     def rescale(self, img, decimal_percent):
         """ Rescale an image

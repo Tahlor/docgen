@@ -21,6 +21,8 @@ easydict
 GPUtil
 ocrodeg @ git+https://github.com/NVlabs/ocrodeg
 mwparserfromhell
+aggdraw
+
 
 # IF REPO IS PUBLIC
 #hwgen @ https://github.com/tahlor/hwgen/archive/master.zip
