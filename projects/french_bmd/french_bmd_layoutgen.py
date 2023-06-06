@@ -64,6 +64,7 @@ def parser(args=None):
     parser.add_argument("--overwrite", type=bool, default=False, help="Overwrite output directory if it exists")
     parser.add_argument("--hw_batch_size", type=int, default=8, help="Number of HW images to generate at once, depends on GPU memory")
     parser.add_argument("--count", type=int, default=None, help="Number of images to generate")
+    parser.add_argument("--start_iteration", type=int, default=0, help="Number to start generating from")
     parser.add_argument("--wikipedia", default=None, help="Use wikipedia data for text generation, e.g., 20220301.fr, 20220301.en")
     parser.add_argument("--degradation", action="store_true", help="Apply degradation function to images")
     parser.add_argument("--workers", type=int, default=None, help="How many parallel processes to spin up for LAYOUT only? (default is number of cores - 2)")
@@ -292,6 +293,7 @@ def main(opts):
         layout_dataset = LayoutDataset(layout_generator=lg,
                                        render_text_pairs=render_text_pair,
                                        length=opts.count,
+                                       start_idx_offset=opts.start_iteration,
                                        degradation_function=opts.degradation_function,
                                        #output_path=opts.output,
                                        )
@@ -309,11 +311,16 @@ def main(opts):
     # Generate documents
     import time
     start = time.time()
+    iteration = start_iteration = opts.start_iteration
 
     try:
         for i, batch in tqdm(enumerate(layout_loader)):
-            if i and i % 1000 == 0:
-                ocr_dataset = save_out(ocr_dataset, i, opts)
+            iteration = i + start_iteration
+
+            if iteration >= opts.count:
+                break
+            elif iteration > start_iteration and iteration % 1000 == 0:
+                ocr_dataset = save_out(ocr_dataset, iteration, opts)
                 ocr_dataset = {}
 
             # batch size should just be 1 since there is no GPU acceleration on LayoutGeneration
@@ -321,6 +328,8 @@ def main(opts):
             for name,data,img in batch:
                 ocr_dataset[name] = data
                 img.save(opts.output / f"{name}.jpg")
+
+
     except Exception as e:
         print(e)
 
@@ -330,7 +339,7 @@ def main(opts):
     except Exception as e:
         print(f"Couldn't stop daemon, {e}")
 
-    save_out(ocr_dataset, i, opts)
+    save_out(ocr_dataset, iteration + 1, opts)
 
 
     stop = time.time()
@@ -382,13 +391,14 @@ if __name__ == "__main__":
     elif socket.gethostname() == "Galois":
         args = """
           --config ./config/default.yaml 
+          --start 53000
           --count 100000
           --renderer novel
           --output /media/EVO970/data/synthetic/french_bmd/ 
           --saved_hw_model_folder /media/data/1TB/datasets/s3/HWR/synthetic-data/python-package-resources/handwriting-models 
           --wikipedia 20220301.fr
           --saved_hw_model IAM
-          --hw_batch_size 64
+          --hw_batch_size 80    
           --workers 0
         """
     else:
