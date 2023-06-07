@@ -9,7 +9,7 @@ import random
 from docgen.pdf_edit import *
 from PIL import Image
 from textgen.unigram_dataset import Unigrams
-from docgen.rendertext.render_word import RenderWordFont
+from textgen.rendertext.render_word import RenderWordFont
 from hwgen.data.saved_handwriting_dataset import SavedHandwriting, SavedHandwritingRandomAuthor
 import numpy as np
 from docgen.utils import utils
@@ -25,7 +25,7 @@ from docgen.pdf_edit import convert_to_ocr_format
 import argparse
 from pathlib import Path
 import shlex
-from docgen.rendertext.render_word import RenderImageTextPair
+from textgen.rendertext.render_word import RenderImageTextPair
 from ast import literal_eval as make_tuple
 from docgen.render_doc import BoxFiller
 import logging

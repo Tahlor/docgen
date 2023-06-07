@@ -217,7 +217,7 @@ def filter_to_one_row(fields):
     return fields
 
 if __name__ == '__main__':
-    from docgen.content.table_from_faker import TableDataFromFaker
+    from textgen.table_from_faker import TableDataFromFaker
     functions = ["address",
                  "relationship",
                  "job",

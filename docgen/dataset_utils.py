@@ -268,8 +268,6 @@ def coco_dataset(dict_list, output_path):
                                         "id": ann_id_counter,
                                         "category_id": categories[localization_level]["id"],
                     }
-                    # if 'text_decode_vocab' in box:
-                    #     out_dict['text_decode_vocab'] = box['text_decode_vocab']
                     annotations.append(out_dict)
                     ann_id_counter+=1
 

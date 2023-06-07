@@ -49,7 +49,7 @@ class LayoutDataset(Dataset):
 
 if __name__ == "__main__":
     from textgen.unigram_dataset import Unigrams
-    from docgen.rendertext.render_word import RenderImageTextPair
+    from textgen.rendertext.render_word import RenderImageTextPair
     from docgen.layoutgen.layoutgen import LayoutGenerator
 
     HWR_FILES = None # folder with handwriting .npy files

@@ -26,7 +26,7 @@ from docgen.layoutgen.layoutgen import LayoutGenerator, SectionTemplate
 #from docgen.layoutgen.layoutgen import *
 from hwgen.data.saved_handwriting_dataset import SavedHandwriting, SavedHandwritingRandomAuthor
 from textgen.unigram_dataset import Unigrams
-from docgen.rendertext.render_word import RenderImageTextPair
+from textgen.rendertext.render_word import RenderImageTextPair
 from pathlib import Path
 from docgen.dataset_utils import load_and_draw_and_display, save_json, ocr_dataset_to_coco
 from docgen.degradation.degrade import degradation_function_composition2
