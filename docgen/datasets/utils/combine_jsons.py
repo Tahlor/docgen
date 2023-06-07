@@ -1,3 +1,4 @@
+import shutil
 import socket
 import sys
 import shlex
@@ -24,7 +25,7 @@ class FindJSONS:
         self.text_dict = {}
         self.coco_dict = {}
         self.ocr_dict = {}
-        self.max_json_count = self.args.json_count
+        self.max_json_count = self.args.max_json_count
         self.write_mode = "w" if self.args.overwrite else "a"
         self.skip_coco = self.args.skip_coco
         self.skip_text = self.args.skip_text
@@ -34,6 +35,11 @@ class FindJSONS:
         self.overwrite = self.args.overwrite
         self.check_outputs()
         self.skip_no_number = True # skip file if no idx number, assumed to be aggregate
+        self.all_json_paths = []
+        self.move_files_when_done_folder = self.args.input_folder / "singles"
+        self.move_files_when_done_folder.mkdir(exist_ok=True)
+
+
     def check_outputs(self):
         if not self.overwrite:
             for v in self.variants:
@@ -47,13 +53,15 @@ class FindJSONS:
         parser.add_argument("--input_npy_folder", help="Path to the folder containing the input NPY files",
                             default=None, type=Path)
         parser.add_argument("--output_folder", default=None, help="Folder to save the JSON files", type=Path)
-        parser.add_argument("--json_count", type=int, default=None, help="Maximum number of files to process")
+        parser.add_argument("--max_json_count", type=int, default=None, help="Maximum number of files to process")
         parser.add_argument("--overwrite", action="store_true",
                             help="")
         parser.add_argument("--skip_coco", action="store_true", help="Skip COCO JSON files")
         parser.add_argument("--skip_text", action="store_true", help="Skip TEXT JSON files")
         parser.add_argument("--skip_ocr", action="store_true", help="Skip OCR JSON files")
         parser.add_argument("--save_npy", action="store_true", help="Save the numpy arrays")
+        parser.add_argument("--move_files_when_done", action="store_true", help="Move the original jsons to input/singles")
+
 
         if args is None:
             args = parser.parse_args()
@@ -65,6 +73,7 @@ class FindJSONS:
 
         if args.output_folder is None:
             args.output_folder = args.input_folder
+
         return args
 
     def append_dicts(self, memory_labels, json_data, coco=False):
@@ -103,6 +112,7 @@ class FindJSONS:
             file_count += 1
 
             file_path = Path(os.path.join(self.args.input_folder, file))
+            self.all_json_paths.append(file_path)
             with open(file_path, "r") as f:
                 data = json.load(f)
 
@@ -159,6 +169,15 @@ class FindJSONS:
         if not self.skip_text and self.text_dict:
             self.save_json(self.text_dict, self.args.output_folder / f"TEXT.json")
 
+    def move_files_when_done(self):
+        logger.info("Moving files to done folder")
+        for file in tqdm(self.all_json_paths):
+            if file.exists():
+                shutil.move(file, self.move_files_when_done_folder)
+            else:
+                logger.info(f"File {file} does not exist, skipping")
+
+
     def main(self):
         Path(self.args.output_folder).mkdir(exist_ok=True, parents=True)
         if self.args.input_npy_folder:
@@ -170,6 +189,10 @@ class FindJSONS:
             self.create_aggregate_npy_files()
 
         self.create_aggregate_jsons()
+        if self.args.move_files_when_done:
+            self.move_files_when_done()
+
+
 
 
 if __name__ == "__main__":
@@ -181,13 +204,9 @@ if __name__ == "__main__":
         args = f""" {input_folder} --output_folder . --overwrite
         """
     elif socket.gethostname() == "Galois":
-<<<<<<< HEAD
         input_folder = f"/media/EVO970/data/synthetic/french_bmd_0092/singles"
         args =f"{input_folder} --output_folder . --overwrite --save_npy"
-=======
-        args = """/media/EVO970/data/synthetic/french_bmd_0092/ --output_folder . --overwrite --save_npy"""
-    
->>>>>>> 20653919ea8ca5ac368766594a6e50a73b6ce184
+
     if sys.argv[1:]:
         args = None
 
