@@ -16,6 +16,11 @@ def parser_args(args=None):
 
     parser.add_argument('--ocr_json_path', type=str, required=True,
                         help='The COCO format file')
+    parser.add_argument('--reencode_ocr', action='store_true', default=False, help='Recode the OCR data')
+    parser.add_argument('--rebuild_coco', action='store_true', default=False,
+                        help='Rebuild COCO json without WORD level data')
+    parser.add_argument('--rebuild_coco_word', action='store_true', default=False,
+                        help='Rebuild COCO json with ONLY WORD level data')
 
     if args is not None:
         import shlex
@@ -46,27 +51,34 @@ def main(args=None):
     ocr = load_json(args.ocr_json_path)
 
     # re-encode OCR
-    new_path = args.ocr_json_path.replace("OCR", "OCR_NEW")
-    logger.info(f"Saving to {new_path}")
-    save_json(new_path, ocr)
+    if args.reencode_ocr:
+        new_path = args.ocr_json_path.replace("OCR", "OCR_NEW")
+        logger.info(f"Saving to {new_path}")
+        save_json(new_path, ocr)
 
     # save
-    coco = ocr_dataset_to_coco(ocr, exclude_cats="word")
-    output_path = args.ocr_json_path.replace("OCR", "COCO_NEW")
-    logger.info(f"Saving to {output_path}")
-    save_json(output_path, coco)
+    if args.rebuild_coco:
+        coco = ocr_dataset_to_coco(ocr, exclude_cats="word")
+        output_path = args.ocr_json_path.replace("OCR", "COCO_NEW")
+        logger.info(f"Saving to {output_path}")
+        save_json(output_path, coco)
 
     # save only word cats
-    coco = ocr_dataset_to_coco(ocr, exclude_cats=["section", "paragraph", "line", "margin_note", "paragraph_note", "page_title", "page_header"])
-    output_path = args.ocr_json_path.replace("OCR", "COCO_WORD_ONLY")
-    logger.info(f"Saving to {output_path}")
-    save_json(output_path, coco)
+    if args.rebuild_coco_word:
+        coco = ocr_dataset_to_coco(ocr, exclude_cats=["section", "paragraph", "line", "margin_note", "paragraph_note", "page_title", "page_header"])
+        output_path = args.ocr_json_path.replace("OCR", "COCO_WORD_ONLY")
+        logger.info(f"Saving to {output_path}")
+        save_json(output_path, coco)
 
 
 if __name__ == "__main__":
-    args = r"""--ocr_json_path 'G:\s3\synthetic_data\FRENCH_BMD\FRENCH_BMD_LAYOUTv2.1.0\singles\OCR_1000.json' """
-    args = r"""--ocr_json_path 'G:\s3\synthetic_data\FRENCH_BMD\FRENCH_BMD_LAYOUTv2.1.0\OCR.json' """
-
+    args = r"""--ocr_json_path 'G:\s3\synthetic_data\FRENCH_BMD\FRENCH_BMD_LAYOUTv2.1.0\singles\OCR_1000.json' 
+            --rebuild_coco_word --rebuild_coco  
+            """
+    #args = r"""--ocr_json_path 'G:\s3\synthetic_data\FRENCH_BMD\FRENCH_BMD_LAYOUTv2.1.0\OCR.json' """
+    args = r"""--ocr_json_path '/media/EVO970/data/synthetic_data/french_bmd_0005/OCR.json' 
+                --rebuild_coco_word  
+                """
     args = args.replace("\n","")
     if not args or len(sys.argv) > 1:
         args = sys.argv[1:]
