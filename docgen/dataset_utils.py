@@ -33,17 +33,45 @@ class JSONEncoder(json.JSONEncoder):
 
     def default(self, obj):
         if hasattr(obj, "toJSON"):
-            return super().encode(obj.toJSON())
+            #return super().encode(obj.toJSON()) # this encodes 2x, e.g. (1,2,3,4) -> "[1,2,3,4]" -> '"[1,2,3,4]"'
+            return obj.toJSON()
+
         # WindowsPath
         elif isinstance(obj, Path):
-            return super().encode(str(obj))
-        #return super().encode(obj)
+            return str(obj)
+            #return super().encode(obj)
+
         return json.JSONEncoder.default(self, obj)
+
+class CustomDecoder(json.JSONDecoder):
+    """ Some of the early OCR JSONs encoded bbox's wrong, this will load them
+
+        # Example usage
+        json_data = '{"bbox": "[1,2,3]", "foo": "bar"}'
+        decoded = json.loads(json_data, cls=CustomDecoder)
+
+        print(decoded)  # Outputs: {'bbox': [1, 2, 3], 'foo': 'bar'}
+
+    """
+    def decode(self, s):
+        result = super().decode(s)
+        return self._decode(result)
+
+    def _decode(self, data):
+        if isinstance(data, str):
+            return data
+        elif isinstance(data, list):
+            return [self._decode(v) for v in data]
+        elif isinstance(data, dict):
+            if "bbox" in data and isinstance(data["bbox"], str):
+                data["bbox"] = json.loads(data["bbox"])
+            return {k: self._decode(v) for k, v in data.items()}
+        return data
 
 
 def load_json(path):
     with Path(path).open() as ff:
-        ocr = json.load(ff)
+        ocr = json.load(ff, cls=CustomDecoder)
     return ocr
 
 def save_json(path, arr):
@@ -73,7 +101,7 @@ def delete_extra_images(path):
 def ocr_dataset_to_coco(ocr_dict,
                         data_set_name="Synthetic Forms - Pre-alpha Release",
                         bbox_format_input:Literal['XYXY', 'XYWH']="XYXY",
-                        use_fine_grained_paragraph_categories:bool=True,
+                        use_fine_grained_paragraph_descriptions:bool=True,
                         exclude_cats=None):
     """
 
@@ -81,7 +109,7 @@ def ocr_dataset_to_coco(ocr_dict,
         ocr_dict:
         data_set_name:
         bbox_format_input:
-        use_fine_grained_paragraph_categories (bool): instead of outputting broad "paragraph" category,
+        use_fine_grained_paragraph_descriptions (bool): instead of outputting broad "paragraph" category,
                                 will output "paragraph","margin_note","page_title","paragraph_note", etc.
 
     Returns:
@@ -115,7 +143,19 @@ def ocr_dataset_to_coco(ocr_dict,
 
     category_id_counter = max([item["id"] for key, item in categories.items()])
 
-    def process_item(ocr_dict, img_idx, category, segmentation=[]):
+    def process_item(ocr_dict, img_idx, category, segmentation=[], info_dict=None):
+        """
+
+        Args:
+            ocr_dict:
+            img_idx:
+            category:
+            segmentation:
+            info_dict: other information to add to this annotation from parent
+
+        Returns:
+
+        """
         nonlocal ann_id_counter, categories, category_id_counter
 
         # add new categories as found
@@ -134,6 +174,8 @@ def ocr_dataset_to_coco(ocr_dict,
             "category_id": category_id,
             "segmentation": to_list(segmentation),
         }
+        if info_dict:
+            item.update(info_dict)
 
         ann_id_counter += 1
         if "text" in ocr_dict:
@@ -142,24 +184,36 @@ def ocr_dataset_to_coco(ocr_dict,
                 item["text_decode_vocab"] = ocr_dict["text_decode_vocab"]
         return item
 
-    def nested(img_id, dict, keyword):
+    def nested(img_id, dict, keyword, info_dict_for_children=None):
+        """
+
+        Args:
+            img_id:
+            dict:
+            keyword:
+            parent_section_description: page_header, margin_note, title, etc.
+
+        Returns:
+
+        """
         level = hierarchy.index(keyword)
         segmentation_list = []
         items = dict[keyword+"s"] # NOTE: the OCR dataset is hierarchal, uses a list of paragraphs
         category = keyword
 
-        if use_fine_grained_paragraph_categories and "category" in dict:
+        if use_fine_grained_paragraph_descriptions and "category" in dict:
             category = dict["category"]
+            info_dict_for_children = {"root":category}
 
         if items:
-            for item in items:
+            for i, item in enumerate(items):
                 if level < len(hierarchy) - 1:
-                    child_seg, child_seg_list = nested(img_id, item, hierarchy[level+1])
+                    child_seg, child_seg_list = nested(img_id, item, hierarchy[level+1], info_dict_for_children=info_dict_for_children)
                 else:
                     child_seg = child_seg_list = [BBox.box_4pt(to_xyxy(item["bbox"]))]
 
 
-                annotation = process_item(item, img_id, category=category, segmentation=child_seg_list)
+                annotation = process_item(item, img_id, category=category, segmentation=child_seg_list, info_dict=info_dict_for_children)
 
                 # Including every word massively inflates the COCO dataset size
                 if not (exclude_cats and category in exclude_cats):
@@ -376,6 +430,7 @@ def draw_boxes_sections_COCO(coco_format,
                 if draw_segmentations:
                     for segment in annotation["segmentation"]:
                         BBox.draw_segmentation(segment, background_img, color=color)
+
     return background_img
 
 
@@ -576,6 +631,14 @@ def fix_coords(coco_dict):
         ann["bbox"] = BBox("ul", ann["bbox"]).get_XYWH()
 
 def add_ids_to_json(coco):
+    """ A post-processing function if you forgot to add ids to a COCO json
+
+    Args:
+        coco:
+
+    Returns:
+
+    """
     coco_dict = load_json(coco)
     categories = {
         "section": {'supercategory': 'section', 'id': 1, 'name': 'section'},

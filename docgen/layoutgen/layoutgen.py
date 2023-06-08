@@ -14,7 +14,7 @@ from docgen.dataset_utils import ocr_dataset_to_coco
 from PIL import Image
 
 from docgen.bbox import BBox
-from docgen.render_doc import fill_area_with_words, composite_images2, BoxFiller
+from docgen.render_doc import fill_area_with_words, composite_images_PIL, BoxFiller
 from docgen.utils.utils import display
 from docgen.render_doc import convert_to_ocr_format
 
@@ -790,7 +790,7 @@ class LayoutGenerator:
                 styles = box_dict["styles"]
 
 
-            composite_images2(background_image, image, doc_box.bbox_writable[0:2])
+            composite_images_PIL(background_image, image, doc_box.bbox_writable[0:2])
             doc_box.bbox_list = localization
 
         else:

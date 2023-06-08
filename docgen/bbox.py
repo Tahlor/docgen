@@ -1,3 +1,4 @@
+import random
 import sys
 if sys.version_info >= (3, 8):
     from typing import Literal
@@ -152,6 +153,90 @@ class BBox:
                 return self._change_origin(self._bbox, self.height_ll)
             else:
                 return self._bbox
+
+    def intersects(self, other_box):
+        return self._intersects(self, other_box)
+
+    @staticmethod
+    def _intersects(a,b):
+        """Check if two bounding boxes intersect.
+
+        Args:
+            other (BBox): another bounding box to check for intersection
+
+        Returns:
+            bool: True if the bounding boxes intersect, False otherwise
+        """
+        a = a._bbox
+        b = b._bbox
+
+        # a is to the right of b
+        if a[0] > b[2]:
+            return False
+
+        # a is to the left of b
+        if a[2] < b[0]:
+            return False
+
+        # a is above b
+        if a[1] > b[3]:
+            return False
+
+        # a is below b
+        if a[3] < b[1]:
+            return False
+
+        # bounding boxes intersect
+        return True
+
+    def random_subbox(self, min_size_x=None, min_size_y=None, max_size_x=None, max_size_y=None):
+        min_size_x, min_size_y, max_size_x, max_size_y = \
+            self.validate_sizes(min_size_x, min_size_y, max_size_x, max_size_y)
+
+        # Get the random sizes of the subbox within min and max size limit
+        random_subbox_width = random.randint(min_size_x, max_size_x)
+        random_subbox_height = random.randint(min_size_y, max_size_y)
+
+        # Get the random start point (upper left corner of the subbox)
+        # such that the whole subbox fits into the original bbox
+        x1 = random.randint(self._bbox[0], self._bbox[2] - random_subbox_width)
+        y1 = random.randint(self._bbox[1], self._bbox[3] - random_subbox_height)
+
+        # Calculate the lower right corner of the subbox
+        x2 = x1 + random_subbox_width
+        y2 = y1 + random_subbox_height
+
+        # Create and return the new subbox as a BBox object
+        return BBox(self.origin, (x1, y1, x2, y2), format=self.format)
+
+    def validate_sizes(self, min_size_x, min_size_y, max_size_x, max_size_y):
+        width, height = self._get_width(self._bbox), self._get_height(self._bbox)
+        if min_size_x is None:
+            min_size_x = 0
+        if min_size_y is None:
+            min_size_y = 0
+        if max_size_x is None:
+            max_size_x = width
+        if max_size_y is None:
+            max_size_y = height
+        if max_size_x > width:
+            warnings.warn("The max_size_x is bigger than the width of the original bounding box.")
+            max_size_x = width
+
+        if max_size_y > height:
+            warnings.warn("The max_size_y is bigger than the height of the original bounding box.")
+            max_size_y = height
+
+        if min_size_x > max_size_x:
+            warnings.warn(
+                "The min_size_x is greater than the max_size_x. Adjusting the min_size_x to match the max_size_x.")
+            min_size_x = max_size_x
+
+        if min_size_y > max_size_y:
+            warnings.warn(
+                "The min_size_y is greater than the max_size_y. Adjusting the min_size_y to match the max_size_y.")
+            min_size_y = max_size_y
+        return min_size_x, min_size_y, max_size_x, max_size_y
 
     @property
     def bbox(self):

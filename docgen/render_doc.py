@@ -29,7 +29,7 @@ from collections.abc import Iterator
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("root")
 
-def composite_images(background_image, paste_image, position):
+def composite_images_numpy(background_image, paste_image, position):
     """
     Args:
         background_image:
@@ -63,10 +63,10 @@ def composite_images(background_image, paste_image, position):
 
     return background_image
 
-def composite_images2(background:Union[Image.Image, np.ndarray],
-                      paste:Union[Image.Image, np.ndarray],
-                      pos,
-                      offset=(0,0)):
+def composite_images_PIL(background:Union[Image.Image, np.ndarray],
+                         paste:Union[Image.Image, np.ndarray],
+                         pos,
+                         offset=(0,0)):
     """
 
     Args:
@@ -153,8 +153,10 @@ def estimate_space(word_imgs, vertical_space, horizontal_space):
 def identity(x):
     return x
 def np_img_to_pil(x):
-    return Image.fromarray((x.squeeze() * 255).astype(np.uint8))
-
+    if np.max(x) <= 1:
+        return Image.fromarray((x.squeeze() * 255).astype(np.uint8))
+    else:
+        return Image.fromarray(x.squeeze())
 def shape(item):
     """
     Args:
@@ -424,7 +426,7 @@ class BoxFiller:
 
     def convert_img_format(self, img):
         if self.word_img_format == "auto":
-            if isinstance(img, np.ndarray) and np.max(img) <= 1:
+            if isinstance(img, np.ndarray):
                 return np_img_to_pil(img)
             else:
                 return img
@@ -461,8 +463,7 @@ class BoxFiller:
         else:
             decimal_percent = self.size_variation_gen() * to_font_size_factor
         self.last_word_img = self.rescale(img, decimal_percent)
-        return {"img":self.last_word_img,
-                "text":self.last_word_text}
+        return self.last_word_img,self.last_word_text
 
     def rescale(self, img, decimal_percent):
         """ Rescale an image
@@ -494,6 +495,7 @@ class BoxFiller:
               word_img_gen=None,
               text_gen=None,
               error_mode=None,
+              font_size_override=None
               ):
         """ Reset the BoxFiller object, usually done for each new box
 
@@ -530,7 +532,9 @@ class BoxFiller:
                 self.random_word_idx = False
             self.img_text_pair_gen, self.word_img_gen, self.text_gen = self.setup_content_gen(img_text_pair_gen, word_img_gen, text_gen)
 
-        if hasattr_not_none(self.bbox, "font_size"):
+        if font_size_override:
+            self.font_size = font_size_override
+        elif hasattr_not_none(self.bbox, "font_size"):
             self.font_size = self.bbox.font_size
         else:
             self.font_size = self.default_font_size
@@ -614,6 +618,14 @@ class BoxFiller:
         self.starting_x1 = abs(self.starting_x1)
         self.horizontal_space_min_max = (.2, .6)
         self.vertical_space_min_max = (self.vert_space_min_gen(), self.vert_space_max_gen())
+
+    def reset_word_variation(self):
+        """ Randomize font size between words
+
+        Returns:
+
+        """
+        pass
 
 
     def gen_valid_vertical_offset(self, x1, word_height):
@@ -820,7 +832,12 @@ class BoxFiller:
                 "styles":self.styles
                 }
 
-    def randomly_fill_box_with_words(self, bbox, *args, **kwargs):
+    def randomly_fill_box_with_words(self, bbox,
+                                     allow_overlap=True,
+                                     max_tries=2,
+                                     font_size_override_range=None,
+                                     *args,
+                                     **kwargs):
         """ Fill a box with words, randomly rotating and scaling them, used for paragraph note boxes
 
         Args:
@@ -833,13 +850,17 @@ class BoxFiller:
         """
         self.reset(bbox, *args, **kwargs)
         self.words_attempted = 0
+        failures = 0
+
         while self.words_used < self.max_words and self.words_attempted < self.max_words*2:
+            if font_size_override_range:
+                self.font_size = random.randint(*font_size_override_range)
             self.words_attempted += 1
             next_word_img, next_word_text = self.get_word(self.input_word_idx)
-            new_angle = np.random.exponential(4) * np.random.choice([-1,1])
             # plt.hist(np.random.exponential(4, 1000)); plt.show()
             # Rotate the image by the angle
             if np.random.choice([True, False]):
+                new_angle = np.random.exponential(4) * np.random.choice([-1, 1])
                 next_word_img = next_word_img.rotate(new_angle, expand=True, fillcolor='white')
 
             # Generate a random position within the bounding box
@@ -851,8 +872,7 @@ class BoxFiller:
             if max_valid_x1 < 0 or max_valid_y1 < 0:
                 continue
 
-            self.bbox_list.append(
-                                BBox("ul",
+            new_bbox = BBox("ul",
                                        (x,
                                         y,
                                         x + width(next_word_img),
@@ -864,10 +884,17 @@ class BoxFiller:
                                        paragraph_index=self.paragraph_idx,
                                        img=next_word_img
                                        )
-            )
 
-            self.words_used += 1
-            self.line_word_idx += 1
+            if allow_overlap or not any(new_bbox.intersects(other_bbox) for other_bbox in self.bbox_list):
+                    self.bbox_list.append(
+                        new_bbox
+                    )
+                    self.words_used += 1
+                    self.line_word_idx += 1
+            else:
+                failures += 1
+                if failures >= max_tries:
+                    break
 
         self.paste_images()
 
@@ -885,7 +912,7 @@ class BoxFiller:
             bbox.offset_origin(offset_y=self.bbox[1],
                                 offset_x=self.bbox[0])
 
-            composite_images2(self.img, bbox.img, bbox, offset=self.paste_offset)
+            composite_images_PIL(self.img, bbox.img, bbox, offset=self.paste_offset)
             bbox.img = None # free up memory
 
 

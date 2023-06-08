@@ -1,4 +1,4 @@
-from docgen.layoutgen.segmentation_dataset.semantic_segmentation import SemanticSegmentationDataset
+from docgen.layoutgen.segmentation_dataset.semantic_segmentation import SemanticSegmentationDatasetImageFolder
 import torch
 import cv2
 from PIL import Image, ImageDraw

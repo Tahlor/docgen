@@ -74,6 +74,8 @@ def parser(args=None):
     parser.add_argument("--TESTING", action="store_true", help="Enable testing mode")
     parser.add_argument("--vocab", default=VOCABULARY, type=str, help="The list of vocab tokens to use")
     parser.add_argument("--exclude_chars", default="0123456789()+*;#:!/,.", type=str, help="Exclude these chars from the vocab")
+    parser.add_argument("--daemon_buffer_size", type=int, default=1000,
+                        help="How many batches to store in memory")
 
     if args is not None:
         import shlex
@@ -273,7 +275,7 @@ def main(opts):
                                    style=opts.saved_hw_model,
                                    )
 
-            daemon_iterator = WordIterator(render_text_pair_gen)
+            daemon_iterator = WordIterator(render_text_pair_gen, buffer_size=opts.daemon_buffer_size)
             render_text_pair = daemon_iterator.get_next_word_iterator()
             print("LOOPING")
             x = next(render_text_pair)
@@ -339,7 +341,7 @@ def main(opts):
     except Exception as e:
         print(f"Couldn't stop daemon, {e}")
 
-    save_out(ocr_dataset, iteration + 1, opts)
+    save_out(ocr_dataset, iteration, opts)
 
 
     stop = time.time()
@@ -386,6 +388,7 @@ if __name__ == "__main__":
           --saved_hw_model IAM
           --hw_batch_size 8
           --workers 0
+          --daemon_buffer_size 100
         """
 
     elif socket.gethostname() == "Galois":

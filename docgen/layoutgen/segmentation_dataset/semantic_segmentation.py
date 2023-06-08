@@ -1,4 +1,6 @@
 import os
+import sys
+
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 import numpy as np
 import random
@@ -67,18 +69,16 @@ class IdentityTransform:
         return x
 
 class SemanticSegmentationDataset(Dataset):
-    def __init__(self, img_dir,
+    def __init__(self,
                  transforms_before_mask_threshold=None,
                  transforms_after_mask_threshold=None,
                  threshold=.6,
                  overfit_dataset_length=0,
                  size=448,
                  ):
-        self.img_dir = img_dir
         self.transforms_before = transforms_before_mask_threshold
         self.transforms_after = transforms_after_mask_threshold
         self.threshold01 = threshold if threshold < 1 else threshold * 255
-        self.img_paths = self.get_images(img_dir)
         self.soft_mask = True
         self.overfit_dataset_length = overfit_dataset_length
 
@@ -98,22 +98,11 @@ class SemanticSegmentationDataset(Dataset):
                 #transforms.ToTensor()
             ])
 
-    def get_images(self, img_dir):
-        return [x for x in Path(img_dir).rglob("*.jpg")]
-
     def __len__(self):
         return len(self.img_paths)
 
     def __getitem__(self, idx):
-        if self.overfit_dataset_length > 0:
-            idx = idx % self.overfit_dataset_length
-        else:
-            idx = idx % len(self)
-
-        img_path = self.img_paths[idx]
-        #img = read_image(str(img_path))
-        # read in with pil optimized for pytorch
-        img = Image.open(img_path)
+        img = self.get_image(idx)
 
         if self.transforms_before:
             img = self.transforms_before(img)
@@ -137,14 +126,54 @@ class SemanticSegmentationDataset(Dataset):
         masks = [item['mask'] for item in batch]
         return {'image': torch.stack(images, dim=0), 'mask': torch.stack(masks, dim=0)}
 
+    def get_image(self, idx):
+        raise NotImplementedError()
+
+class SemanticSegmentationDatasetGenerative(SemanticSegmentationDataset):
+    def __init__(self,
+                 generator,
+                 *args,
+                 **kwargs):
+        super().__init__(*args, **kwargs)
+        self.generator = generator
+
+    def get_image(self, idx):
+        return self.generator.get()
+
+    def __len__(self):
+        return sys.maxsize
+
+class SemanticSegmentationDatasetImageFolder(SemanticSegmentationDataset):
+    def __init__(self, img_dir,
+                 *args,
+                 **kwargs):
+        super().__init__(*args, **kwargs)
+        self.img_dir = img_dir
+        self.img_paths = self.get_images(img_dir)
+
+    def get_images(self, img_dir):
+        return [x for x in Path(img_dir).rglob("*.jpg")]
+
+    def __len__(self):
+        return len(self.img_paths)
+
+    def get_image(self, idx):
+        if self.overfit_dataset_length > 0:
+            idx = idx % self.overfit_dataset_length
+        else:
+            idx = idx % len(self)
+
+        img_path = self.img_paths[idx]
+        img = Image.open(img_path)
+        return img
 
 class AggregateSemanticSegmentationDataset(Dataset):
-    def __init__(self, subdatasets:List[SemanticSegmentationDataset],
+    def __init__(self, subdatasets:List[SemanticSegmentationDatasetImageFolder],
                  background_img_properties=None,
                  overfit_dataset_length=0,
                  random_origin_composition=True,
                  mask_default_value=0,
-                 img_default_value=1,):
+                 img_default_value=1, ):
         """
 
         Args:
@@ -343,13 +372,24 @@ class AggregateSemanticSegmentationDataset(Dataset):
 
 
 if __name__=="__main__":
-    reportlab = r"G:\s3\synthetic_data\reportlab\training\train"
-    hw = r"G:\s3\synthetic_data\multiparagraph"
-    dataset1 = SemanticSegmentationDataset(img_dir=reportlab)
-    dataset2 = SemanticSegmentationDataset(img_dir=hw)
+    from docgen.layoutgen.segmentation_dataset.hw_gen import HWGenerator, PrintedTextGenerator
+
+    # image folder version
+    # reportlab = r"G:\s3\synthetic_data\reportlab\training\train"
+    # hw = r"G:\s3\synthetic_data\multiparagraph"
+    #dataset1 = SemanticSegmentationDatasetImageFolder(img_dir=reportlab)
+    #dataset2 = SemanticSegmentationDatasetImageFolder(img_dir=hw)
+
+    # generated version
+    hw_generator = HWGenerator()
+    printed_text_generator = PrintedTextGenerator()
+    dataset1 = SemanticSegmentationDatasetGenerative(hw_generator)
+    dataset2 = SemanticSegmentationDatasetGenerative(printed_text_generator)
+
     aggregate_dataset = AggregateSemanticSegmentationDataset([dataset1, dataset2],
                                                              background_img_properties='max',
                                                              )
+
     dataloader = torch.utils.data.DataLoader(aggregate_dataset, batch_size=2, collate_fn=aggregate_dataset.collate_fn)
     for batch in dataloader:
         print(batch['image'].shape)
