@@ -23,7 +23,7 @@ class CustomImageDraw(ImageDraw.ImageDraw):
             outline = 'black'
 
         if colors is None:
-            colors = [random.randint(0, 255) for _ in range(4)]
+            colors = [random.randint(0, 100) for _ in range(4)]
 
         if thicknesses is None:
             #thicknesses = [random.randint(1, self.max_line_thickness) for _ in range(4)]

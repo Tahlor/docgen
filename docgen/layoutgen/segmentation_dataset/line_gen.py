@@ -14,7 +14,7 @@ from docgen.layoutgen.segmentation_dataset.gen import Gen
 
 
 class LineGenerator(Gen):
-    def __init__(self, size=(448, 448), shape_count_range=(1, 10), line_thickness_range=(1, 5)):
+    def __init__(self, size=(448, 448), shape_count_range=(2, 5), line_thickness_range=(1, 5)):
         super().__init__()
         self.size = size
         self.shape_count_range = shape_count_range
@@ -24,6 +24,26 @@ class LineGenerator(Gen):
         start_point = np.random.randint(0, self.size[0]), np.random.randint(0, self.size[1])
         end_point = np.random.randint(0, self.size[0]), np.random.randint(0, self.size[1])
         line_thickness = np.random.randint(*self.line_thickness_range)
+        return {"xy": (start_point, end_point), "width": line_thickness}
+
+    def _random_line(self, pixel_offset=8):
+        orientation = np.random.choice(['horizontal', 'vertical'])
+
+        if orientation == 'horizontal':
+            # For nearly horizontal lines, keep the y-coordinates close
+            y = np.random.randint(0, self.size[1])
+            y_offset = np.random.randint(-pixel_offset, pixel_offset)  # This controls how "nearly" horizontal the line is
+            start_point = np.random.randint(0, self.size[0]), y
+            end_point = np.random.randint(0, self.size[0]), y + y_offset
+        else:
+            # For nearly vertical lines, keep the x-coordinates close
+            x = np.random.randint(0, self.size[0])
+            x_offset = np.random.randint(-pixel_offset, pixel_offset)  # This controls how "nearly" vertical the line is
+            start_point = x, np.random.randint(0, self.size[1])
+            end_point = x + x_offset, np.random.randint(0, self.size[1])
+
+        line_thickness = np.random.randint(*self.line_thickness_range)
+
         return {"xy": (start_point, end_point), "width": line_thickness}
 
     def draw_alias(self):
@@ -49,9 +69,8 @@ class LineGenerator(Gen):
 
 def test_random_line_dataset():
     dataset = LineGenerator()
-    for i in range(10):
-        sample = dataset[i]
-        img = Image.fromarray(sample['image'].numpy().astype('uint8'), 'RGB')
+    for i in range(3):
+        img = dataset[i]
         img.show()
 
 

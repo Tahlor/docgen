@@ -74,11 +74,13 @@ class SemanticSegmentationDataset(Dataset):
                  threshold=.6,
                  overfit_dataset_length=0,
                  size=448,
+                 soft_mask=True
                  ):
+        # if threshold is None, just use the pixel intensity as labellogit
         self.transforms_before = transforms_before_mask_threshold
         self.transforms_after = transforms_after_mask_threshold
         self.threshold01 = threshold if threshold < 1 else threshold * 255
-        self.soft_mask = True
+        self.soft_mask = soft_mask
         self.overfit_dataset_length = overfit_dataset_length
 
         # Default transformations before thresholding
@@ -113,7 +115,8 @@ class SemanticSegmentationDataset(Dataset):
             bw_img = img[0]
 
         if self.soft_mask:
-            mask = torch.where(bw_img < self.threshold01, 1 - bw_img, torch.tensor(0))
+            #mask = torch.where(bw_img < self.threshold01, 1 - bw_img, torch.tensor(0))
+            mask = 1.0 - bw_img
         else:
             mask = torch.where(bw_img < self.threshold01, torch.tensor(1), torch.tensor(0))
 
@@ -480,6 +483,7 @@ if __name__=="__main__":
 
     aggregate_dataset = AggregateSemanticSegmentationDataset([form_dataset, hw_dataset, printed_dataset],
                                                              background_img_properties='max',
+
                                                              )
 
     dataloader = torch.utils.data.DataLoader(aggregate_dataset, batch_size=2, collate_fn=aggregate_dataset.collate_fn)
