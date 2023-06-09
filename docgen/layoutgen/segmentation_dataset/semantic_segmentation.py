@@ -1,3 +1,4 @@
+import socket
 import os
 import sys
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
@@ -123,7 +124,8 @@ class SemanticSegmentationDataset(Dataset):
 
         return sample
 
-    def collate_fn(self, batch):
+    @staticmethod
+    def collate_fn(batch):
         images = [item['image'] for item in batch]
         masks = [item['mask'] for item in batch]
         return {'image': torch.stack(images, dim=0), 'mask': torch.stack(masks, dim=0)}
@@ -447,15 +449,23 @@ if __name__=="__main__":
     from docgen.layoutgen.segmentation_dataset.line_gen import LineGenerator
     from docgen.layoutgen.segmentation_dataset.box_gen import BoxGenerator
 
+    if socket.gethostname() == "PW01AYJG":
+        saved_fonts_folder = Path(r"G:/s3/synthetic_data/resources/fonts")
+        saved_hw_folder = Path("C:/Users/tarchibald/Anaconda3/envs/docgen_windows/hwgen/resources/generated")
+    elif socket.gethostname() == "Galois":
+        saved_fonts_folder = Path("/media/EVO970/s3/datascience-computervision-l3apps/HWR/synthetic-data/python-package-resources/fonts/")
+        saved_hw_folder = Path("/media/EVO970/s3/synthetic_data/python-package-resources/generated-handwriting/single-word-datasets/iam-cvl-32px-top10k-words")
+
+
     # image folder version
     # reportlab = r"G:\s3\synthetic_data\reportlab\training\train"
     # hw = r"G:\s3\synthetic_data\multiparagraph"
-    #dataset1 = SemanticSegmentationDatasetImageFolder(img_dir=reportlab)
-    #dataset2 = SemanticSegmentationDatasetImageFolder(img_dir=hw)
+    # dataset1 = SemanticSegmentationDatasetImageFolder(img_dir=reportlab)
+    # dataset2 = SemanticSegmentationDatasetImageFolder(img_dir=hw)
 
     # generated version
-    hw_generator = HWGenerator()
-    printed_text_generator = PrintedTextGenerator()
+    hw_generator = HWGenerator(saved_hw_folder=saved_hw_folder)
+    printed_text_generator = PrintedTextGenerator(saved_fonts_folder=saved_fonts_folder)
 
     grid_generator = GridGenerator()
     line_generator = LineGenerator()
@@ -474,21 +484,24 @@ if __name__=="__main__":
 
     dataloader = torch.utils.data.DataLoader(aggregate_dataset, batch_size=2, collate_fn=aggregate_dataset.collate_fn)
 
-    for batch in dataloader:
+    for i, batch in enumerate(dataloader):
         print(batch['image'].shape)
         print(batch['mask'].shape)
         # show images
-        for i in range(batch['image'].shape[0]):
-            img = batch['image'][i]
-            mask = batch['mask'][i]
+        for j in range(batch['image'].shape[0]):
+            img = batch['image'][j]
+            mask = batch['mask'][j]
 
             img_pil = transforms.ToPILImage()(img)
             mask_pil1 = transforms.ToPILImage()(mask[0])
             mask_pil2 = transforms.ToPILImage()(mask[1])
-            img_pil.show()
-            mask_pil1.show()
-            mask_pil2.show()
+
+        if i > 15:
             break
-        break
+        #     img_pil.show()
+        #     mask_pil1.show()
+        #     mask_pil2.show()
+        #     break
+        # break
 
 
