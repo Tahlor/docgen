@@ -1,4 +1,4 @@
-from docgen.layoutgen.segmentation_dataset.hw_gen import *
+from docgen.layoutgen.segmentation_dataset.word_gen import *
 class PrintedTextGenerator:
 
     def get(self, img_size=None):

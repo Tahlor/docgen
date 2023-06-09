@@ -1,10 +1,11 @@
 import random
 from PIL import Image, ImageDraw, ImageFont
-
+import numpy as np
 class CustomImageDraw(ImageDraw.ImageDraw):
     def __init__(self, *args, max_line_thickness=5, **kwargs):
         super().__init__(*args, **kwargs)
         self.max_line_thickness = max_line_thickness
+        self.thickness_generator = RandomGenerator(values = [1, 2, 3, 4], weights = [50, 25, 12, 6])
 
     def rectangle(self, xy, fill=None, outline=None, *, styles=None, colors=None, thicknesses=None):
         """
@@ -25,12 +26,19 @@ class CustomImageDraw(ImageDraw.ImageDraw):
             colors = [random.randint(0, 255) for _ in range(4)]
 
         if thicknesses is None:
-            thicknesses = [random.randint(1, self.max_line_thickness) for _ in range(4)]
+            #thicknesses = [random.randint(1, self.max_line_thickness) for _ in range(4)]
+            thicknesses = [self.thickness_generator() for _ in range(4)]
 
         if fill is not None:
             super().rectangle(xy, fill=fill)
 
-        x1, y1, x2, y2 = xy
+        if len(xy) == 4:
+            x1, y1, x2, y2 = xy
+        elif len(xy) == 2:
+            (x1, y1), (x2, y2) = xy
+        else:
+            raise ValueError("Invalid xy parameter")
+
         all_points = [(x1, y1), (x2, y1), (x2, y2), (x1, y2)]
 
         for line_idx in range(4):
@@ -51,3 +59,13 @@ class CustomImageDraw(ImageDraw.ImageDraw):
                 y2 -= (thicknesses[(line_idx+1) % 4]-1) // 2
 
             self.line([(x1, y1), (x2, y2)], fill=colors[line_idx], width=thicknesses[line_idx])
+
+class RandomGenerator:
+    def __init__(self, values, weights):
+        self.values = values
+        self.weights = weights
+    def get(self):
+        return np.random.choice(self.values, p=np.array(self.weights) / np.sum(self.weights))
+
+    def __call__(self, *args, **kwargs):
+        return self.get()

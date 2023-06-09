@@ -1,14 +1,11 @@
 import os
 import sys
-
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 import numpy as np
 import random
 from pathlib import Path
-
 import matplotlib.pyplot as plt
 import torch
-from torch.utils.data import Dataset
 from torch.utils.data import Dataset
 from torchvision import transforms
 from torchvision.io import read_image
@@ -16,6 +13,7 @@ from typing import List, Optional, Tuple, Union
 from PIL import Image
 from torchvision.transforms import ToPILImage
 from typing import List, Optional, Tuple, Union, Literal, Callable
+from docgen.layoutgen.layoutgen import composite_images_PIL
 
 to_pil = ToPILImage()
 """
@@ -108,7 +106,11 @@ class SemanticSegmentationDataset(Dataset):
             img = self.transforms_before(img)
 
         # convert to grayscale using luminance
-        bw_img = img[0] * 0.2126 + img[1] * 0.7152 + img[2] * 0.0722
+        if img.shape[0] == 3:
+            bw_img = img[0] * 0.2126 + img[1] * 0.7152 + img[2] * 0.0722
+        else:
+            bw_img = img[0]
+
         if self.soft_mask:
             mask = torch.where(bw_img < self.threshold01, 1 - bw_img, torch.tensor(0))
         else:
@@ -167,20 +169,52 @@ class SemanticSegmentationDatasetImageFolder(SemanticSegmentationDataset):
         img = Image.open(img_path)
         return img
 
+
+import random
+
+
+def conservative_random_offset(bck_w, bck_h, img_w, img_h, ):
+    if bck_w > img_w and bck_h > img_h:
+        start_x = random.randint(0, bck_w - img_w)
+        start_y = random.randint(0, bck_h - img_h)
+    else: # image is larger than background in at least one dimension
+        start_x = random.randint(-img_w // 2, bck_w // 2)
+        start_y = random.randint(-img_h // 2, bck_h // 2)
+    return start_x, start_y
+
+
+import random
+
+def more_random_offset(bck_w, bck_h, img_w, img_h, percent=0.9):
+    # Calculate the maximum offset, based on the percentage
+    max_offset_x = max(0, int((bck_w - img_w) * percent))
+    max_offset_y = max(0, int((bck_h - img_h) * percent))
+
+    min_offset_x = -max(0,int(img_w*(1-percent)))
+    min_offset_y = -max(0,int(img_h *(1-percent)))
+
+    # The start_x value can now be negative
+    start_x = random.randint(min_offset_x, bck_w - img_w)
+    start_y = random.randint(min_offset_y, bck_h - img_h)
+
+    return start_x, start_y
+
+
 class AggregateSemanticSegmentationDataset(Dataset):
     def __init__(self, subdatasets:List[SemanticSegmentationDatasetImageFolder],
                  background_img_properties=None,
                  overfit_dataset_length=0,
                  random_origin_composition=True,
                  mask_default_value=0,
-                 img_default_value=1, ):
+                 img_default_value=1,
+                 dataset_length=5000):
         """
 
         Args:
             subdatasets:
             background_img_properties: a size tuple, or the property of compositing images (use "min", "max")
             overfit_dataset_length:
-            random_origin_composition:
+            random_origin_composition (bool): randomize image composition
             mask_default_value (int): what value should the mask be by default
             img_default_value (int): if pasting on to a blank image, what value should it be by default
         """
@@ -190,11 +224,14 @@ class AggregateSemanticSegmentationDataset(Dataset):
         self.random_origin_composition = random_origin_composition
         self.mask_default_value = mask_default_value
         self.img_default_value = img_default_value
+        self.dataset_length = dataset_length
 
     def __len__(self):
-        return min(len(d) for d in self.subdatasets)
+        #return min(len(d) for d in self.subdatasets)
+        return self.dataset_length
 
-    def composite_the_images2(self, background_img, img, bckg_x, bckg_y):
+    @staticmethod
+    def composite_the_images_torch(background_img, img, bckg_x, bckg_y):
         # Shape of the composite_image
         bckg_h, bckg_w = background_img.shape[-2:]
         img_h, img_w = img.shape[-2:]
@@ -340,13 +377,10 @@ class AggregateSemanticSegmentationDataset(Dataset):
         for img, mask in zip(images, masks):
             if self.random_origin_composition:
                 # if bckg is bigger in both dimensions
-                if bckg_size[1] > img.shape[1] and bckg_size[0] > img.shape[0]:
-                    start_x = random.randint(0, bckg_size[-1] - img.shape[-1])
-                    start_y = random.randint(0, bckg_size[-2] - img.shape[-2])
-                else: # random paste
-                    start_x = random.randint(-img.shape[-1] // 2, bckg_size[-1] // 2)
-                    start_y = random.randint(-img.shape[-2] // 2, bckg_size[-2] // 2)
-
+                start_x, start_y = more_random_offset(composite_image.shape[-1],
+                                                      composite_image.shape[-2],
+                                                      img.shape[-1],
+                                                      img.shape[-2])
             else:
                 start_x = 0
                 start_y = 0
@@ -371,8 +405,47 @@ class AggregateSemanticSegmentationDataset(Dataset):
         return {'image': torch.stack(images, dim=0), 'mask': torch.stack(masks, dim=0)}
 
 
+class FlattenPILGenerators(torch.utils.data.Dataset):
+    """ Take several generating datasets and flatten the output into 1 image
+        ASSUMES PIL size formats
+    """
+    def __init__(self, datasets,
+                 img_size=(512,512),
+                 random_offset=True,
+                 color_scheme="L"):
+        self.datasets = datasets
+        self.random_offset = random_offset
+        self.img_size = img_size
+        self.color_scheme = color_scheme
+
+    def get(self):
+        # composite all images
+        img = Image.new(self.color_scheme, self.img_size, color='white')
+        for d in self.datasets:
+            overlay_img = d.get()
+            if self.random_offset:
+                offset = more_random_offset(img.size[0],img.size[1], overlay_img.size[0],overlay_img.size[1])
+            else:
+                offset = (0,0)
+            img = composite_images_PIL(img, overlay_img, pos=offset)
+        return img
+
+class FlattenDatasets(torch.utils.data.Dataset):
+    """ Take several generating datasets and flatten the output into 1 image
+        for TORCH
+    """
+    def __init__(self, datasets, random_offset=True):
+        self.datasets = datasets
+        self.random_offset = random_offset
+
+    def get(self):
+        raise NotImplementedError("Not implemented for torch yet")
+
 if __name__=="__main__":
-    from docgen.layoutgen.segmentation_dataset.hw_gen import HWGenerator, PrintedTextGenerator
+    from docgen.layoutgen.segmentation_dataset.word_gen import HWGenerator, PrintedTextGenerator
+    from docgen.layoutgen.segmentation_dataset.grid_gen import GridGenerator
+    from docgen.layoutgen.segmentation_dataset.line_gen import LineGenerator
+    from docgen.layoutgen.segmentation_dataset.box_gen import BoxGenerator
 
     # image folder version
     # reportlab = r"G:\s3\synthetic_data\reportlab\training\train"
@@ -383,14 +456,24 @@ if __name__=="__main__":
     # generated version
     hw_generator = HWGenerator()
     printed_text_generator = PrintedTextGenerator()
-    dataset1 = SemanticSegmentationDatasetGenerative(hw_generator)
-    dataset2 = SemanticSegmentationDatasetGenerative(printed_text_generator)
 
-    aggregate_dataset = AggregateSemanticSegmentationDataset([dataset1, dataset2],
+    grid_generator = GridGenerator()
+    line_generator = LineGenerator()
+    box_generator = BoxGenerator()
+
+    form_generator = FlattenPILGenerators([grid_generator, line_generator, box_generator])
+
+    # form elements
+    form_dataset = SemanticSegmentationDatasetGenerative(form_generator)
+    hw_dataset = SemanticSegmentationDatasetGenerative(hw_generator)
+    printed_dataset = SemanticSegmentationDatasetGenerative(printed_text_generator)
+
+    aggregate_dataset = AggregateSemanticSegmentationDataset([form_dataset, hw_dataset, printed_dataset],
                                                              background_img_properties='max',
                                                              )
 
     dataloader = torch.utils.data.DataLoader(aggregate_dataset, batch_size=2, collate_fn=aggregate_dataset.collate_fn)
+
     for batch in dataloader:
         print(batch['image'].shape)
         print(batch['mask'].shape)
