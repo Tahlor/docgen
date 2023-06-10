@@ -128,10 +128,32 @@ class SemanticSegmentationDataset(Dataset):
         return sample
 
     @staticmethod
-    def collate_fn(batch):
+    def collate_fn_simple(batch):
         images = [item['image'] for item in batch]
         masks = [item['mask'] for item in batch]
         return {'image': torch.stack(images, dim=0), 'mask': torch.stack(masks, dim=0)}
+
+    @staticmethod
+    def collate_fn(batch, no_tensor_keys=None):
+        """
+
+        Args:
+            batch:
+            no_tensor_keys: keys in dict that should be collated as a list instead of a tensor
+
+        Returns:
+            batch:
+
+        """
+        keys = batch[0].keys()
+        collated_batch = {}
+
+        for key in keys:
+            if no_tensor_keys and key in no_tensor_keys:
+                collated_batch[key] = [item[key] for item in batch]
+            else:
+                collated_batch[key] = torch.stack([item[key] for item in batch], dim=0)
+        return collated_batch
 
     def get_image(self, idx):
         raise NotImplementedError()
