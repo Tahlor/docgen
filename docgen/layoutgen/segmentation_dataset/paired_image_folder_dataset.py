@@ -11,17 +11,21 @@ logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
 
 class PairedImgLabelImageFolderDataset(Dataset):
-    def __init__(self, img_folder, label_folder=None, transform=None):
+    def __init__(self, img_dir,
+                 label_folder=None,
+                 transform=None,
+                 max_uniques=None):
         super().__init__()
         if label_folder is None:
-            label_folder = img_folder
-        self.imgs = sorted(Path(img_folder).glob("input*.png"))
+            label_folder = img_dir
+        self.max_uniques = max_uniques
+        self.imgs = sorted(Path(img_dir).glob("input*.png"))
         self.labels = sorted(Path(label_folder).glob("label*.png"))
 
         if len(self.imgs) != len(self.labels):
             logger.warning(f"Number of images {len(self.imgs)} does not match number of labels {len(self.labels)}")
         elif len(self.imgs) == 0:
-            raise ValueError(f"No images found in {img_folder}")
+            raise ValueError(f"No images found in {img_dir}")
 
         self.transform = transform
         if self.transform is None:
@@ -29,13 +33,25 @@ class PairedImgLabelImageFolderDataset(Dataset):
             self.transform = Compose([transforms.ToTensor()]
                                      )
 
+    @property
+    def unique_length(self):
+        """ Basically to allow overfitting without shortening an epoch
+
+        Returns:
+
+        """
+        if self.max_uniques:
+            return self.max_uniques
+        else:
+            return len(self)
+
     def __len__(self):
         return len(self.imgs)
 
     def _get(self, idx):
         while True:
             try:
-                idx = idx % len(self.imgs)
+                idx = idx % self.unique_length
                 img_path = self.imgs[idx]
                 label_path = self.labels[idx]
 
