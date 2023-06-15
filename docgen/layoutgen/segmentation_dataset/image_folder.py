@@ -5,13 +5,13 @@ from PIL import Image
 from torchvision import transforms
 from torchvision.transforms import Compose
 import logging
-
+from docgen.transforms.transforms import ResizeAndPad
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
 
 class NaiveImageFolder(Dataset):
-    def __init__(self, img_dir, transform=None, max_length=None, color_scheme="RGB", **kwargs):
+    def __init__(self, img_dir, transform_list=None, max_length=None, color_scheme="RGB", longest_side=None, **kwargs):
         super().__init__()
 
         self.imgs = list(Path(img_dir).glob("*.png")) + list(Path(img_dir).glob("*.jpg"))
@@ -21,11 +21,23 @@ class NaiveImageFolder(Dataset):
         if len(self.imgs) == 0:
             raise ValueError(f"No images found in {img_dir}")
 
-        self.transform = transform
-        if self.transform is None:
-            # just convert it to tensor, compose it
-            self.transform = Compose([transforms.ToTensor()]
-                                     )
+        self.transform_list = transform_list
+
+        if self.transform_list:
+            if longest_side:
+                raise ValueError("Cannot specify longest_side and transform_list")
+
+        else:
+            self.transform_list = []
+            if longest_side:
+                resize_and_pad = ResizeAndPad(longest_side, 32)
+                # resize so longest side is this, pad the other side
+                self.transform_list.append(resize_and_pad)
+
+            self.transform_list.append(transforms.ToTensor())
+
+        self.transform_composition = Compose(self.transform_list)
+
         self.max_length = max_length if max_length is not None else len(self.imgs)
 
     def __len__(self):
@@ -39,8 +51,8 @@ class NaiveImageFolder(Dataset):
 
                 # load from png and convert to tensor
                 img = Image.open(img_path).convert(self.color_scheme)
-                if self.transform is not None:
-                    img = self.transform(img)
+                if self.transform_composition is not None:
+                    img = self.transform_composition(img)
 
                 return {'image': img, }
             except:

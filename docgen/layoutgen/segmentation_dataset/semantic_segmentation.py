@@ -15,6 +15,7 @@ from PIL import Image
 from torchvision.transforms import ToPILImage
 from typing import List, Optional, Tuple, Union, Literal, Callable
 from docgen.layoutgen.layoutgen import composite_images_PIL
+from docgen.transforms.transforms import ResizeAndPad, IdentityTransform
 
 to_pil = ToPILImage()
 """
@@ -32,40 +33,6 @@ to_pil = ToPILImage()
 
 """
 
-def pad_image(image):
-    # Calculate padding
-    h, w = image.shape[-2:]
-    h_pad = (32 - h % 32) % 32
-    w_pad = (32 - w % 32) % 32
-
-    if h_pad == 0 and w_pad == 0:
-        return image
-    else:
-        padding = transforms.Pad((w_pad // 2, h_pad // 2, w_pad - w_pad // 2, h_pad - h_pad // 2), fill=1)
-        image = padding(image)
-
-    return image
-
-class resize_so_largest_side_is:
-    def __init__(self, size=448):
-        self.size = size
-
-    def __call__(self, image):
-
-        h, w = image.shape[-2:]
-        if h > w:
-            new_h = self.size
-            new_w = int(self.size * w / h)
-        else:
-            new_w = self.size
-            new_h = int(self.size * h / w)
-
-        return transforms.Resize((new_h, new_w))(image)
-
-class IdentityTransform:
-    """A transform that does nothing"""
-    def __call__(self, x):
-        return x
 
 class SemanticSegmentationDataset(Dataset):
     def __init__(self,
@@ -88,8 +55,9 @@ class SemanticSegmentationDataset(Dataset):
             self.transforms_before = transforms.Compose([
                 #transforms.ToPILImage(),
                 transforms.ToTensor(),
-                resize_so_largest_side_is(size=size) if size else IdentityTransform(),
-                pad_image,
+                #resize_so_largest_side_is(size=size) if size else IdentityTransform(),
+                #pad_image,
+                ResizeAndPad(size, 32) if size else IdentityTransform()
             ])
 
         # Default transformations after thresholding
@@ -373,8 +341,10 @@ class AggregateSemanticSegmentationDataset(Dataset):
         if self.overfit_dataset_length > 0:
             idx = idx % self.overfit_dataset_length
 
-        images_and_masks = [(d[idx]["image"],d[idx]["mask"]) for d in self.subdatasets]
-        images, masks = zip(*images_and_masks)
+        images_and_masks = [d[idx] for d in self.subdatasets]
+
+        # convert list of dicts to tuple of lists
+        images, masks = [x["image"] for x in images_and_masks], [x["mask"] for x in images_and_masks]
 
         if isinstance(self.background_img_properties, str):
             if self.background_img_properties == 'max':

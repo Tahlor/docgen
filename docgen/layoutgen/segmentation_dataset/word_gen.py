@@ -41,22 +41,26 @@ def get_resource(package_name, resource_relative_path):
     return pkg_resources.resource_filename(package_name, resource_path)
 
 class WordGenerator(Gen):
-    def __init__(self, img_size=(512,512)):
+    def __init__(self, img_size=(512,512),
+                 font_size_rng=(8,50),
+                  word_count_rng=(10,20),
+                  **kwargs
+        ):
         self.width, self.height = self.img_size = img_size
-        self.min_font_size = 12
-        self.max_font_size = 50
+        self.font_size_rng = font_size_rng
+        self.word_count_rng = word_count_rng
 
     def _get(self, img_size=None):
         if img_size is None:
             img_size = self.img_size
-        font_size = random.randint(self.min_font_size, self.max_font_size)
+        font_size = random.randint(*self.font_size_rng)
         img = Image.new("RGB", img_size, (255,255,255))
         if random.random() > 0.1:
             bbox = BBox("ul", [0, 0, *img_size])
             box_dict = self.filler.randomly_fill_box_with_words(bbox, img=img,
-                                                       max_words=random.randint(10, 20),
+                                                       max_words=random.randint(*self.word_count_rng),
                                                        allow_overlap=False,
-                                                       font_size_override_range=(self.min_font_size, self.max_font_size)
+                                                       font_size_override_range=self.font_size_rng
                                                        )
         else:
             bbox = self.get_random_bbox(img_size=img_size, font_size=font_size)
@@ -73,8 +77,11 @@ class PrintedTextGenerator(WordGenerator):
     """
             saved_fonts_folder = Path(r"G:/s3/synthetic_data/resources/fonts")
     """
-    def __init__(self, img_size=(512,512), saved_fonts_folder=None):
-        super().__init__(img_size)
+    def __init__(self, img_size=(512,512),
+                 font_size_rng=(8, 50),
+                 word_count_rng=(10, 20),
+                 saved_fonts_folder=None, **kwargs):
+        super().__init__(img_size, font_size_rng=font_size_rng, word_count_rng=word_count_rng, **kwargs)
         unigrams = get_resource(package_name="textgen", resource_relative_path="/datasets/unigram_freq.csv")
         clear_fonts_path = saved_fonts_folder / "clear_fonts.csv"
 
@@ -89,8 +96,11 @@ class PrintedTextGenerator(WordGenerator):
                                 random_word_idx=True)
 
 class HWGenerator(WordGenerator):
-    def __init__(self, img_size=(512,512), saved_hw_folder=None):
-        super().__init__(img_size)
+    def __init__(self, img_size=(512,512),
+                 font_size_rng=(8, 50),
+                 word_count_rng=(10, 20),
+                 saved_hw_folder=None, **kwargs):
+        super().__init__(img_size, font_size_rng=font_size_rng, word_count_rng=word_count_rng,  **kwargs)
         unigrams = get_resource(package_name="textgen", resource_relative_path="/datasets/unigram_freq.csv")
         if saved_hw_folder is None:
             saved_hw_folder = Path(site.getsitepackages()[0]) / r"hwgen/resources/generated"
