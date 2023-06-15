@@ -22,11 +22,12 @@ class PairedImgLabelImageFolderDataset(Dataset):
         super().__init__()
         if label_dir is None:
             label_dir = img_dir
-        self.max_uniques = max_uniques
+        self.max_uniques = int(max_uniques) if max_uniques else None
         self.label_dir = label_dir
         self.img_dir = img_dir
         self.path_database = self.process_img_file_list(img_dir, label_dir)
-        self.length = length_override if length_override else len(self.path_database)
+        self.length = int(length_override) if length_override else len(self.path_database)
+
         if len(self.path_database) == 0:
             raise ValueError(f"No images found in {img_dir}")
 
