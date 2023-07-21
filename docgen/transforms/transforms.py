@@ -4,7 +4,8 @@ import numpy as np
 from torchvision.transforms import functional as F
 from torchvision.transforms import Compose
 from torchvision import transforms
-
+import torch
+from torchvision.transforms import ToTensor
 
 class ResizeAndPad:
     def __init__(self, resize, div):
@@ -14,11 +15,25 @@ class ResizeAndPad:
             resize: The side of the longest side will be resized to this
             div: The other side will be padded to be divisible by this
         """
-        self.resize = ResizeLongestSide(resize)
+        self.resize = ResizeLongestSide(resize) if resize else None
         self.div = div
 
     def __call__(self, img):
         img = self.resize(img)
+        img = pad_divisible_by(img, self.div)
+        return img
+
+class ResizeAndPadToBeDvisibleBy:
+    def __init__(self, div):
+        """
+
+        Args:
+            resize: The side of the longest side will be resized to this
+            div: The other side will be padded to be divisible by this
+        """
+        self.div = div
+
+    def __call__(self, img):
         img = pad_divisible_by(img, self.div)
         return img
 
@@ -39,9 +54,16 @@ def pad_divisible_by(image, pad_divisible_by=32):
 class ResizeLongestSide:
 
     def __init__(self, size=448):
-        self.size = size
+        """ Must have 3 channels
 
+        Args:
+            size:
+        """
+        self.size = size
+        self.to_tensor = ToTensor()
     def __call__(self, image):
+        if not isinstance(image, torch.Tensor):
+            image = self.to_tensor(image)
 
         h, w = image.shape[-2:]
         if h > w:
@@ -57,3 +79,12 @@ class IdentityTransform:
     """A transform that does nothing"""
     def __call__(self, x):
         return x
+
+class ToTensorIfNeeded:
+    def __init__(self):
+        self.totensor = ToTensor()
+    def __call__(self, x):
+        if not isinstance(x, torch.Tensor):
+            return self.totensor(x)
+        else:
+            return x

@@ -5,13 +5,14 @@ from PIL import Image
 from torchvision import transforms
 from torchvision.transforms import Compose
 import logging
-from docgen.transforms.transforms import ResizeAndPad
+from docgen.transforms.transforms import ResizeAndPad, ToTensorIfNeeded
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
 
 class NaiveImageFolder(Dataset):
-    def __init__(self, img_dir, transform_list=None, max_length=None, color_scheme="RGB", longest_side=None, **kwargs):
+    def __init__(self, img_dir, transform_list=None, max_length=None, color_scheme="RGB", longest_side=None,
+                 pad_to_be_divisible_by=32, **kwargs):
         super().__init__()
 
         self.imgs = list(Path(img_dir).glob("*.png")) + list(Path(img_dir).glob("*.jpg"))
@@ -30,11 +31,13 @@ class NaiveImageFolder(Dataset):
         else:
             self.transform_list = []
             if longest_side:
-                resize_and_pad = ResizeAndPad(longest_side, 32)
+                resize_and_pad = ResizeAndPad(longest_side, pad_to_be_divisible_by)
                 # resize so longest side is this, pad the other side
-                self.transform_list.append(resize_and_pad)
+            else:
+                resize_and_pad = ResizeAndPad(None, pad_to_be_divisible_by)
+            self.transform_list.append(resize_and_pad)
 
-            self.transform_list.append(transforms.ToTensor())
+        self.transform_list.append(ToTensorIfNeeded())
 
         self.transform_composition = Compose(self.transform_list)
 

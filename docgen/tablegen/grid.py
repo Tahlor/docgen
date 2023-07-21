@@ -24,7 +24,6 @@ class Grid(Gen):
         self.row_height_range = row_height_range
         self.col_width_range = col_width_range
         self.color_scheme = color_scheme
-        self.image = Image.new(self.color_scheme, (self.width, self.height), "white")
         self.draw = None
         self.cells = []
         self.slant = True

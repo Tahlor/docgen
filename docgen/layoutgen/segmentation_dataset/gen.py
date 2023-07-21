@@ -43,3 +43,9 @@ class Gen:
         """
         bg_img = Image.new("RGB", bg_size, (255,255,255))
         return composite_images_PIL(img, bg_img, pos, offset=(0,0))
+    
+    def pickle_prep(self):
+        """ Delete anything that can't be pickled
+        """
+        if hasattr(self, "generator") and hasattr(self.generator, "image"):
+            del self.generator.image

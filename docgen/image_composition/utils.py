@@ -1,3 +1,4 @@
+import numpy as np
 import random
 from docgen.bbox import BBox
 
@@ -76,3 +77,121 @@ def new_textbox_given_background_line(background_shape,
     size = max_size_given_origin_and_background(origin, background_shape, vertical_buffer_factor=1)
     bbox = BBox("ul", [origin[0], origin[1], origin[0] + size[0], origin[1] + size[1]], format="XYXY", font_size=font_size)
     return size, origin, font_size, bbox
+
+
+def convert_most_extreme_value_to_min_max(extreme_x, extreme_y):
+    min_start_x = min(0, extreme_x)  # if image2 is wider than image1, then the min start position can be neg
+    max_start_x = max(0, extreme_x)  # if image2 is wider than image1, then the max start position is 0
+    min_start_y = min(0, extreme_y)  # if image2 is taller than image1, then the min start position can be neg
+    max_start_y = max(0, extreme_y)  # if image2 is taller than image1, then the max start position is 0
+    return min_start_x, max_start_x, min_start_y, max_start_y
+
+class CompositeImages:
+    """ Composite two images together, given a minimum overlap percentage
+
+    """
+
+    def __init__(self, image_format='HWC', composite_function=np.minimum):
+        self.params_last_used = None
+        self.image_format = image_format
+        self.composite_function = composite_function
+
+    def calculate_origin(self, base_image, image2, min_overlap):
+        if self.image_format == 'CHW':
+            x, y = 2, 1
+        elif self.image_format == 'HWC':
+            x, y = 1, 0
+        else:
+            raise ValueError(f"Unsupported image format: {self.image_format}")
+
+        height1, width1 = base_image.shape[y], base_image.shape[x]
+        height2, width2 = image2.shape[y], image2.shape[x]
+
+        target_overlap_percent = random.uniform(min_overlap, 1.0)
+
+        # Calculate the minimum overlap in pixels
+        overlap_pixel_target = target_overlap_percent * width1 * height1
+
+        # Image 2 is smaller than the overlap target in at least 1 dimension
+        if min(width2, width1) * min(height2, height1) < overlap_pixel_target:
+            extreme_x = base_image.shape[x] - image2.shape[x]  # if this is negative, then this is the min and 0 the max
+            extreme_y = base_image.shape[y] - image2.shape[y]
+
+            min_start_x, max_start_x, min_start_y, max_start_y = convert_most_extreme_value_to_min_max(extreme_x,
+                                                                                                       extreme_y)
+            # Calculate random start positions within the calculated limits
+            origin_x = random.randint(min_start_x, max_start_x)
+            origin_y = random.randint(min_start_y, max_start_y)
+
+            width_overlap = min(width2, width1)
+            height_overlap = min(height2, height1)
+
+        else:
+            # Calculate the minimum width required to meet the overlap requirement
+            max_width = min(width2, width1)
+            max_height = min(height2, height1)
+
+            min_width = overlap_pixel_target // max_height
+            width_overlap = random.randint(min_width, max_width)
+
+            height_overlap = overlap_pixel_target // width_overlap
+
+            width_overlap = int(min(width_overlap + 1, width2, width1))
+            height_overlap = int(min(height_overlap + 1, height2, height1))
+            assert width_overlap * height_overlap >= overlap_pixel_target
+
+            # Choose a random origin ensuring the chosen width and height will be within base_image
+            def get_valid_origin(dim_overlap, dim1, dim2):
+                part_of_image2_outside_image1 = dim2 > dim_overlap
+                both_sides_of_image2_outside_image1 = dim_overlap == dim1
+                assert dim_overlap <= dim1
+                if part_of_image2_outside_image1 and not both_sides_of_image2_outside_image1:
+                    neg_excess_dim = abs(dim2 - dim_overlap)
+                    pos_excess_dim = dim1 - dim_overlap
+                    origin = random.choice([-neg_excess_dim, pos_excess_dim])
+                elif both_sides_of_image2_outside_image1:
+                    assert dim2 >= dim_overlap
+                    excess = abs(dim2 - dim_overlap)
+                    origin = random.randint(-excess, 0)
+                else:  # completely inside image1
+                    assert dim1 >= dim_overlap
+                    origin = random.randint(0, dim1 - dim_overlap)
+
+                return origin
+
+            origin_x = get_valid_origin(width_overlap, width1, width2)
+            origin_y = get_valid_origin(height_overlap, height1, height2)
+
+        self.params_last_used = {
+            'origin_x': origin_x,
+            'origin_y': origin_y,
+            'width_overlap': width_overlap,
+            'height_overlap': height_overlap,
+            'overlap_pixel_target': overlap_pixel_target,
+            'target_overlap_percent': target_overlap_percent,
+            'width1': width1,
+            'height1': height1,
+            'width2': width2,
+            'height2': height2,
+        }
+        return origin_x, origin_y
+
+    def __call__(self, base_image, image2, min_overlap=0.5):
+        origin_x, origin_y = self.calculate_origin( base_image, image2, min_overlap)
+        width1, height1, width2, height2 = self.params_last_used['width1'], self.params_last_used['height1'], \
+                                              self.params_last_used['width2'], self.params_last_used['height2']
+
+        # Paste image2 onto base_image at the chosen origin
+        result_image = base_image.copy()
+        overlay_image = image2[
+                               max(0, -origin_y):min(height2, height1 - origin_y),
+                               max(0, -origin_x):min(width2, width1 - origin_x)]
+
+        overlap = result_image[max(0, origin_y):min(height1, origin_y + height2),
+                               max(0, origin_x):min(width1, origin_x + width2)]
+
+        result_image[max(0, origin_y):min(height1, origin_y + height2),
+        max(0, origin_x):min(width1, origin_x + width2)] = self.composite_function(overlap, overlay_image)
+        return result_image
+
+

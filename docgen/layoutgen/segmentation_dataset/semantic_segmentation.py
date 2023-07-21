@@ -16,6 +16,7 @@ from torchvision.transforms import ToPILImage
 from typing import List, Optional, Tuple, Union, Literal, Callable
 from docgen.layoutgen.layoutgen import composite_images_PIL
 from docgen.transforms.transforms import ResizeAndPad, IdentityTransform
+from docgen.image_composition.utils import CompositeImages
 
 to_pil = ToPILImage()
 """
@@ -59,13 +60,20 @@ class SemanticSegmentationDataset(Dataset):
                 #pad_image,
                 ResizeAndPad(size, 32) if size else IdentityTransform()
             ])
-
+            
         # Default transformations after thresholding
         if self.transforms_after is None:
             self.transforms_after = transforms.Compose([
                 #transforms.ToPILImage(),
                 #transforms.ToTensor()
             ])
+
+        # self.transforms_after = transforms.Compose([
+        #     #to_numpy
+        #     lambda x: x.numpy(),
+        #     self.transforms_after,
+        #     transforms.ToTensor()
+        # ])
 
     def __len__(self):
         return len(self.img_paths)
@@ -85,6 +93,9 @@ class SemanticSegmentationDataset(Dataset):
         if self.soft_mask:
             #mask = torch.where(bw_img < self.threshold01, 1 - bw_img, torch.tensor(0))
             mask = 1.0 - bw_img
+            transition_point = .3
+            steepness = 20
+            mask = torch.sigmoid(steepness * (mask - transition_point))
         else:
             mask = torch.where(bw_img < self.threshold01, torch.tensor(1), torch.tensor(0))
 
@@ -161,7 +172,7 @@ class SemanticSegmentationDatasetImageFolder(SemanticSegmentationDataset):
             idx = idx % len(self)
 
         img_path = self.img_paths[idx]
-        img = Image.open(img_path)
+        img = Image.open(img_path).copy()
         return img
 
 
@@ -202,7 +213,8 @@ class AggregateSemanticSegmentationDataset(Dataset):
                  random_origin_composition=True,
                  mask_default_value=0,
                  img_default_value=1,
-                 dataset_length=5000):
+                 dataset_length=5000,
+                 transforms_after_compositing=None,):
         """
 
         Args:
@@ -220,6 +232,8 @@ class AggregateSemanticSegmentationDataset(Dataset):
         self.mask_default_value = mask_default_value
         self.img_default_value = img_default_value
         self.dataset_length = dataset_length
+        self.transforms_after_compositing = transforms_after_compositing
+        self.random_origin_function = CompositeImages(image_format="CHW").calculate_origin # vs. more_random_offset
 
     def __len__(self):
         #return min(len(d) for d in self.subdatasets)
@@ -374,10 +388,11 @@ class AggregateSemanticSegmentationDataset(Dataset):
         for img, mask in zip(images, masks):
             if self.random_origin_composition:
                 # if bckg is bigger in both dimensions
-                start_x, start_y = more_random_offset(composite_image.shape[-1],
-                                                      composite_image.shape[-2],
-                                                      img.shape[-1],
-                                                      img.shape[-2])
+                # start_x, start_y = more_random_offset(composite_image.shape[-1],
+                #                                       composite_image.shape[-2],
+                #                                       img.shape[-1],
+                #                                       img.shape[-2])
+                start_x, start_y = self.random_origin_function(composite_image, img, .7)
             else:
                 start_x = 0
                 start_y = 0
@@ -393,6 +408,10 @@ class AggregateSemanticSegmentationDataset(Dataset):
 
             composite_masks.append(pasted_mask)
         composite_masks = torch.stack(composite_masks, dim=0)
+
+        # apply self.transforms_after_compositing
+        if self.transforms_after_compositing:
+            composite_image = self.transforms_after_compositing(composite_image)
 
         return {'image': composite_image, 'mask': composite_masks}
 

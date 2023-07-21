@@ -1,5 +1,6 @@
 import re
 from docgen.layoutgen.segmentation_dataset.semantic_segmentation import SemanticSegmentationDataset
+import docgen.layoutgen.segmentation_dataset.image_folder
 from torch.utils.data import Dataset
 from pathlib import Path
 from PIL import Image
@@ -40,26 +41,38 @@ class PairedImgLabelImageFolderDataset(Dataset):
             self.transform = Compose(self.transform)
 
     def process_img_file_list(self, img_dir, label_folder):
-        """ Safer to parse the image file to get the index, create a dictionary
-
-        Returns:
-
+        """
+        Safer to parse the image file to get the index, create a dictionary
         """
         label_folder = Path(label_folder)
-        imgs = Path(img_dir).glob("input*.png")
-        #self.labels = sorted(Path(label_folder).glob("label*.png"))
+        imgs = Path(img_dir).glob("*input*.png")
+
         path_database = {}
         for img_path in imgs:
-            id = re.search(r"(\d+)$", img_path.stem).group(1)
-            label_path = label_folder / f"label_{id}.png"
-            if label_path.exists():
-                # path_database[int(id)] = {"img_path": img.relative_to(self.img_dir),
-                #                           "label_path": label_path.relative_to(self.label_dir)}
+            # Extract the id from the filename.
+            # The regular expression will match both "12345_input" and "input_12345".
+            match = re.search(r"(\d+)", img_path.stem)
+            if match:
+                id = match.group(1)
+
+                # Try both label formats.
+                label_path1 = label_folder / f"label_{id}.png"
+                label_path2 = label_folder / f"{id}_label.png"
+
+                # If one of the label paths exists, use it.
+                # If not, log a warning.
+                if label_path1.exists():
+                    label_path = label_path1
+                elif label_path2.exists():
+                    label_path = label_path2
+                else:
+                    logger.warning(f"No label file exists for {label_path1} or {label_path2}")
+                    continue  # Skip to next image file.
+
                 path_database[int(id)] = {"img_path": img_path,
                                           "label_path": label_path}
-
             else:
-                logger.warning(f"Label {label_path} does not exist")
+                logger.warning(f"No id found in filename {img_path}")
 
         return path_database
 
