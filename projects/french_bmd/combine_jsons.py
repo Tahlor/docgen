@@ -19,7 +19,7 @@ if __name__ == "__main__":
         """
     elif socket.gethostname() == "Galois":
         input_folder = f"/media/EVO970/data/synthetic/french_bmd_0005"
-        args = f"{input_folder} --overwrite --save_npy"
+        args = f"{input_folder} --overwrite --save_npy --move_files_when_done"
 
     if sys.argv[1:]:
         args = None

@@ -76,7 +76,7 @@ if __name__ == "__main__":
             --rebuild_coco_word --rebuild_coco  
             """
     #args = r"""--ocr_json_path 'G:\s3\synthetic_data\FRENCH_BMD\FRENCH_BMD_LAYOUTv2.1.0\OCR.json' """
-    args = r"""--ocr_json_path '/media/EVO970/data/synthetic_data/french_bmd_0005/OCR.json' 
+    args = r"""--ocr_json_path '/media/EVO970/data/synthetic/french_bmd_0005/OCR.json' 
                 --rebuild_coco_word  
                 """
     args = args.replace("\n","")
