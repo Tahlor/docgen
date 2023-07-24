@@ -1,6 +1,7 @@
 import numpy as np
 import random
 from docgen.bbox import BBox
+from typing import Union
 
 def pick_origin(background_shape,
                 factor=4):
@@ -86,21 +87,34 @@ def convert_most_extreme_value_to_min_max(extreme_x, extreme_y):
     max_start_y = max(0, extreme_y)  # if image2 is taller than image1, then the max start position is 0
     return min_start_x, max_start_x, min_start_y, max_start_y
 
-class CompositeImages:
+class CompositeImagesDeprecated:
     """ Composite two images together, given a minimum overlap percentage
+    Example usage:
+        composite = CompositeImages()
+        composite(base_image, image2, min_overlap=.5, image_format='HWC', composite_function=np.minimum, overlap_with_respect_to="paste_image")
+
+        OR to calculate the origin:
+        composite.calculate_origin(base_image, image2, min_overlap=.5)
 
     """
 
-    def __init__(self, image_format='HWC', composite_function=np.minimum):
+    def __init__(self, image_format='HWC', composite_function=np.minimum,
+                 overlap_with_respect_to:Union["base_image","paste_image"]="base_image"):
         self.params_last_used = None
         self.image_format = image_format
         self.composite_function = composite_function
+        self.overlap_with_respect_to = overlap_with_respect_to
+
 
     def calculate_origin(self, base_image, image2, min_overlap):
         if self.image_format == 'CHW':
             x, y = 2, 1
         elif self.image_format == 'HWC':
             x, y = 1, 0
+        elif self.image_format.upper() == 'PIL':
+            x, y = 0, 1
+            base_image.shape = base_image.size
+            image2.shape = image2.size
         else:
             raise ValueError(f"Unsupported image format: {self.image_format}")
 
@@ -109,8 +123,11 @@ class CompositeImages:
 
         target_overlap_percent = random.uniform(min_overlap, 1.0)
 
+        overlap_width_baseline, overlap_height_baseline = (width1, height1) if self.overlap_with_respect_to == "base_image" \
+            else (width2, height2)
+
         # Calculate the minimum overlap in pixels
-        overlap_pixel_target = target_overlap_percent * width1 * height1
+        overlap_pixel_target = target_overlap_percent * overlap_width_baseline * overlap_height_baseline
 
         # Image 2 is smaller than the overlap target in at least 1 dimension
         if min(width2, width1) * min(height2, height1) < overlap_pixel_target:

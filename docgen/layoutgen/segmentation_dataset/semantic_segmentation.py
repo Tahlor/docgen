@@ -16,7 +16,8 @@ from torchvision.transforms import ToPILImage
 from typing import List, Optional, Tuple, Union, Literal, Callable
 from docgen.layoutgen.layoutgen import composite_images_PIL
 from docgen.transforms.transforms import ResizeAndPad, IdentityTransform
-from docgen.image_composition.utils import CompositeImages
+#from docgen.image_composition.utils import CompositeImages
+from docdegrade.composite import CompositeImages
 
 to_pil = ToPILImage()
 """
@@ -33,7 +34,10 @@ to_pil = ToPILImage()
 # * a dataset this is composed of other datasets
 
 """
-
+class SoftMaskConfig:
+    def __init__(self, soft_mask_threshold=.3, soft_mask_steepness=20):
+        self.soft_mask_threshold = soft_mask_threshold
+        self.soft_mask_steepness = soft_mask_steepness
 
 class SemanticSegmentationDataset(Dataset):
     def __init__(self,
@@ -42,14 +46,14 @@ class SemanticSegmentationDataset(Dataset):
                  threshold=.6,
                  overfit_dataset_length=0,
                  size=448,
-                 soft_mask=True
+                 soft_mask_config: Union[SoftMaskConfig, bool]=SoftMaskConfig()
                  ):
         # if threshold is None, just use the pixel intensity as labellogit
         self.transforms_before = transforms_before_mask_threshold
         self.transforms_after = transforms_after_mask_threshold
         self.threshold01 = threshold if threshold < 1 else threshold * 255
-        self.soft_mask = soft_mask
         self.overfit_dataset_length = overfit_dataset_length
+        self.soft_mask_config = soft_mask_config
 
         # Default transformations before thresholding
         if self.transforms_before is None:
@@ -90,11 +94,11 @@ class SemanticSegmentationDataset(Dataset):
         else:
             bw_img = img[0]
 
-        if self.soft_mask:
+        if self.soft_mask_config:
             #mask = torch.where(bw_img < self.threshold01, 1 - bw_img, torch.tensor(0))
             mask = 1.0 - bw_img
-            transition_point = .3
-            steepness = 20
+            transition_point = self.soft_mask_config.soft_mask_threshold
+            steepness = self.soft_mask_config.soft_mask_steepness
             mask = torch.sigmoid(steepness * (mask - transition_point))
         else:
             mask = torch.where(bw_img < self.threshold01, torch.tensor(1), torch.tensor(0))
