@@ -15,7 +15,7 @@ class NaiveImageFolder(Dataset):
                  pad_to_be_divisible_by=32, **kwargs):
         super().__init__()
 
-        self.imgs = list(Path(img_dir).glob("*.png")) + list(Path(img_dir).glob("*.jpg"))
+        self.imgs = list(Path(img_dir).rglob("*.png")) + list(Path(img_dir).rglob("*.jpg"))
         self.imgs = sorted(self.imgs)
         self.color_scheme = color_scheme
 
@@ -57,7 +57,7 @@ class NaiveImageFolder(Dataset):
                 if self.transform_composition is not None:
                     img = self.transform_composition(img)
 
-                return {'image': img, }
+                return {'image': img,  "name": img_path.stem}
             except:
                 logger.exception(f"Error loading image {img_path}")
                 idx += 1
@@ -76,4 +76,4 @@ class NaiveImageFolder(Dataset):
 
     @staticmethod
     def collate_fn(batch):
-        return SemanticSegmentationDataset.collate_fn(batch)
+        return SemanticSegmentationDataset.collate_fn(batch, no_tensor_keys=["name"])

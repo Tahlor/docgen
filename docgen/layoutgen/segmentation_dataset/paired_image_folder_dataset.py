@@ -106,7 +106,7 @@ class PairedImgLabelImageFolderDataset(Dataset):
                     img = self.transform(img)
                     label = self.transform(label)
 
-                return {'image': img, 'mask': label}
+                return {'image': img, 'mask': label, "name": img_path.stem}
             except:
                 logger.exception(f"Error loading image {idx} {img_path}")
                 idx += 1

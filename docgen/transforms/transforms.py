@@ -1,3 +1,5 @@
+import warnings
+
 import torch
 from PIL import Image
 import numpy as np
@@ -8,22 +10,19 @@ import torch
 from torchvision.transforms import ToTensor
 
 class ResizeAndPad:
-    def __init__(self, resize, div):
-        """
-
-        Args:
-            resize: The side of the longest side will be resized to this
-            div: The other side will be padded to be divisible by this
-        """
-        self.resize = ResizeLongestSide(resize) if resize else None
+    def __init__(self, longest_side, div):
+        self.resize = ResizeLongestSide(longest_side) if longest_side else None
         self.div = div
+        self.totensor = ToTensor()
 
     def __call__(self, img):
-        img = self.resize(img)
+        img = self.totensor(img)
+        if self.resize:
+            img = self.resize(img)
         img = pad_divisible_by(img, self.div)
         return img
 
-class ResizeAndPadToBeDvisibleBy:
+class PadToBeDvisibleBy:
     def __init__(self, div):
         """
 
@@ -38,6 +37,9 @@ class ResizeAndPadToBeDvisibleBy:
         return img
 
 def pad_divisible_by(image, pad_divisible_by=32):
+    if isinstance(image, Image.Image):
+        warnings.warn("Cannot pad PIL")
+
     # Calculate padding
     h, w = image.shape[-2:]
     h_pad = (pad_divisible_by - h % pad_divisible_by) % pad_divisible_by
@@ -61,6 +63,7 @@ class ResizeLongestSide:
         """
         self.size = size
         self.to_tensor = ToTensor()
+
     def __call__(self, image):
         if not isinstance(image, torch.Tensor):
             image = self.to_tensor(image)
