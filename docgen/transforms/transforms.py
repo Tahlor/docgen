@@ -9,6 +9,29 @@ from torchvision import transforms
 import torch
 from torchvision.transforms import ToTensor
 
+
+class RandomCropIfTooBig:
+    def __init__(self, size):
+        self.size = size
+        self.random_crop = transforms.RandomCrop(size)
+        self.totensor = ToTensor()
+
+
+    def __call__(self, img):
+        img = self.totensor(img)
+        # if it's big enough, crop
+        if img.shape[-2] >= self.size[0] and img.shape[-1] >= self.size[1]:
+            return self.random_crop(img)
+        # if only one side is big enough, just do one
+        elif img.shape[-2] >= self.size[0]:
+            return F.crop(img, 0, 0, self.size[0], img.shape[-1])
+        elif img.shape[-1] >= self.size[1]:
+            return F.crop(img, 0, 0, img.shape[-2], self.size[1])
+        # if neither side is big enough, just return it
+        else:
+            return img
+
+
 class ResizeAndPad:
     def __init__(self, longest_side, div):
         self.resize = ResizeLongestSide(longest_side) if longest_side else None
@@ -77,6 +100,28 @@ class ResizeLongestSide:
             new_h = int(self.size * h / w)
 
         return transforms.Resize((new_h, new_w))(image)
+
+class ResizeLongestSideIfTooBig:
+
+    def __init__(self, size=448):
+        """ Must have 3 channels
+
+        Args:
+            size:
+        """
+        self.size = size
+        self.to_tensor = ToTensor()
+        self.resize = ResizeLongestSide(size)
+
+    def __call__(self, image):
+        if not isinstance(image, torch.Tensor):
+            image = self.to_tensor(image)
+
+        h, w = image.shape[-2:]
+        if h > self.size or w > self.size:
+            return self.resize(image)
+        return image
+
 
 class IdentityTransform:
     """A transform that does nothing"""
