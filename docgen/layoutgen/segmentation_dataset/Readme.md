@@ -17,6 +17,12 @@ output = cv2.seamlessClone(src, dst, src_mask, center, cv2.NORMAL_CLONE)
 # Save result
 cv2.imwrite("output.jpg", output)
 
+## TODO:
+- Use actual documents, take max(text_preds, table_preds) as GT
+- Predict a background channel? Use a softmax type deal, with background OR max(classes)
+
 https://docs.opencv.org/3.4/df/da0/group__photo__clone.html
 https://arxiv.org/pdf/2101.11674.pdf
 https://drive.google.com/drive/folders/19Xt35IZx8It5rYJXfwevnici3ZxWm_8O
+
+

@@ -16,8 +16,8 @@ from torchvision.transforms import ToPILImage
 from typing import List, Optional, Tuple, Union, Literal, Callable
 from docgen.layoutgen.layoutgen import composite_images_PIL
 from docgen.transforms.transforms import ResizeAndPad, IdentityTransform
-#from docgen.image_composition.utils import CompositeImages
-from docdegrade.composite import CompositeImages
+from docgen.image_composition.utils import CompositeImages, CalculateImageOriginForCompositing
+#from docdegrade.composite import CompositeImages
 
 to_pil = ToPILImage()
 """
@@ -237,7 +237,7 @@ class AggregateSemanticSegmentationDataset(Dataset):
         self.img_default_value = img_default_value
         self.dataset_length = dataset_length
         self.transforms_after_compositing = transforms_after_compositing
-        self.random_origin_function = CompositeImages(image_format="CHW").calculate_origin # vs. more_random_offset
+        self.random_origin_function = CalculateImageOriginForCompositing(image_format="CHW") # vs. more_random_offset
 
     def __len__(self):
         #return min(len(d) for d in self.subdatasets)
@@ -474,13 +474,6 @@ if __name__=="__main__":
         saved_fonts_folder = Path("/media/EVO970/s3/datascience-computervision-l3apps/HWR/synthetic-data/python-package-resources/fonts/")
         saved_hw_folder = Path("/media/EVO970/s3/synthetic_data/python-package-resources/generated-handwriting/single-word-datasets/iam-cvl-32px-top10k-words")
 
-
-    # image folder version
-    # reportlab = r"G:\s3\synthetic_data\reportlab\training\train"
-    # hw = r"G:\s3\synthetic_data\multiparagraph"
-    # dataset1 = SemanticSegmentationDatasetImageFolder(img_dir=reportlab)
-    # dataset2 = SemanticSegmentationDatasetImageFolder(img_dir=hw)
-
     # generated version
     hw_generator = HWGenerator(saved_hw_folder=saved_hw_folder)
     printed_text_generator = PrintedTextGenerator(saved_fonts_folder=saved_fonts_folder)
@@ -517,10 +510,3 @@ if __name__=="__main__":
 
         if i > 15:
             break
-        #     img_pil.show()
-        #     mask_pil1.show()
-        #     mask_pil2.show()
-        #     break
-        # break
-
-

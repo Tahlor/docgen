@@ -18,8 +18,14 @@ class NaiveImageFolder(Dataset):
     def __init__(self, img_dir, transform_list=None, max_length=None, color_scheme="RGB", longest_side=None,
                  pad_to_be_divisible_by=32, **kwargs):
         super().__init__()
+        img_dirs = img_dir
+        if not isinstance(img_dir, (tuple, list)):
+            img_dirs = [img_dir]
 
-        self.imgs = list(Path(img_dir).rglob("*.png")) + list(Path(img_dir).rglob("*.jpg"))
+        self.imgs = []
+        for img_dir in img_dirs:
+            self.imgs += list(Path(img_dir).rglob("*.png")) + list(Path(img_dir).rglob("*.jpg"))
+
         self.imgs = sorted(self.imgs)
         self.color_scheme = color_scheme
 
@@ -46,6 +52,7 @@ class NaiveImageFolder(Dataset):
         self.transform_composition = Compose(self.transform_list)
 
         self.max_length = max_length if max_length is not None else len(self.imgs)
+        self.current_img_idx = 0
 
     def __len__(self):
         return min(len(self.imgs), self.max_length)
@@ -65,6 +72,12 @@ class NaiveImageFolder(Dataset):
             except:
                 logger.exception(f"Error loading image {img_path}")
                 idx += 1
+
+    def get(self, idx=None):
+        if idx is None:
+            idx = self.current_img_idx = 0
+            self.current_img_idx = (1 + self.current_img_idx ) % len(self.imgs)
+        return self._get(idx)
 
     def __getitem__(self, idx):
         """
@@ -239,3 +252,5 @@ class NaiveImageFolderPatch(NaiveImageFolder):
             raise StopIteration
 
         return value
+
+
