@@ -100,6 +100,15 @@ class HWGenerator(WordGenerator):
                  font_size_rng=(8, 50),
                  word_count_rng=(10, 20),
                  saved_hw_folder=None, **kwargs):
+        """ Generates handwritten text in real time OR combine them from pre-generated .npy files
+
+        Args:
+            img_size:
+            font_size_rng:
+            word_count_rng:
+            saved_hw_folder:
+            **kwargs:
+        """
         super().__init__(img_size, font_size_rng=font_size_rng, word_count_rng=word_count_rng,  **kwargs)
         unigrams = get_resource(package_name="textgen", resource_relative_path="/datasets/unigram_freq.csv")
         if saved_hw_folder is None:

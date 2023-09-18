@@ -12,9 +12,11 @@ from sklearn.utils import shuffle
 from docgen.layoutgen.segmentation_dataset.gen import Gen
 from pathlib import Path
 from docgen.image_composition.utils import CalculateImageOriginForCompositing
-import albumentations as A
+from docgen.image_composition.utils import seamless_composite, composite_the_images_numpy
 
 class CompositeImages(Gen):
+    """ If you have a bunch of e.g., text datasets, you could produce the composited versions using this object
+    """
     def __init__(self, folders, transforms=None, default_transform=None):
         super().__init__()
 
@@ -87,36 +89,6 @@ class CompositeImages(Gen):
         return result_pil, (origin_x, origin_y)
 
 
-def numpy_composite(base_image, overlay_image, origin_x, origin_y, composite_function=np.minimum):
-    width1, height1, width2, height2 = base_image.shape[1], base_image.shape[0], overlay_image.shape[1], overlay_image.shape[0]
-
-    result_image = base_image.copy()
-    overlay_image = overlay_image[
-                    max(0, -origin_y):min(height2, height1 - origin_y),
-                    max(0, -origin_x):min(width2, width1 - origin_x)]
-
-    overlap = result_image[max(0, origin_y):min(height1, origin_y + height2),
-              max(0, origin_x):min(width1, origin_x + width2)]
-
-    result_image[max(0, origin_y):min(height1, origin_y + height2),
-    max(0, origin_x):min(width1, origin_x + width2)] = composite_function(overlap, overlay_image)
-    return result_image
-
-def seamless_composite(base_image, overlay_image, origin_x, origin_y, *args, **kwargs):
-    # Assume that the images are single or three-channel 8-bit images
-    # Create a binary mask from the alpha channel of image2
-    if overlay_image.shape[2] == 4:  # RGBA image
-        mask = overlay_image[..., 3]
-    else:  # RGB or grayscale
-        mask = np.ones_like(overlay_image[..., 0]) * 255
-
-    # Calculate center coordinates based on the origin and size of image2
-    center = (origin_y + overlay_image.shape[1] // 2, origin_x + overlay_image.shape[0] // 2)
-
-    # Apply seamless cloning
-    result = cv2.seamlessClone(src=overlay_image, dst=base_image, mask=mask, p=center,
-                               flags=cv2.NORMAL_CLONE)
-    return result
 
 def demo_image_composition(img1_path, img2_path):
     # Load images using PIL
@@ -131,7 +103,7 @@ def demo_image_composition(img1_path, img2_path):
     compositor = CompositeImages(folders)
 
     # Test naive_composite
-    result_naive, _ = compositor.composite(img1, img2, composite_function=numpy_composite)
+    result_naive, _ = compositor.composite(img1, img2, composite_function=composite_the_images_numpy)
     result_naive.show()
     result_naive.save('result_naive_composite.png')
 

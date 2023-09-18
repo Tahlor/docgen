@@ -1,10 +1,11 @@
+from hwgen.data.utils import show
 from tqdm import tqdm
 from docgen.layoutgen.segmentation_dataset.word_gen import HWGenerator, PrintedTextGenerator
 from docgen.layoutgen.segmentation_dataset.grid_gen import GridGenerator
 from docgen.layoutgen.segmentation_dataset.line_gen import LineGenerator
 from docgen.layoutgen.segmentation_dataset.box_gen import BoxGenerator
 from docgen.layoutgen.segmentation_dataset.semantic_segmentation import SemanticSegmentationDatasetGenerative, \
-AggregateSemanticSegmentationDataset, FlattenPILGenerators, SoftMaskConfig
+AggregateSemanticSegmentationDataset, FlattenPILGenerators, SoftMask, Mask, NaiveMask, SemanticSegmentationDatasetImageFolder
 from docgen.layoutgen.segmentation_dataset.paired_image_folder_dataset import PairedImgLabelImageFolderDataset
 import torch
 import socket
@@ -20,6 +21,11 @@ from PIL import Image
 from docgen.layoutgen.segmentation_dataset.image_paste_gen import CompositeImages
 from docgen.layoutgen.segmentation_dataset.image_folder import NaiveImageFolder
 from docgen.layoutgen.segmentation_dataset.gen import RandomSelectorDataset
+from docgen.image_composition.utils import encode_channels_to_colors
+from docgen.layoutgen.segmentation_dataset.utils.dataset_sampler import LayerSampler
+import tifffile
+from torchvision.transforms import ToTensor
+from docgen.windows.utils import map_drive
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -30,6 +36,12 @@ workers = int(multiprocessing.cpu_count()/2)
 workers = 0
 
 SIZE=448
+
+"""
+    # Idea: predict noise pixel levels, invert, apply soft-MASK, add to predicted HW-mask, compare to comparable GT;
+    # UGH too much work, just use the HW generator for now
+
+"""
 
 def create_generating_dataset(saved_fonts_folder=None, saved_hw_folder=None, dataset_length=5000,
                               transforms_before=None,
@@ -49,10 +61,19 @@ def create_generating_dataset(saved_fonts_folder=None, saved_hw_folder=None, dat
         saved_fonts_folder = Path(r"G:/s3/synthetic_data/resources/fonts")
         saved_hw_folder = Path("C:/Users/tarchibald/Anaconda3/envs/docgen_windows/hwgen/resources/generated")
         saved_seals_folder = Path("G:/s3/synthetic_data/resources/seals")
-        saved_preprinted_folder = Path("G:/s3/forms/HTSNet_scanned_documents")
-        saved_background_folder = Path("G:/s3/synthetic_data/resources/backgrounds")
+        saved_preprinted_text_and_elements_folders = Path("G:/s3/forms/HTSNet_scanned_documents")
+        map_drive(target_path=r"G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle", drive_letter="B:")
+        saved_background_folder = Path("B:/document_backgrounds/paper_only")
         saved_images = Path("G:/s3/synthetic_data/resources/images")
-
+        saved_pdf_text_images = [#"G:/s3/forms/PDF/IRS/text/images",
+                                 #"G:/s3/forms/PDF/GDC/text/images",
+                                 "G:/s3/forms/PDF/OPM/text/images",
+                                 "G:/s3/forms/PDF/SSA/text/images"]
+        saved_pdf_form_elements = ["G:/s3/forms/PDF/IRS/other_elements/images",
+                                   "G:/s3/forms/PDF/GDC/other_elements/images",
+                                   "G:/s3/forms/PDF/OPM/other_elements/images",
+                                   "G:/s3/forms/PDF/SSA/other_elements/images"]
+        saved_fbmd_handwriting = "G:/s3/french_bmd/transcription_pairs/transcriptions/version3/train_images"
 
     elif socket.gethostname() == "Galois":
         saved_fonts_folder = Path("/media/EVO970/s3/datascience-computervision-l3apps/HWR/synthetic-data/python-package-resources/fonts/")
@@ -67,6 +88,7 @@ def create_generating_dataset(saved_fonts_folder=None, saved_hw_folder=None, dat
 
     # generated versionPairedImgLabelImageFolderDataset
     hw_generator = HWGenerator(saved_hw_folder=saved_hw_folder,)
+
     printed_text_generator = PrintedTextGenerator(saved_fonts_folder=saved_fonts_folder,
                                                   font_size_rng=(8, 40),
                                                   word_count_rng=(10,20)
@@ -76,32 +98,47 @@ def create_generating_dataset(saved_fonts_folder=None, saved_hw_folder=None, dat
     grid_generator = GridGenerator()
     line_generator = LineGenerator()
     box_generator = BoxGenerator()
-    seal_generator = SemanticSegmentationDatasetGenerative(NaiveImageFolder(saved_seals_folder),
-                                                              transforms_before_mask_threshold=transforms_before,
-                                                              #transforms_after_mask_threshold=transforms_after,
-                                                              size=SIZE)
-    background_generator = SemanticSegmentationDatasetGenerative(NaiveImageFolder(saved_background_folder),
-                                                                transforms_before_mask_threshold=transforms_before,
-                                                                #transforms_after_mask_threshold=transforms_after,
-                                                                size=SIZE)
-    preprinted_generator = SemanticSegmentationDatasetGenerative(NaiveImageFolder(saved_preprinted_folder),
-                                                                    transforms_before_mask_threshold=transforms_before,
-                                                                    #transforms_after_mask_threshold=transforms_after,
-                                                                    size=SIZE)
-    image_generator = SemanticSegmentationDatasetGenerative(NaiveImageFolder(saved_images),
-                                                                    transforms_before_mask_threshold=transforms_before,
-                                                                    #transforms_after_mask_threshold=transforms_after,
-                                                                    size=SIZE)
-    image_dataset = RandomSelectorDataset({
-        "seal": seal_generator,
-        "image": image_generator
-    })
+
+    # dataset2 = SemanticSegmentationDatasetImageFolder(img_dir=saved_images, layer_contents="images")
+
+
+    # seal_generator = SemanticSegmentationDatasetGenerative(layer_contents=("seals","text"),
+    #                                                        generator=NaiveImageFolder(saved_seals_folder),
+    #                                                           transforms_before_mask_threshold=transforms_before,
+    #                                                           size=SIZE)
+    #
+    # background_generator = SemanticSegmentationDatasetGenerative(layer_contents=("noise"),
+    #                                                             generator=NaiveImageFolder(saved_background_folder),
+    #                                                             mask_maker=NaiveMask(),
+    #                                                             transforms_before_mask_threshold=transforms_before,
+    #                                                             size=SIZE)
+    # preprinted_generator = SemanticSegmentationDatasetGenerative(generator=NaiveImageFolder(saved_preprinted_text_and_elements_folders),
+    #                                                                 layer_contents=("text", "form_elements"),
+    #                                                                 transforms_before_mask_threshold=transforms_before,
+    #                                                                 size=SIZE)
+    # image_generator = SemanticSegmentationDatasetGenerative(generator=NaiveImageFolder(saved_images),
+    #                                                                 layer_contents=("images"),
+    #                                                                 transforms_before_mask_threshold=transforms_before,
+    #                                                                 size=SIZE)
+    # pdf_text_generator = SemanticSegmentationDatasetGenerative(generator=NaiveImageFolder(saved_pdf_text_images),
+    #                                                                 layer_contents=("text"),
+    #                                                                 transforms_before_mask_threshold=transforms_before,
+    #                                                                 size=SIZE)
+    # pdf_form_elements_generator = SemanticSegmentationDatasetGenerative(generator=NaiveImageFolder(saved_pdf_form_elements),
+    #                                                                 layer_contents=("form_elements"),
+    #                                                                 transforms_before_mask_threshold=transforms_before,
+    #                                                                 size=SIZE)
+    # fbmd_handwriting_generator = SemanticSegmentationDatasetGenerative(generator=NaiveImageFolder(saved_fbmd_handwriting),
+    #                                                                 layer_contents=("hw"),
+    #                                                                 transforms_before_mask_threshold=transforms_before,
+    #                                                                 size=SIZE)
 
     form_generator = FlattenPILGenerators([grid_generator, line_generator, box_generator])
 
     # form elements
     logger.info("Generating Semantic Segmentation Datasets")
-    form_dataset = SemanticSegmentationDatasetGenerative(form_generator,
+    form_dataset = SemanticSegmentationDatasetGenerative(layer_contents=("form_elements"),
+                                                         generator=form_generator,
                                                          transforms_before_mask_threshold=transforms_before,
                                                          #transforms_after_mask_threshold=transforms_after,
                                                          size=SIZE)
@@ -110,31 +147,44 @@ def create_generating_dataset(saved_fonts_folder=None, saved_hw_folder=None, dat
     # print(m["image"].shape)
     # grid_generator.pickle_prep()
 
-    hw_dataset = SemanticSegmentationDatasetGenerative(hw_generator,
-                                                         transforms_before_mask_threshold=transforms_before2,
-                                                         #transforms_after_mask_threshold=transforms_after,
-                                                         size=SIZE,
-                                                         soft_mask_config=SoftMaskConfig(soft_mask_threshold=.2,
-                                                                                            soft_mask_steepness=45)
+    hw_dataset = SemanticSegmentationDatasetGenerative(generator=hw_generator,
+                                                            layer_contents=("hw"),
+                                                             transforms_before_mask_threshold=transforms_before2,
+                                                             size=SIZE,
+                                                             mask_maker=SoftMask(soft_mask_threshold=.2,
+                                                             soft_mask_steepness=45)
 
                                                        )
-    printed_dataset = SemanticSegmentationDatasetGenerative(printed_text_generator,
+    printed_dataset = SemanticSegmentationDatasetGenerative(generator=printed_text_generator,
+                                                            layer_contents=("text", "form_elements"),
                                                             transforms_before_mask_threshold=transforms_before,
-                                                            #transforms_after_mask_threshold=transforms_after,
                                                             size=SIZE)
 
-    aggregate_dataset = AggregateSemanticSegmentationDataset([form_dataset,
-                                                              hw_dataset,
-                                                              printed_dataset,
-                                                              seal_generator,
-                                                              background_generator,
-                                                              preprinted_generator,
-                                                              image_generator],
+    # all_generators2 = [form_dataset,
+    #                     hw_dataset,
+    #                     printed_dataset,
+    #                     background_generator,
+    #                     preprinted_generator,
+    #                     pdf_form_elements_generator,
+    #                     pdf_text_generator,
+    #                     seal_generator,
+    #                     image_generator,
+    #                                                          ],
+
+    all_generators = [form_dataset,  hw_dataset, hw_dataset, printed_dataset]
+    layout_sampler = LayerSampler(all_generators,
+                                  [d.sampling_weight if hasattr(d, "sampling_weight") else 1 for d in all_generators]
+                                  )
+
+    aggregate_dataset = AggregateSemanticSegmentationDataset(all_generators,
                                                              background_img_properties='max',
                                                              dataset_length=dataset_length,
                                                              transforms_after_compositing=transforms_after,
+                                                             layout_sampler=layout_sampler,
+
                                                              )
 
+    print(aggregate_dataset.config)
     return aggregate_dataset
 
 def get_path():
@@ -148,7 +198,7 @@ def get_path():
 
 def get_path_novel():
     if socket.gethostname() == "PW01AYJG":
-        path = Path(r"C:\Users\tarchibald\github\document_embeddings\document_embeddings\segmentation\dataset\v5_100k")
+        path = Path(r"C:\Users\tarchibald\github\document_embeddings\document_embeddings\segmentation\dataset\v6_100k")
     elif socket.gethostname() == "Galois":
         path = Path(r"/media/EVO970/s3/synthetic_data/semantic_segmentation_dataset/v3_100k")
     else:
@@ -169,7 +219,7 @@ def save_dataset():
     output = get_path_novel()
     output.mkdir(exist_ok=True, parents=True)
     logger.info("Saving dataset to {}".format(output))
-    transforms_before, transforms_after, transforms_before2 = get_transforms()
+    transforms_before, transforms_after, transforms_before2, transforms_before_image_folders = get_transforms()
     dataset = create_generating_dataset(dataset_length=100000,
                                         transforms_before=transforms_before,
                                         transforms_after=transforms_after,
@@ -193,20 +243,27 @@ def save_dataset():
     for i, batch in tqdm(enumerate(dataloader)):
         step+=1
         img_path = output / f"{step:07d}_input.png"
-        label_path = output / f"{step:07d}_label.png"
+        label_path = output / f"{step:07d}_label.tiff"
+        label_path_visual = output / f"{step:07d}_label_visual.jpg"
 
         if False and img_path.exists():
             continue
 
         inputs, labels = batch['image'], batch['mask']
 
+        # convert to numpy and switch to HWC, handle batch or not
+        labels = labels.numpy().transpose(0, 2, 3, 1) if len(labels.shape) == 4 else labels.numpy().transpose(1, 2, 0)
+
         for j in range(inputs.shape[0]):
-            input = inputs[j]
+            input_img = inputs[j]
             label = labels[j]
 
             # save as images
-            to_pil(input).save(img_path)
-            to_pil(label).save(label_path)
+            input_img = to_pil(input_img)
+            input_img.save(img_path)
+            visualized_img = encode_channels_to_colors(label)
+            to_pil(visualized_img).save(label_path_visual)
+            tifffile.imwrite(label_path, label)
 
 def get_transforms():
     """
@@ -225,12 +282,21 @@ def get_transforms():
     before += either
     after = [Blobs(), BackgroundMultiscaleNoise(), BackgroundFibrous(), Contrast()]
 
-    transforms_before = transforms.Compose([
+    transforms_before_generative = transforms.Compose([
         # ocnvert PIL IMage to numpy
+        ToNumpy(),
+        # transforms.ToTensor(),
+        RandomChoice(before),
+        ResizeAndPad(SIZE, 32) if SIZE else IdentityTransform(), # this converts to Tensor
+    ])
+
+    transforms_before_image_folders = transforms.Compose([
         ToNumpy(),
         RandomChoice(before),
         ResizeAndPad(SIZE, 32) if SIZE else IdentityTransform(), # this converts to Tensor
     ])
+
+
     transforms_before2 = transforms.Compose([
         ToNumpy(),
         ResizeAndPad(SIZE, 32) if SIZE else IdentityTransform(), # this converts to Tensor
@@ -238,14 +304,19 @@ def get_transforms():
 
     transforms_after = transforms.Compose([
         #lambda x: x.permute(1, 2, 0),
-        CHWToHWC(),
-        Squeeze(),
-        RandomChoice(after),
-        HWCToCHW(),
+
+        # NO DEGRADATION
+        # CHWToHWC(),
+        # ToNumpy(),
+        # Squeeze(),
+        # RandomChoice(after),
+        # ToTensor(),
+
+        # HWCToCHW(),
         #lambda x: x.numpy(),
         #transforms.ToTensor()
     ])
-    return transforms_before, transforms_after, transforms_before2
+    return transforms_before_generative, transforms_after, transforms_before2, transforms_before_image_folders
     #return None,None
 
 

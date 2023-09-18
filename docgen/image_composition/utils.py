@@ -1,9 +1,12 @@
+from typing import Callable
+import torch
 import numpy as np
 import random
 from docgen.bbox import BBox
 from typing import Union, Tuple, Dict, Any
 from pathlib import Path
 from random import choice
+import cv2
 
 def pick_origin(background_shape,
                 factor=4):
@@ -248,6 +251,217 @@ class CompositeImages(CalculateImageOriginForCompositing):
         origin_x, origin_y = self.calculate_origin(base_image, overlay_image, min_overlap)
         result_image = np_composite(base_image, overlay_image, origin_x, origin_y, self.composite_function)
         return result_image
+
+COLORS = [
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1],
+            [1, 1, 0],
+            [1, 0, 1],
+            [0, 1, 1]
+        ]
+
+def encode_channels_to_colors_np(image: np.array, colors: list=None) -> np.array:
+    """
+    Encode each channel to a different color and composite to a single image.
+    HWC
+    """
+    if colors is None:
+        colors = COLORS
+    output_img = np.zeros((image.shape[0], image.shape[1], 3))
+    # nothing should be less than 0
+    image = np.maximum(image, 0)
+
+    for i in range(image.shape[-1]):
+        channel = image[:,:,i]
+        channel_normalized = channel / 255.0 if channel.max() > 1 else channel
+        from hwgen.data.utils import show
+        show(channel_normalized)
+        color = np.array(colors[i])
+        colored_channel = channel_normalized[:, :, np.newaxis] * color
+        output_img = np.maximum(output_img, colored_channel)
+
+    output_img = (output_img * 255).astype('uint8')
+    return output_img
+
+def encode_channels_to_colors_torch(image: torch.Tensor, colors: list=None) -> torch.Tensor:
+    """
+    Encode each channel to a different color and composite to a single PyTorch image.
+    CHW
+    """
+    if colors is None:
+        colors = COLORS
+
+    # Initialize output tensor
+    output_img = torch.zeros((3, image.shape[1], image.shape[2]), device=image.device)
+
+    for i in range(image.size(0)):
+        channel = image[i,:,:]
+        channel_normalized = channel / 255.0
+        color = torch.tensor(colors[i], device=image.device).view(3, 1, 1)
+        colored_channel = channel_normalized * color
+        output_img = torch.maximum(output_img, colored_channel)
+
+    output_img = (output_img * 255).clamp(0, 255).byte()
+    return output_img
+
+def encode_channels_to_colors(image, colors: list=None):
+    if isinstance(image, np.ndarray):
+        return encode_channels_to_colors_np(image, colors)
+    elif isinstance(image, torch.Tensor):
+        return encode_channels_to_colors_torch(image, colors)
+    else:
+        raise ValueError("Unsupported tensor type. Expected np.array or torch.Tensor.")
+def composite_the_images_numpy(base_image, overlay_image, origin_x, origin_y, composite_function=np.minimum):
+    width1, height1, width2, height2 = base_image.shape[1], base_image.shape[0], overlay_image.shape[1], overlay_image.shape[0]
+
+    result_image = base_image.copy()
+    overlay_image = overlay_image[
+                    max(0, -origin_y):min(height2, height1 - origin_y),
+                    max(0, -origin_x):min(width2, width1 - origin_x)]
+
+    overlap = result_image[max(0, origin_y):min(height1, origin_y + height2),
+              max(0, origin_x):min(width1, origin_x + width2)]
+
+    result_image[max(0, origin_y):min(height1, origin_y + height2),
+    max(0, origin_x):min(width1, origin_x + width2)] = composite_function(overlap, overlay_image)
+    return result_image
+
+def torch_wrapper(func):
+    """
+    A generic wrapper to allow a function operating on numpy arrays to handle PyTorch tensors.
+
+    Args:
+    - func (Callable): The function to wrap.
+
+    Returns:
+    - Callable: A function that can handle PyTorch tensors.
+    """
+    def inner(base_image, overlay_image, *args, **kwargs):
+        was_tensor = False
+
+        # Check if the images are PyTorch tensors and convert to numpy arrays if so
+        if isinstance(base_image, torch.Tensor):
+            was_tensor = True
+            base_image = base_image.cpu().numpy().transpose(1, 2, 0)  # Convert CxHxW to HxWxC
+
+        if isinstance(overlay_image, torch.Tensor):
+            overlay_image = overlay_image.cpu().numpy().transpose(1, 2, 0)  # Convert CxHxW to HxWxC
+
+        result = func(base_image, overlay_image, *args, **kwargs)
+
+        # Convert back to tensor if original input was a tensor
+        if was_tensor:
+            result = torch.from_numpy(result.transpose(2, 0, 1))  # Convert HxWxC to CxHxW
+
+        return result
+
+    return inner
+
+def np01_to_255(img):
+    if img.dtype == np.uint8:
+        return img
+    return (img * 255).astype(np.uint8)
+
+def np255_to_01(img):
+    if img.dtype == np.float32:
+        return img
+    return img.astype(np.float32) / 255
+
+@torch_wrapper
+def seamless_composite(base_image: np.ndarray, overlay_image: np.ndarray, origin_x: int, origin_y: int) -> np.ndarray:
+    """
+    Composite overlay_image onto base_image using seamless cloning.
+
+    Args:
+        base_image (np.ndarray): The base image.
+        overlay_image (np.ndarray): The image to overlay.
+        origin_x (int): X-coordinate of the top-left corner where overlay_image should be placed on base_image.
+        origin_y (int): Y-coordinate of the top-left corner where overlay_image should be placed on base_image.
+
+    Returns:
+        np.ndarray: The composited image.
+    """
+    base_image = np01_to_255(base_image)
+    overlay_image = np01_to_255(overlay_image)
+
+    # Handle negative origins by cropping the overlay_image
+    if origin_x < 0:
+        overlay_image = overlay_image[:, -origin_x:]
+        origin_x = 0
+
+    if origin_y < 0:
+        overlay_image = overlay_image[-origin_y:, :]
+        origin_y = 0
+
+    # Handle overlay image exceeding the right/bottom edge
+    if origin_x + overlay_image.shape[1] > base_image.shape[1]:
+        overlay_image = overlay_image[:, :(base_image.shape[1] - origin_x)]
+
+    if origin_y + overlay_image.shape[0] > base_image.shape[0]:
+        overlay_image = overlay_image[:(base_image.shape[0] - origin_y), :]
+
+    # Create a binary mask from the alpha channel of overlay_image or from grayscale image
+    if overlay_image.shape[2] == 4:  # RGBA image
+        mask = overlay_image[..., 3]
+    else:  # RGB or grayscale
+        mask = np.ones_like(overlay_image[..., 0]) * 255  # If not RGBA, just use a full mask
+
+    # Calculate center coordinates based on the adjusted origin and size of overlay_image
+    center = (origin_x + overlay_image.shape[1] // 2, origin_y + overlay_image.shape[0] // 2)
+
+    # Apply seamless cloning. Note that we're ensuring the overlay image is only in RGB.
+    result = cv2.seamlessClone(src=overlay_image[..., :3], dst=base_image, mask=mask, p=center, flags=cv2.NORMAL_CLONE)
+
+    return np255_to_01(result)
+
+def composite_the_images_torch(background_img, img, bckg_x, bckg_y, method: Callable = torch.min):
+    """
+
+    Args:
+        background_img: CHW
+        img: CHW
+        bckg_x:
+        bckg_y:
+        method:
+
+    Returns:
+
+    To work with numpy, you would:
+            Unsqueeze Operation: In PyTorch, you use .unsqueeze(0) to add a new dimension at the front. In NumPy, you would use np.newaxis.
+            Clone Operation: In PyTorch, you use .clone() to create a copy of a tensor. In NumPy, you would use .copy().
+            Minimum Operation: In PyTorch, you use torch.min() to find the minimum of two tensors. In NumPy, you would use np.minimum().
+    """
+
+    # if background_img has 2 dimensions and img has 3, expand the background
+    if len(background_img.shape) == 2 and len(img.shape) == 3:
+        background_img = background_img.unsqueeze(0)
+
+    # if img has more channels than background, expand the background
+    if img.shape[0] > background_img.shape[0] and len(background_img.shape) == 3 == len(img.shape):
+        background_img = background_img.expand(img.shape[0], -1, -1)
+
+    bckg_h, bckg_w = background_img.shape[-2:]
+    img_h, img_w = img.shape[-2:]
+
+    x_start, x_end = max(bckg_x, 0), min(bckg_x + img_w, bckg_w)
+    y_start, y_end = max(bckg_y, 0), min(bckg_y + img_h, bckg_h)
+
+    img_x_start, img_x_end = max(-bckg_x, 0), min(-bckg_x + bckg_w, img_w)
+    img_y_start, img_y_end = max(-bckg_y, 0), min(-bckg_y + bckg_h, img_h)
+
+    if x_end <= x_start or y_end <= y_start:
+        print("No overlap between the images.")
+
+    # Clone the background image to avoid modifying the original
+    background_img = background_img.clone()
+
+    # Take the minimum pixel value between the images in the overlapping area
+    background_img[..., y_start:y_end, x_start:x_end] = method(background_img[..., y_start:y_end, x_start:x_end],
+                                                               img[..., img_y_start:img_y_end,
+                                                               img_x_start:img_x_end])
+
+    return background_img
 
 
 if __name__ == '__main__':

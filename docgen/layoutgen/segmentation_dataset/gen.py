@@ -2,6 +2,9 @@ import sys
 from docgen.bbox import BBox
 from docgen.render_doc import composite_images_PIL
 from PIL import Image
+from typing import Dict, Any, Union, Optional
+from torch.utils.data import Dataset
+import random
 
 class Gen:
 
@@ -50,11 +53,12 @@ class Gen:
         if hasattr(self, "generator") and hasattr(self.generator, "image"):
             del self.generator.image
 
+class NaiveGenerator(Gen):
+    def __init__(self, img_size):
+        self.img_size = img_size
 
-from typing import Dict, Any, Union
-from torch.utils.data import Dataset
-import random
-
+    def get(self):
+        return Image.new("RGB", self.img_size, (255,255,255))
 
 class RandomSelectorDataset(Dataset):
     """Dataset to randomly select and return an item from one of the given datasets.

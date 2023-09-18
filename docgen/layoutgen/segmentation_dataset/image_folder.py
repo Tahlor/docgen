@@ -16,15 +16,38 @@ logger.addHandler(logging.StreamHandler())
 
 class NaiveImageFolder(Dataset):
     def __init__(self, img_dir, transform_list=None, max_length=None, color_scheme="RGB", longest_side=None,
-                 pad_to_be_divisible_by=32, **kwargs):
+                 pad_to_be_divisible_by=32, recursive=True, extensions=(".jpg", ".png"), return_format="just_image",
+                 **kwargs):
+        """
+
+        Args:
+            img_dir:
+            transform_list:
+            max_length:
+            color_scheme:
+            longest_side:
+            pad_to_be_divisible_by:
+            recursive:
+            extensions:
+            return_format: "dict" or "just_image"
+            **kwargs:
+        """
+
         super().__init__()
         img_dirs = img_dir
         if not isinstance(img_dir, (tuple, list)):
             img_dirs = [img_dir]
 
         self.imgs = []
+        extensions = set([ext.lower() for ext in extensions])
         for img_dir in img_dirs:
-            self.imgs += list(Path(img_dir).rglob("*.png")) + list(Path(img_dir).rglob("*.jpg"))
+            img_dir = Path(img_dir)
+            if recursive:
+                self.imgs += list(img_dir.rglob("*.*"))
+            else:
+                self.imgs += list(img_dir.glob("*.*"))
+        self.imgs = [img for img in self.imgs if img.suffix.lower() in extensions]
+
 
         self.imgs = sorted(self.imgs)
         self.color_scheme = color_scheme
@@ -53,6 +76,7 @@ class NaiveImageFolder(Dataset):
 
         self.max_length = max_length if max_length is not None else len(self.imgs)
         self.current_img_idx = 0
+        self.return_format = return_format
 
     def __len__(self):
         return min(len(self.imgs), self.max_length)
@@ -68,7 +92,13 @@ class NaiveImageFolder(Dataset):
                 if self.transform_composition is not None:
                     img = self.transform_composition(img)
 
-                return {'image': img,  "name": img_path.stem}
+                if self.return_format == "just_image":
+                    return img
+                elif self.return_format == "dict":
+                    return {'image': img,  "name": img_path.stem}
+                else:
+                    raise NotImplementedError(f"return_format {self.return_format} not implemented")
+
             except:
                 logger.exception(f"Error loading image {img_path}")
                 idx += 1

@@ -1,0 +1,119 @@
+workers: 0
+final_size: 448
+
+datasets:
+  - name: hw
+    type: HandwritingDataset
+    path: "G:/s3/synthetic_data/resources/handwriting"
+    sample_weight: 1
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - RandomDistortions
+        - RuledSurfaceDistortions
+        - Blur
+        - Lighten
+        - Contrast
+      - ResizeAndPad:
+        size: 448
+        padding: 32
+
+  - name: images
+    type: NaiveImageFolder
+    layer_contents: image
+    path: "G:/s3/synthetic_data/resources/images"
+    sample_weight: 1
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - RandomDistortions
+        - RuledSurfaceDistortions
+        - Blur
+        - Lighten
+        - Contrast
+      - ResizeAndPad:
+        size: 448
+        padding: 32
+  - name: background
+    type: SemanticSegmentationDatasetGenerative
+    layer_contents: noise
+    path: "B:/document_backgrounds/paper_only"
+    sample_weight: 1
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - RandomDistortions
+        - RuledSurfaceDistortions
+      - ResizeAndPad:
+        size: 448
+        padding: 32
+  - name: seals
+    type: SemanticSegmentationDatasetGenerative
+    layer_contents: seals
+    path: "G:/s3/synthetic_data/resources/seals"
+    sample_weight: 1
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - RandomDistortions
+        - RuledSurfaceDistortions
+      - ResizeAndPad:
+        size: 448
+        padding: 32
+  - name: preprinted_text_and_forms
+    type: SemanticSegmentationDatasetGenerative
+    layer_contents:
+      - text
+      - form_elements
+    path: "G:/s3/forms/HTSNet_scanned_documents"
+    sample_weight: 1
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - RandomDistortions
+        - RuledSurfaceDistortions
+      - ResizeAndPad:
+        size: 448
+        padding: 32
+
+  - name: pdf_text
+    type: SemanticSegmentationDatasetGenerative
+    layer_contents: text
+    path:
+      - "G:/s3/forms/PDF/OPM/text/images"
+      - "G:/s3/forms/PDF/SSA/text/images"
+    sample_weight: 1
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - RandomDistortions
+        - RuledSurfaceDistortions
+      - ResizeAndPad:
+        size: 448
+        padding: 32
+
+
+  - name: pdf_form_elements
+    type: SemanticSegmentationDatasetGenerative
+    layer_contents: form_elements
+    path:
+      - "G:/s3/forms/PDF/IRS/other_elements/images"
+      - "G:/s3/forms/PDF/GDC/other_elements/images"
+      - "G:/s3/forms/PDF/OPM/other_elements/images"
+      - "G:/s3/forms/PDF/SSA/other_elements/images"
+    sample_weight: 1
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - RandomDistortions
+        - RuledSurfaceDistortions
+      - ResizeAndPad:
+        size: 448
+        padding: 32
+
+global_transforms:
+  - RandomDistortions
+  - RuledSurfaceDistortions
+  - Blur
+  - Lighten
+  - Contrast

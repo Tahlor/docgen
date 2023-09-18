@@ -1,3 +1,4 @@
+from docgen.layoutgen.segmentation_dataset.utils.dataset_sampler import LayerSampler
 import socket
 import os
 import sys
@@ -17,7 +18,7 @@ from typing import List, Optional, Tuple, Union, Literal, Callable
 from docgen.layoutgen.layoutgen import composite_images_PIL
 from docgen.transforms.transforms import ResizeAndPad, IdentityTransform
 from docgen.image_composition.utils import CompositeImages, CalculateImageOriginForCompositing
-#from docdegrade.composite import CompositeImages
+from docgen.image_composition.utils import seamless_composite, composite_the_images_numpy, composite_the_images_torch
 
 to_pil = ToPILImage()
 """
@@ -33,27 +34,102 @@ to_pil = ToPILImage()
 # * a dataset that is self-contained that contains all parts
 # * a dataset this is composed of other datasets
 
+# If the pixel percentage of the image that is identified as text (based on some threshold), then throw it out 
+# TEXT: G:\s3\forms\PDF\GDC\text\images\
+# FORM ELEMENTS: G:\s3\forms\PDF\GDC\other_elements\images\ - require pretty dark threshold, on at least 1 channel
+# 
+
+# Aggregate: should be given a list of descriptions of the layers to be composited; each dataset should have one of these layer descriptions
+# We can use a "meta" random choose that decides which if any dataset it's going to sample
+# It can choose to sample NONE of them, in which case we just omit that layer
+# COMBINED FORMS: what if we want it to predict TEXT+FORM element combined?
+
+# Another experiment: don't predict the mask, just predict the B&W original pixel value
+# When I save the dataset, just save the raw pixels and let the mask calculated at runtime?
+
+        if self.mask_object:
+            #mask = torch.where(bw_img < self.threshold01, 1 - bw_img, torch.tensor(0))
+            mask = 1.0 - bw_img
+            transition_point = self.mask_object.soft_mask_threshold
+            steepness = self.mask_object.soft_mask_steepness
+            mask = torch.sigmoid(steepness * (mask - transition_point))
+        else:
+            mask = torch.where(bw_img < self.threshold01, torch.tensor(1), torch.tensor(0))
+
+* Figure out BEFORE augmentations, these include rotation, size, some kinds of distortions, color, etc. When do we convert it to a tensor?
+    # Let's avoid all kinds of numpy augmentations
+* Random chooser
+* Config maker!
+* Crop the top and bottom of images
+* Crop the bing ones
+* Random rotation / mirror
+
+
+https://www.1001fonts.com/handwriting-fonts.html
+https://fonts.google.com/?category=Handwriting
+
 """
-class SoftMaskConfig:
+
+
+class NaiveMask:
+    """ It's not even a mask, it's just pixel intensity
+    """
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def __call__(self, img):
+        # convert to grayscale using luminance
+        if img.shape[0] == 3:
+            img = torch.sum(img, dim=0) / 3
+        return img
+
+class Mask(NaiveMask):
+    def __init__(self, threshold=.5, *args, **kwargs):
+        self.threshold01 = threshold if threshold < 1 else threshold * 255
+
+    def __call__(self, img):
+        return torch.where(img < self.threshold01, torch.tensor(1), torch.tensor(0))
+
+class SoftMask(Mask):
     def __init__(self, soft_mask_threshold=.3, soft_mask_steepness=20):
+        super().__init__()
         self.soft_mask_threshold = soft_mask_threshold
         self.soft_mask_steepness = soft_mask_steepness
 
+    def __call__(self, img):
+        mask = 1.0 - img
+        transition_point = self.soft_mask_threshold
+        steepness = self.soft_mask_steepness
+        mask = torch.sigmoid(steepness * (mask - transition_point))
+        return mask
+
 class SemanticSegmentationDataset(Dataset):
     def __init__(self,
+                 layer_contents: Union[tuple,str,list],
                  transforms_before_mask_threshold=None,
                  transforms_after_mask_threshold=None,
-                 threshold=.6,
                  overfit_dataset_length=0,
                  size=448,
-                 soft_mask_config: Union[SoftMaskConfig, bool]=SoftMaskConfig()
+                 mask_maker: Union[Mask, bool]=None,
                  ):
+        """
+
+        Args:
+            layer_contents: e.g. ('text', 'form_elements', 'handwriting')
+            transforms_before_mask_threshold:
+            transforms_after_mask_threshold:
+            overfit_dataset_length:
+            size:
+            mask_maker:
+        """
+        # sort it so that the order is consistent
+        self.layer_contents = (layer_contents,) if isinstance(layer_contents, str) else tuple(sorted(layer_contents))
+
         # if threshold is None, just use the pixel intensity as labellogit
         self.transforms_before = transforms_before_mask_threshold
         self.transforms_after = transforms_after_mask_threshold
-        self.threshold01 = threshold if threshold < 1 else threshold * 255
         self.overfit_dataset_length = overfit_dataset_length
-        self.soft_mask_config = soft_mask_config
+        self.mask_object = mask_maker if mask_maker else Mask()
 
         # Default transformations before thresholding
         if self.transforms_before is None:
@@ -94,14 +170,7 @@ class SemanticSegmentationDataset(Dataset):
         else:
             bw_img = img[0]
 
-        if self.soft_mask_config:
-            #mask = torch.where(bw_img < self.threshold01, 1 - bw_img, torch.tensor(0))
-            mask = 1.0 - bw_img
-            transition_point = self.soft_mask_config.soft_mask_threshold
-            steepness = self.soft_mask_config.soft_mask_steepness
-            mask = torch.sigmoid(steepness * (mask - transition_point))
-        else:
-            mask = torch.where(bw_img < self.threshold01, torch.tensor(1), torch.tensor(0))
+        mask = self.mask_object(bw_img)
 
         if self.transforms_after:
             img = self.transforms_after(img)
@@ -141,12 +210,14 @@ class SemanticSegmentationDataset(Dataset):
     def get_image(self, idx):
         raise NotImplementedError()
 
+
 class SemanticSegmentationDatasetGenerative(SemanticSegmentationDataset):
     def __init__(self,
+                 layer_contents,
                  generator,
                  *args,
                  **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(layer_contents, *args, **kwargs)
         self.generator = generator
 
     def get_image(self, idx):
@@ -156,10 +227,10 @@ class SemanticSegmentationDatasetGenerative(SemanticSegmentationDataset):
         return sys.maxsize
 
 class SemanticSegmentationDatasetImageFolder(SemanticSegmentationDataset):
-    def __init__(self, img_dir,
+    def __init__(self, layer_contents, img_dir,
                  *args,
                  **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(layer_contents, *args, **kwargs)
         self.img_dir = img_dir
         self.img_paths = self.get_images(img_dir)
 
@@ -211,14 +282,18 @@ def more_random_offset(bck_w, bck_h, img_w, img_h, percent=0.9):
 
 
 class AggregateSemanticSegmentationDataset(Dataset):
-    def __init__(self, subdatasets:List[SemanticSegmentationDatasetImageFolder],
+    def __init__(self, subdatasets:List[SemanticSegmentationDataset],
                  background_img_properties=None,
                  overfit_dataset_length=0,
                  random_origin_composition=True,
                  mask_default_value=0,
                  img_default_value=1,
                  dataset_length=5000,
-                 transforms_after_compositing=None,):
+                 transforms_after_compositing=None,
+                 output_channel_content_names=None,
+                 layout_sampler=None,
+                 composite_function: Union[seamless_composite, composite_the_images_torch]=composite_the_images_torch,):
+
         """
 
         Args:
@@ -228,6 +303,11 @@ class AggregateSemanticSegmentationDataset(Dataset):
             random_origin_composition (bool): randomize image composition
             mask_default_value (int): what value should the mask be by default
             img_default_value (int): if pasting on to a blank image, what value should it be by default
+            dataset_length (int): how many images to generate in one epoch
+            transforms_after_compositing:
+            output_channel_content_names (list): list of names for each layer
+            layout_sampler (LayerSampler): a LayerSampler object that will be used to sample the layers
+
         """
         self.subdatasets = subdatasets
         self.background_img_properties = background_img_properties
@@ -238,187 +318,142 @@ class AggregateSemanticSegmentationDataset(Dataset):
         self.dataset_length = dataset_length
         self.transforms_after_compositing = transforms_after_compositing
         self.random_origin_function = CalculateImageOriginForCompositing(image_format="CHW") # vs. more_random_offset
+        self.composite_function = composite_function
+        #self.layer_contents_names = layer_contents_names if layer_contents_names else self.get_layer_contents_to_output_channel_map()
+        self.layout_sampler = layout_sampler
+        self.output_channel_content_names = self.get_layer_contents_to_output_channel_map(
+            ) if output_channel_content_names is None else output_channel_content_names
+        self.config = self.get_combination_config(
+            [subdataset.layer_contents for subdataset in self.subdatasets])
+
+    def get_channel_idx(self, layer_name_tuple):
+        return self.output_channel_content_names.index((layer_name_tuple,) if isinstance(layer_name_tuple, str) else tuple(layer_name_tuple))
+
+    def get_layer_contents_to_output_channel_map(self):
+        """ You need to make sure that ALL unique elements are found (i.e., they might only appear in a combined thing,
+                but we still have a spot for them (not essential, but for simplicity)
+
+        Returns:
+
+        """
+        self.unique_layers = sorted(list(set([item for dataset in self.subdatasets for item in dataset.layer_contents])))
+        self.combined_layers = sorted(
+            list(set(
+            [item.layer_contents for item in self.subdatasets if len(item.layer_contents) > 1]
+            )), key=lambda x: (len(x), x)
+        )
+        return [(x,) if isinstance(x,str) else x for x in self.unique_layers] + self.combined_layers
+
+
+    def get_combination_config(self, list_of_subdataset_layer_tuples):
+        """ Given a list of tuples of like (("hw", "text"), ("noise"), ("hw", "text", "noise")), return a config,
+            with mapping the tuple to the output channel index from self.output_channel_content_names
+            so hw -> 0, text -> 1, noise -> 2, (hw, text) -> 3, (hw, text, noise) -> 4
+            so the config would be ((0,1), 3), ((0,1,2), 4)
+
+        Args:
+            list_of_subdataset_layer_tuples (list): list of tuples of layer names
+
+        Returns:
+            tuple: config
+
+        """
+
+        config = []
+        for layer_tuple in list_of_subdataset_layer_tuples:
+            if len(layer_tuple) > 1:
+                # Getting indices for the individual layers from the tuple
+                channels = tuple(self.get_channel_idx(layer) for layer in layer_tuple)
+                combined_channel = self.get_channel_idx(layer_tuple)
+                config.append((channels, combined_channel))
+
+        return tuple(config)
 
     def __len__(self):
         #return min(len(d) for d in self.subdatasets)
         return self.dataset_length
 
-    @staticmethod
-    def composite_the_images_torch(background_img, img, bckg_x, bckg_y):
-        # Shape of the composite_image
-        bckg_h, bckg_w = background_img.shape[-2:]
-        img_h, img_w = img.shape[-2:]
 
-        # if background_img has 2 dimensions and img has 3, expand the background
-        if len(background_img.shape) == 2 and len(img.shape) == 3:
-            background_img = background_img.unsqueeze(0)
-
-        # if img has more channels than background, expand the background
-        if img.shape[0] > background_img.shape[0] and len(background_img.shape) == 3 == len(img.shape):
-            background_img = background_img.expand(img.shape[0], -1, -1)
-            #assert torch.all(background_img[0] == background_img[1])
-
-        # Calculate the coordinates of the paste area
-        paste_x = bckg_x
-        paste_y = bckg_y
-        paste_width = min(img_w, bckg_w - bckg_x if bckg_x >= 0 else img_w + bckg_x, bckg_w)
-        paste_height = min(img_h, bckg_h - bckg_y if bckg_y >= 0 else img_h + bckg_y, bckg_h)
-
-        # Check for overlap
-        if paste_width <= 0 or paste_height <= 0:
-            print("No overlap between the images.")
-            return background_img
-
-        # Paste the overlap onto the background image
-        background_img = background_img.clone()
-
-        slice_background = background_img[..., paste_y:paste_y + paste_height, paste_x:paste_x + paste_width]
-        slice_img = img[..., :paste_height, :paste_width]
-
-        # Ensure the slices are of the same shape
-        if slice_background.shape == slice_img.shape:
-            background_img[..., paste_y:paste_y + paste_height, paste_x:paste_x + paste_width] = torch.min(
-                slice_background, slice_img)
-        else:
-            print("Shapes do not match: slice_background = {}, slice_img = {}".format(slice_background.shape,
-                                                                                      slice_img.shape))
-
-        # Return the composite image
-        return background_img
-
-    def composite_the_images3(self, background_img, img, bckg_x, bckg_y):
-        # if background_img has 2 dimensions and img has 3, expand the background
-        if len(background_img.shape) == 2 and len(img.shape) == 3:
-            background_img = background_img.unsqueeze(0)
-
-        # if img has more channels than background, expand the background
-        if img.shape[0] > background_img.shape[0] and len(background_img.shape) == 3 == len(img.shape):
-            background_img = background_img.expand(img.shape[0], -1, -1)
-            #assert torch.all(background_img[0] == background_img[1])
-
-        # Paste the overlap onto the background image
-        background_img = background_img.clone()
-
-        bckg_h, bckg_w = background_img.shape[-2:]
-        img_h, img_w = img.shape[-2:]
-
-        x_start, x_end = max(bckg_x, 0), min(bckg_x + img_w, bckg_w)
-        y_start, y_end = max(bckg_y, 0), min(bckg_y + img_h, bckg_h)
-
-        img_x_start, img_x_end = max(-bckg_x, 0), min(-bckg_x + bckg_w, img_w)
-        img_y_start, img_y_end = max(-bckg_y, 0), min(-bckg_y + bckg_h, img_h)
-
-        if x_end <= x_start or y_end <= y_start:
-            print("No overlap between the images.")
-            # return background_img
-
-        background_img[..., y_start:y_end, x_start:x_end] = img[..., img_y_start:img_y_end, img_x_start:img_x_end]
-        return background_img
-
-    def composite_the_images(self, background_img, img, bckg_x, bckg_y, method:Callable=torch.min):
-
-        # # If the images have a different number of channels, expand them to have 3 channels
-        # if len(background_img.shape) < 3:
-        #     background_img = background_img.unsqueeze(0).repeat(3, 1, 1)
-        # if len(img.shape) < 3:
-        #     img = img.unsqueeze(0).repeat(3, 1, 1)
-
-        if len(background_img.shape) == 2 and len(img.shape) == 3:
-            background_img = background_img.unsqueeze(0)
-
-        # if img has more channels than background, expand the background
-        if img.shape[0] > background_img.shape[0] and len(background_img.shape) == 3 == len(img.shape):
-            background_img = background_img.expand(img.shape[0], -1, -1)
-            #assert torch.all(background_img[0] == background_img[1])
-
-
-        bckg_h, bckg_w = background_img.shape[-2:]
-        img_h, img_w = img.shape[-2:]
-
-        x_start, x_end = max(bckg_x, 0), min(bckg_x + img_w, bckg_w)
-        y_start, y_end = max(bckg_y, 0), min(bckg_y + img_h, bckg_h)
-
-        img_x_start, img_x_end = max(-bckg_x, 0), min(-bckg_x + bckg_w, img_w)
-        img_y_start, img_y_end = max(-bckg_y, 0), min(-bckg_y + bckg_h, img_h)
-
-        if x_end <= x_start or y_end <= y_start:
-            print("No overlap between the images.")
-            # return background_img
-        # Clone the background image to avoid modifying the original
-        background_img = background_img.clone()
-
-        # Take the minimum pixel value between the images in the overlapping area
-        background_img[..., y_start:y_end, x_start:x_end] = method(background_img[..., y_start:y_end, x_start:x_end],
-                                                                      img[..., img_y_start:img_y_end,
-                                                                      img_x_start:img_x_end])
-
-        return background_img
-
-    def __getitem__(self, idx):
-
+    def __getitem__(self, idx: int) -> dict:
+        """Get item for a given index."""
         if self.overfit_dataset_length > 0:
             idx = idx % self.overfit_dataset_length
 
-        images_and_masks = [d[idx] for d in self.subdatasets]
+        if self.layout_sampler is None:
+            chosen_datasets = self.subdatasets
+        else:
+            chosen_datasets = self.layout_sampler.sample(replacement=False)
 
-        # convert list of dicts to tuple of lists
+        images_and_masks = [d[idx] for d in self.subdatasets]
         images, masks = [x["image"] for x in images_and_masks], [x["mask"] for x in images_and_masks]
 
+        # Calculate background size
+        bckg_size = self._calculate_background_size(images)
+
+        composite_image = torch.ones(bckg_size) * self.img_default_value
+        composite_masks = torch.zeros((len(self.output_channel_content_names), *bckg_size[-2:]))
+        if self.mask_default_value:
+            composite_masks += self.mask_default_value
+
+        composite_masks[len(self.unique_layers):] = -100
+
+        layers = [x.layer_contents for x in chosen_datasets]
+        combined_layers_in_current_iteration = [x.layer_contents for x in chosen_datasets if len(x.layer_contents) > 1]
+        combined_layer_elements_in_current_iteration = set([item for sublist in combined_layers_in_current_iteration for item in sublist])
+
+        for dataset, (img, mask) in zip(chosen_datasets, zip(images, masks)):
+            start_x, start_y = self._determine_image_start_position(composite_image, img)
+            composite_image = self.composite_function(composite_image, img, start_x, start_y)
+
+            # For mask, choose channel, paste at appropriate location, then take the max with existing mask
+            channel = self.get_channel_idx(dataset.layer_contents)
+            pasted_mask = torch.zeros(bckg_size[-2:]) + self.mask_default_value
+            pasted_mask = composite_the_images_torch(pasted_mask, mask, start_x, start_y, method=torch.max)
+            composite_masks[channel] = torch.max(composite_masks[channel], pasted_mask)
+
+        # Process the combined layers.
+        for combined_layer in combined_layers_in_current_iteration:
+            # loop through constituent channels, taking the max
+            channels = [self.get_channel_idx(layer) for layer in combined_layer]
+            combined_channel = self.get_channel_idx(combined_layer)
+            #composite_masks[combined_channel] = torch.max(composite_masks[combined_channel], torch.max(composite_masks[channels], dim=0)[0])
+            composite_masks[combined_channel] = torch.max(composite_masks[channels], dim=0)[0]
+
+        for combined_layer_element in combined_layer_elements_in_current_iteration:
+            channel = self.get_channel_idx(combined_layer_element)
+            composite_masks[channel] = -100
+
+        if self.transforms_after_compositing:
+            composite_image = self.transforms_after_compositing(composite_image)
+
+
+        return {'image': composite_image, 'mask': composite_masks}
+
+    def _calculate_background_size(self, images: List[torch.Tensor]) -> Tuple:
+        """Calculate the background size for compositing."""
         if isinstance(self.background_img_properties, str):
             if self.background_img_properties == 'max':
-                # choose size based on total pixels
-                # max(np.product(img.shape) for img in images)
                 bckg_size = max(images, key=lambda img: np.product(img.shape)).shape
             elif self.background_img_properties == 'min':
                 bckg_size = min(images, key=lambda img: np.product(img.shape)).shape
             else:
                 raise ValueError("Invalid mode. Choose from 'max', 'min'")
-        elif isinstance(self.background_img_properties, (tuple,list)):
+        elif isinstance(self.background_img_properties, (tuple, list)):
             if len(self.background_img_properties) == 2:
-                bckg_size = (1,*self.background_img_properties)
-
+                bckg_size = (1, *self.background_img_properties)
             else:
                 bckg_size = self.background_img_properties
         else:
             raise ValueError("Invalid background_img_properties. Choose from 'max', 'min' or specify a size tuple")
+        return bckg_size
 
-        composite_image = torch.ones(bckg_size)
-
-        if self.img_default_value:
-            composite_image *= self.img_default_value
-
-        composite_masks = []
-
-        for img, mask in zip(images, masks):
-            if self.random_origin_composition:
-                # if bckg is bigger in both dimensions
-                # start_x, start_y = more_random_offset(composite_image.shape[-1],
-                #                                       composite_image.shape[-2],
-                #                                       img.shape[-1],
-                #                                       img.shape[-2])
-                start_x, start_y = self.random_origin_function(composite_image, img, .7)
-            else:
-                start_x = 0
-                start_y = 0
-
-            #composite_image[start_y:start_y + img.shape[0], start_x:start_x + img.shape[1]] += img
-            composite_image = self.composite_the_images(composite_image, img, start_x, start_y, method=torch.min)
-
-            pasted_mask = torch.zeros(bckg_size[-2:])
-            if self.mask_default_value!=0:
-                pasted_mask += self.mask_default_value
-
-            pasted_mask = self.composite_the_images(pasted_mask, mask, start_x, start_y, method=torch.max)
-
-            composite_masks.append(pasted_mask)
-        composite_masks = torch.stack(composite_masks, dim=0)
-
-        # apply self.transforms_after_compositing
-        if self.transforms_after_compositing:
-            composite_image = self.transforms_after_compositing(composite_image)
-
-        return {'image': composite_image, 'mask': composite_masks}
-
+    def _determine_image_start_position(self, composite_image: torch.Tensor, img: torch.Tensor) -> Tuple[int, int]:
+        """Determine the start position for the image on the composite background."""
+        if self.random_origin_composition:
+            start_x, start_y = self.random_origin_function(composite_image, img, .7)
+        else:
+            start_x, start_y = 0, 0
+        return start_x, start_y
     def collate_fn(self, batch):
         images = [item['image'] for item in batch]
         masks = [item['mask'] for item in batch]
@@ -489,9 +524,15 @@ if __name__=="__main__":
     hw_dataset = SemanticSegmentationDatasetGenerative(hw_generator)
     printed_dataset = SemanticSegmentationDatasetGenerative(printed_text_generator)
 
-    aggregate_dataset = AggregateSemanticSegmentationDataset([form_dataset, hw_dataset, printed_dataset],
-                                                             background_img_properties='max',
 
+    all_generators = [form_generator, hw_generator, printed_text_generator]
+    layout_sampler = LayerSampler(all_generators,
+                                  [d.sampling_weight if hasattr(d, "sampling_weight") else 1 for d in all_generators]
+                                  )
+
+    aggregate_dataset = AggregateSemanticSegmentationDataset(all_generators,
+                                                             background_img_properties='max',
+                                                             layout_sampler=layout_sampler,
                                                              )
 
     dataloader = torch.utils.data.DataLoader(aggregate_dataset, batch_size=2, collate_fn=aggregate_dataset.collate_fn)
