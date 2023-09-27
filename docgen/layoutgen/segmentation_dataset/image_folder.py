@@ -9,16 +9,27 @@ import torch
 from torchvision import transforms
 from torchvision.transforms import Compose
 import logging
-from docgen.transforms.transforms import ResizeAndPad, ToTensorIfNeeded
+from docgen.transforms.transforms_torch import ResizeAndPad, ToTensorIfNeeded
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
+import random
 
 class NaiveImageFolder(Dataset):
-    def __init__(self, img_dir, transform_list=None, max_length=None, color_scheme="RGB", longest_side=None,
-                 pad_to_be_divisible_by=32, recursive=True, extensions=(".jpg", ".png"), return_format="just_image",
+    def __init__(self, img_dir,
+                 transform_list=None,
+                 max_length=None,
+                 color_scheme="RGB",
+                 recursive=True,
+                 extensions=(".jpg", ".png"),
+                 return_format="just_image",
+                 shuffle=True,
                  **kwargs):
         """
+        Common transforms:
+        - By default it returns a PIL image
+        - ResizeAndPad( longest_side=448, pad_to_be_divisible_by=32)
+        - ToTensorIfNeeded() # converts to tensor if not already a tensor
 
         Args:
             img_dir:
@@ -34,6 +45,7 @@ class NaiveImageFolder(Dataset):
         """
 
         super().__init__()
+        self.shuffle = shuffle
         img_dirs = img_dir
         if not isinstance(img_dir, (tuple, list)):
             img_dirs = [img_dir]
@@ -49,30 +61,19 @@ class NaiveImageFolder(Dataset):
         self.imgs = [img for img in self.imgs if img.suffix.lower() in extensions]
 
 
-        self.imgs = sorted(self.imgs)
+        if self.shuffle:
+            random.shuffle(self.imgs)
+        else:
+            self.imgs = sorted(self.imgs)
+
         self.color_scheme = color_scheme
 
         if len(self.imgs) == 0:
             raise ValueError(f"No images found in {img_dir}")
 
         self.transform_list = transform_list
-
-        if self.transform_list:
-            if longest_side:
-                raise ValueError("Cannot specify longest_side and transform_list")
-
-        else:
-            self.transform_list = []
-            if longest_side:
-                resize_and_pad = ResizeAndPad(longest_side, pad_to_be_divisible_by)
-                # resize so longest side is this, pad the other side
-            else:
-                resize_and_pad = ResizeAndPad(None, pad_to_be_divisible_by)
-            self.transform_list.append(resize_and_pad)
-
-        self.transform_list.append(ToTensorIfNeeded())
-
-        self.transform_composition = Compose(self.transform_list)
+        if self.transform_list is None:
+            self.transform_composition = Compose(self.transform_list)
 
         self.max_length = max_length if max_length is not None else len(self.imgs)
         self.current_img_idx = 0
@@ -89,7 +90,7 @@ class NaiveImageFolder(Dataset):
 
                 # load from png and convert to tensor
                 img = Image.open(img_path).convert(self.color_scheme)
-                if self.transform_composition is not None:
+                if self.transform_composition.transforms is not None:
                     img = self.transform_composition(img)
 
                 if self.return_format == "just_image":
@@ -105,7 +106,7 @@ class NaiveImageFolder(Dataset):
 
     def get(self, idx=None):
         if idx is None:
-            idx = self.current_img_idx = 0
+            idx = self.current_img_idx
             self.current_img_idx = (1 + self.current_img_idx ) % len(self.imgs)
         return self._get(idx)
 
@@ -118,7 +119,7 @@ class NaiveImageFolder(Dataset):
         Returns:
 
         """
-        return self._get(idx)
+        return self.get(idx)
 
 
     @staticmethod
@@ -218,7 +219,7 @@ class NaiveImageFolderPatch(NaiveImageFolder):
                     patch = self.current_img_patches[self.patch_idx]
                     coord = self.current_img_coords[self.patch_idx]
 
-                    # if self.transform_composition is not None:
+                    # if self.transform_composition.transforms is not None:
                     #     patch = self.transform_composition(patch)
 
                     patch_row, patch_column = self.patch_idx // self.patch_column_count, self.patch_idx % self.patch_column_count

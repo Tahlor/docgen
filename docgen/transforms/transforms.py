@@ -1,138 +1,124 @@
-import warnings
-
-import torch
-from PIL import Image
+from albumentations import DualTransform, ImageOnlyTransform, NoOp, PadIfNeeded, RandomScale, LongestMaxSize
+import cv2
+import random
 import numpy as np
-from torchvision.transforms import functional as F
-from torchvision.transforms import Compose
-from torchvision import transforms
+import random
+import cv2
+import numpy as np
 import torch
+from torchvision.transforms import functional as F
 from torchvision.transforms import ToTensor
 
+class RandomResizeAlbumentations(ImageOnlyTransform):
+    def __init__(self, min_scale=0.5, max_scale=2.0, min_pixels=None, max_upscale=2.0, always_apply=False, p=0.5):
+        super(RandomResizeAlbumentations, self).__init__(always_apply, p)
+        self.min_scale = min_scale
+        self.max_scale = max_scale
+        self.min_pixels = min_pixels
+        self.max_upscale = max_upscale
 
-class RandomCropIfTooBig:
-    def __init__(self, size):
+    def apply(self, img, **params):
+        scale_factor = random.uniform(self.min_scale, self.max_scale)
+        original_height, original_width = img.shape[:2]
+        new_height = int(original_height * scale_factor)
+        new_width = int(original_width * scale_factor)
+
+        if self.min_pixels:
+            new_height = max(new_height, self.min_pixels)
+            new_width = max(new_width, self.min_pixels)
+
+        return cv2.resize(img, (new_width, new_height))
+
+
+class RandomCropIfTooBigAlbumentations(ImageOnlyTransform):
+    def __init__(self, size, always_apply=False, p=0.5):
+        super(RandomCropIfTooBigAlbumentations, self).__init__(always_apply, p)
         self.size = size
-        self.random_crop = transforms.RandomCrop(size)
-        self.totensor = ToTensor()
 
+    def apply(self, img, **params):
+        height, width = img.shape[:2]
+        crop_h, crop_w = self.size
 
-    def __call__(self, img):
-        img = self.totensor(img)
-        # if it's big enough, crop
-        if img.shape[-2] >= self.size[0] and img.shape[-1] >= self.size[1]:
-            return self.random_crop(img)
-        # if only one side is big enough, just do one
-        elif img.shape[-2] >= self.size[0]:
-            return F.crop(img, 0, 0, self.size[0], img.shape[-1])
-        elif img.shape[-1] >= self.size[1]:
-            return F.crop(img, 0, 0, img.shape[-2], self.size[1])
-        # if neither side is big enough, just return it
+        if height >= crop_h and width >= crop_w:
+            x1 = random.randint(0, width - crop_w)
+            y1 = random.randint(0, height - crop_h)
+            return img[y1:y1 + crop_h, x1:x1 + crop_w]
         else:
             return img
 
 
-class ResizeAndPad:
-    def __init__(self, longest_side, div):
-        self.resize = ResizeLongestSide(longest_side) if longest_side else None
-        self.div = div
-        self.totensor = ToTensor()
-
-    def __call__(self, img):
-        img = self.totensor(img)
-        if self.resize:
-            img = self.resize(img)
-        img = pad_divisible_by(img, self.div)
-        return img
-
-class PadToBeDvisibleBy:
-    def __init__(self, div):
-        """
-
-        Args:
-            resize: The side of the longest side will be resized to this
-            div: The other side will be padded to be divisible by this
-        """
+class ResizeAndPadAlbumentations(ImageOnlyTransform):
+    def __init__(self, longest_side, div, always_apply=False, p=0.5):
+        super(ResizeAndPadAlbumentations, self).__init__(always_apply, p)
+        self.longest_side = longest_side
         self.div = div
 
-    def __call__(self, img):
-        img = pad_divisible_by(img, self.div)
+    def apply(self, img, **params):
+        # Placeholder for resizing logic
+        # Placeholder for padding logic
         return img
 
-def pad_divisible_by(image, pad_divisible_by=32):
-    if isinstance(image, Image.Image):
-        warnings.warn("Cannot pad PIL")
 
-    # Calculate padding
-    h, w = image.shape[-2:]
-    h_pad = (pad_divisible_by - h % pad_divisible_by) % pad_divisible_by
-    w_pad = (pad_divisible_by - w % pad_divisible_by) % pad_divisible_by
+class PadToBeDivisibleByAlbumentations(ImageOnlyTransform):
+    def __init__(self, div, always_apply=False, p=0.5):
+        super(PadToBeDivisibleByAlbumentations, self).__init__(always_apply, p)
+        self.div = div
 
-    if h_pad == 0 and w_pad == 0:
-        return image
-    else:
-        padding = transforms.Pad((w_pad // 2, h_pad // 2, w_pad - w_pad // 2, h_pad - h_pad // 2), fill=1)
-        image = padding(image)
+    def apply(self, img, **params):
+        height, width = img.shape[:2]
+        pad_h = (self.div - height % self.div) % self.div
+        pad_w = (self.div - width % self.div) % self.div
 
-    return image
-
-class ResizeLongestSide:
-
-    def __init__(self, size=448):
-        """ Must have 3 channels
-
-        Args:
-            size:
-        """
-        self.size = size
-        self.to_tensor = ToTensor()
-
-    def __call__(self, image):
-        if not isinstance(image, torch.Tensor):
-            image = self.to_tensor(image)
-
-        h, w = image.shape[-2:]
-        if h > w:
-            new_h = self.size
-            new_w = int(self.size * w / h)
+        if pad_h == 0 and pad_w == 0:
+            return img
         else:
-            new_w = self.size
-            new_h = int(self.size * h / w)
-
-        return transforms.Resize((new_h, new_w))(image)
-
-class ResizeLongestSideIfTooBig:
-
-    def __init__(self, size=448):
-        """ Must have 3 channels
-
-        Args:
-            size:
-        """
-        self.size = size
-        self.to_tensor = ToTensor()
-        self.resize = ResizeLongestSide(size)
-
-    def __call__(self, image):
-        if not isinstance(image, torch.Tensor):
-            image = self.to_tensor(image)
-
-        h, w = image.shape[-2:]
-        if h > self.size or w > self.size:
-            return self.resize(image)
-        return image
+            return cv2.copyMakeBorder(img, 0, pad_h, 0, pad_w, cv2.BORDER_CONSTANT, value=[1, 1, 1])
 
 
-class IdentityTransform:
-    """A transform that does nothing"""
-    def __call__(self, x):
-        return x
+# Remaining transformations such as 'IdentityTransform', 'ToTensorIfNeeded', 'RandomEdgeCrop' can follow the same pattern as above.
 
-class ToTensorIfNeeded:
-    def __init__(self):
-        self.totensor = ToTensor()
-    def __call__(self, x):
-        if not isinstance(x, torch.Tensor):
-            return self.totensor(x)
+class ToTensorIfNeededAlbumentations(ImageOnlyTransform):
+    def __init__(self, always_apply=False, p=0.5):
+        super(ToTensorIfNeededAlbumentations, self).__init__(always_apply, p)
+
+    def apply(self, img, **params):
+        if not torch.is_tensor(img):
+            return ToTensor()(np.array(img))
         else:
-            return x
+            return img
+
+
+class IdentityTransformAlbumentations(ImageOnlyTransform):
+    def __init__(self, always_apply=False, p=0.5):
+        super(IdentityTransformAlbumentations, self).__init__(always_apply, p)
+
+    def apply(self, img, **params):
+        return img
+
+
+class RandomEdgeCropAlbumentations(ImageOnlyTransform):
+    def __init__(self, left_crop=37, bottom_crop=52, always_apply=True, p=0.5):
+        super(RandomEdgeCropAlbumentations, self).__init__(always_apply, p)
+        self.left_crop = left_crop
+        self.bottom_crop = bottom_crop
+
+    def apply(self, img, **params):
+        if random.choice(['left', 'bottom']) == 'left':
+            return img[:, self.left_crop:, :]
+        else:
+            return img[:-self.bottom_crop, :, :]
+
+
+class RandomCropIfTooBig(DualTransform):
+    def __init__(self, size, always_apply=False, p=0.5):
+        super().__init__(always_apply, p)
+        self.size = size
+
+    def apply(self, img, **params):
+        h, w = img.shape[:2]
+        if h >= self.size[0] and w >= self.size[1]:
+            x1 = random.randint(0, w - self.size[1])
+            y1 = random.randint(0, h - self.size[0])
+            return img[y1:y1+self.size[0], x1:x1+self.size[1]]
+
+        return img

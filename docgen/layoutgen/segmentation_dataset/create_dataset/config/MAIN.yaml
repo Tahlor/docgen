@@ -1,0 +1,188 @@
+workers: 0
+final_size: 448
+dataset_length: 100000
+drive_mappings:
+  "B:": "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle"
+output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v6_100k"
+overwrite: false
+output_img_size: 448
+composite_function: composite_the_images_torch
+layout_sampler_kwargs:
+  default_min_layers: 2
+  default_max_layers: 2
+
+datasets:
+  - name: RenderedFonts
+    type: PrintedTextGenerator
+    layer_contents: "text"
+    base_dataset_kwargs:
+      saved_fonts_folder: "G:/s3/synthetic_data/resources/fonts"
+      font_size_rng: [ 8, 40 ]
+      word_count_rng: [ 10, 20 ]
+    sample_weight: 1
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - RandomDistortions
+        - RuledSurfaceDistortions
+        - Blur
+        - Lighten
+        - Contrast
+      - ToTensor
+      - RandomResize:
+          min_scale: .5
+          max_scale: 2
+
+  - name: generated_form_elements
+    type: PreprintedFormElementGenerator
+    layer_contents:
+      - form_elements
+    sample_weight: 1
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+          - RandomDistortions
+          - RuledSurfaceDistortions
+      - ToTensor
+      - RandomResize:
+          min_scale: .5
+          max_scale: 2
+
+  - name: handwriting
+    type: HWGenerator
+    layer_contents: handwriting
+    base_dataset_kwargs:
+        img_dir: "C:/Users/tarchibald/Anaconda3/envs/docgen_windows/hwgen/resources/generated"
+    sample_weight: 1
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - RandomDistortions
+        - RuledSurfaceDistortions
+        - Blur
+#        - Lighten
+        - Contrast
+      - ToTensor
+      - RandomResize:
+          min_scale: .8
+          max_scale: 1.2
+
+  - name: images
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      img_dir: "G:/s3/synthetic_data/resources/images"
+    layer_contents:
+      - image
+      - text
+    sample_weight: 1
+
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - RandomDistortions
+        - RuledSurfaceDistortions
+        - Blur
+        - Lighten
+        - Contrast
+      - ToTensor
+      - ResizeLongestSide:
+          longest_side: [ 24, 128 ]
+
+  - name: background
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      img_dir: "B:/document_backgrounds/paper_only"
+    layer_contents: noise
+    layer_position: 0 # background layer
+    sample_weight: 1
+    percent_overlap: 1
+    mask:
+      type: naivemask
+      mask_kwargs:
+
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - RandomDistortions
+        - RuledSurfaceDistortions
+      - ToTensor
+      - RandomEdgeCrop
+      - RandomResize:
+          min_scale: .5
+          max_scale: 2
+
+  - name: seals
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      img_dir: "G:/s3/synthetic_data/resources/seals"
+    layer_contents: seals
+    sample_weight: 1
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - RandomDistortions
+        - RuledSurfaceDistortions
+      - ToTensor
+      - ResizeLongestSide:
+          longest_side: [ 24, 128 ]
+
+  - name: pdf_text
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      img_dir:
+        - "G:/s3/forms/PDF/OPM/text/images"
+        - "G:/s3/forms/PDF/SSA/text/images"
+    layer_contents: text
+    sample_weight: 1
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - RandomDistortions
+        - RuledSurfaceDistortions
+      - ToTensor
+      - RandomResize:
+          min_scale: .5
+          max_scale: 2
+          max_upscale: 3
+
+
+  - name: pdf_form_elements
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      img_dir:
+        - "G:/s3/forms/PDF/IRS/other_elements/images"
+        - "G:/s3/forms/PDF/GDC/other_elements/images"
+        - "G:/s3/forms/PDF/OPM/other_elements/images"
+        - "G:/s3/forms/PDF/SSA/other_elements/images"
+    layer_contents: form_elements
+    sample_weight: 1
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - RandomDistortions
+        - RuledSurfaceDistortions
+      - ToTensor
+      - RandomResize:
+          min_scale: .5
+          max_scale: 2
+          max_upscale: 3
+
+
+#  - name: preprinted_text_and_forms
+#    type: NaiveImageFolder
+#    base_dataset_kwargs:
+#      img_dir: "G:/s3/forms/HTSNet_scanned_documents"
+#    layer_contents:
+#      - text
+#      - form_elements
+#    sample_weight: 1
+#    transforms:
+#      - ToNumpy
+#      - RandomChoice:
+#        - RandomDistortions
+#        - RuledSurfaceDistortions
+#      - ResizePad:
+#          longest_side: 448
+#          div: 32
+
+transforms_after_compositing:

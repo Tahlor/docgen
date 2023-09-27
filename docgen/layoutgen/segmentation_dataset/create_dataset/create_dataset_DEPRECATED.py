@@ -26,7 +26,8 @@ from docgen.layoutgen.segmentation_dataset.utils.dataset_sampler import LayerSam
 import tifffile
 from torchvision.transforms import ToTensor
 from docgen.windows.utils import map_drive
-
+from docdegrade.torch_transforms import ToNumpy, CHWToHWC, HWCToCHW, RandomChoice, Squeeze
+from docgen.transforms.transforms_torch import ResizeAndPad, IdentityTransform, RandomResize, RandomCropIfTooBig
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
@@ -41,6 +42,22 @@ SIZE=448
     # Idea: predict noise pixel levels, invert, apply soft-MASK, add to predicted HW-mask, compare to comparable GT;
     # UGH too much work, just use the HW generator for now
 
+    Some before transforms leave a gray box
+    CROP bing images
+    export CONFIG somehow?
+    IGNORE naive mask for now? nah you can predict it, just can't combine it
+    FIX default transform - if NONE, NO TRANSFORMS SHOULD BE PERFORMED!
+    IMPLEMENT CONFIG
+    IMPLEMENT actual transforms of resizing etc.
+    CROPPING and resizing the images/seals
+    Make sure background is fully covered - use the improved COMPOSITION thing
+    PULLING the same image every time
+    Make sure the HANDWRITING is fully composited and visible on the degraded paper :(
+        # Each layer dataset can be background or foreground, do the background ones first?
+    Tiffs are still too big
+    Would be good if we layer the paper on a background of white/black noise or something; or maybe use the with background dataset and segmentation (too much)
+    
+    
 """
 
 def create_generating_dataset(saved_fonts_folder=None, saved_hw_folder=None, dataset_length=5000,
@@ -101,21 +118,22 @@ def create_generating_dataset(saved_fonts_folder=None, saved_hw_folder=None, dat
 
     # dataset2 = SemanticSegmentationDatasetImageFolder(img_dir=saved_images, layer_contents="images")
 
+    seal_generator = SemanticSegmentationDatasetGenerative(layer_contents=("seals","text"),
+                                                           generator=NaiveImageFolder(saved_seals_folder),
+                                                              transforms_before_mask_threshold=[],
+                                                              size=SIZE)
 
-    # seal_generator = SemanticSegmentationDatasetGenerative(layer_contents=("seals","text"),
-    #                                                        generator=NaiveImageFolder(saved_seals_folder),
-    #                                                           transforms_before_mask_threshold=transforms_before,
-    #                                                           size=SIZE)
-    #
-    # background_generator = SemanticSegmentationDatasetGenerative(layer_contents=("noise"),
-    #                                                             generator=NaiveImageFolder(saved_background_folder),
-    #                                                             mask_maker=NaiveMask(),
-    #                                                             transforms_before_mask_threshold=transforms_before,
-    #                                                             size=SIZE)
-    # preprinted_generator = SemanticSegmentationDatasetGenerative(generator=NaiveImageFolder(saved_preprinted_text_and_elements_folders),
-    #                                                                 layer_contents=("text", "form_elements"),
-    #                                                                 transforms_before_mask_threshold=transforms_before,
-    #                                                                 size=SIZE)
+    background_generator = SemanticSegmentationDatasetGenerative(layer_contents=("noise"),
+                                                                generator=NaiveImageFolder(saved_background_folder),
+                                                                mask_maker=NaiveMask(),
+                                                                transforms_before_mask_threshold=[RandomResize(min_scale=.5, max_scale=2.0, min_pixels=SIZE),
+                                                                                                  RandomCropIfTooBig(size=SIZE)],
+                                                                size=SIZE)
+
+    preprinted_generator = SemanticSegmentationDatasetGenerative(generator=NaiveImageFolder(saved_preprinted_text_and_elements_folders),
+                                                                    layer_contents=("text", "form_elements"),
+                                                                    transforms_before_mask_threshold=[RandomCropIfTooBig(size=SIZE)],
+                                                                    size=SIZE)
     # image_generator = SemanticSegmentationDatasetGenerative(generator=NaiveImageFolder(saved_images),
     #                                                                 layer_contents=("images"),
     #                                                                 transforms_before_mask_threshold=transforms_before,
@@ -156,7 +174,7 @@ def create_generating_dataset(saved_fonts_folder=None, saved_hw_folder=None, dat
 
                                                        )
     printed_dataset = SemanticSegmentationDatasetGenerative(generator=printed_text_generator,
-                                                            layer_contents=("text", "form_elements"),
+                                                            layer_contents=("text"),
                                                             transforms_before_mask_threshold=transforms_before,
                                                             size=SIZE)
 
@@ -171,9 +189,9 @@ def create_generating_dataset(saved_fonts_folder=None, saved_hw_folder=None, dat
     #                     image_generator,
     #                                                          ],
 
-    all_generators = [form_dataset,  hw_dataset, hw_dataset, printed_dataset]
+    all_generators = [preprinted_generator, form_dataset,  hw_dataset, printed_dataset, background_generator, seal_generator]
     layout_sampler = LayerSampler(all_generators,
-                                  [d.sampling_weight if hasattr(d, "sampling_weight") else 1 for d in all_generators]
+                                  [d.sample_weight if hasattr(d, "sample_weight") else 1 for d in all_generators]
                                   )
 
     aggregate_dataset = AggregateSemanticSegmentationDataset(all_generators,
@@ -273,8 +291,7 @@ def get_transforms():
     """
     from docdegrade.degradation_objects import RandomDistortions, RuledSurfaceDistortions, Blur, Lighten, Blobs, \
         BackgroundMultiscaleNoise, BackgroundFibrous, Contrast
-    from docgen.transforms.transforms import ResizeAndPad, IdentityTransform
-    from docdegrade.torch_transforms import ToNumpy, CHWToHWC, HWCToCHW, RandomChoice, Squeeze
+    from docgen.transforms.transforms_torch import ResizeAndPad, IdentityTransform
 
     #exclude = [BlurThreshold(), BackgroundFibrous()]
     before = [RandomDistortions(), RuledSurfaceDistortions()]
@@ -283,7 +300,7 @@ def get_transforms():
     after = [Blobs(), BackgroundMultiscaleNoise(), BackgroundFibrous(), Contrast()]
 
     transforms_before_generative = transforms.Compose([
-        # ocnvert PIL IMage to numpy
+        # convert PIL IMage to numpy
         ToNumpy(),
         # transforms.ToTensor(),
         RandomChoice(before),

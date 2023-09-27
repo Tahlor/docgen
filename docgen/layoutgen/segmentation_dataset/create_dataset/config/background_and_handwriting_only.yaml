@@ -1,0 +1,55 @@
+workers: 0
+final_size: 448
+dataset_length: 100000
+drive_mappings:
+  "B:": "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle"
+output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v6_100k"
+overwrite: false
+output_img_size: 448
+composite_function: composite_the_images_torch
+sampler:
+  default_min_layers: 2
+  default_max_layers: 2
+
+datasets:
+
+  - name: handwriting
+    type: HWGenerator
+    layer_contents: handwriting
+    base_dataset_kwargs:
+        img_dir: "C:/Users/tarchibald/Anaconda3/envs/docgen_windows/hwgen/resources/generated"
+    sample_weight: 1
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - RandomDistortions
+        - RuledSurfaceDistortions
+        - Blur
+        - Lighten
+        - Contrast
+      - ToTensor
+      - RandomResize:
+          min_scale: .5
+          max_scale: 2
+
+  - name: background
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      img_dir: "B:/document_backgrounds/paper_only"
+    layer_contents: noise
+    layer_position: 0 # background layer
+    sample_weight: 1
+    percent_overlap: 1
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - RandomDistortions
+        - RuledSurfaceDistortions
+      - ToTensor
+      - RandomEdgeCrop
+      - RandomResize:
+          min_scale: .5
+          max_scale: 2
+          max_upscale: 3
+
+transforms_after_compositing:

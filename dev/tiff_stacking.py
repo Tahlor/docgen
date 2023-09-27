@@ -19,7 +19,7 @@ def stack_images_to_channels(images: list) -> np.array:
 
 def save_tiff_image(image: np.array, output_path: Path):
     """Same as previous definition."""
-    imsave(output_path, image)
+    imsave(output_path, image, compress=9)
 
 def encode_channels_to_colors(image: np.array, colors: list) -> np.array:
     """

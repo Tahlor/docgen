@@ -40,15 +40,21 @@ def get_resource(package_name, resource_relative_path):
     resource_path = '/'.join(('datasets', 'unigram_freq.csv'))
     return pkg_resources.resource_filename(package_name, resource_path)
 
+def split_strs_into_tuple(strs):
+    if isinstance(strs, str):
+        return tuple([int(x) for x in strs.split(",")])
+    return strs
+
 class WordGenerator(Gen):
     def __init__(self, img_size=(512,512),
                  font_size_rng=(8,50),
                   word_count_rng=(10,20),
                   **kwargs
         ):
-        self.width, self.height = self.img_size = img_size
-        self.font_size_rng = font_size_rng
-        self.word_count_rng = word_count_rng
+
+        self.width, self.height = self.img_size = split_strs_into_tuple(img_size)
+        self.font_size_rng = split_strs_into_tuple(font_size_rng)
+        self.word_count_rng = split_strs_into_tuple(word_count_rng)
 
     def _get(self, img_size=None):
         if img_size is None:
@@ -83,7 +89,7 @@ class PrintedTextGenerator(WordGenerator):
                  saved_fonts_folder=None, **kwargs):
         super().__init__(img_size, font_size_rng=font_size_rng, word_count_rng=word_count_rng, **kwargs)
         unigrams = get_resource(package_name="textgen", resource_relative_path="/datasets/unigram_freq.csv")
-        clear_fonts_path = saved_fonts_folder / "clear_fonts.csv"
+        clear_fonts_path = Path(saved_fonts_folder) / "clear_fonts.csv"
 
         words_dataset = Unigrams(csv_file=unigrams)
 

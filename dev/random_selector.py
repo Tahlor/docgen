@@ -4,16 +4,20 @@ from pathlib import Path
 
 
 class LayerSampler:
-    def __init__(self, generators: List[Callable[[], Any]], weights: List[float]):
+    def __init__(self, generators: List[Callable[[], Any]],
+                 layer_weights: List[float],
+                 number_of_layer_weights: List[int] = None):
         """
         Initialize the LayerSampler with generators and weights.
 
         Args:
             generators (List[Callable[[], Any]]): List of generator functions.
-            weights (List[float]): Non-normalized weights associated with each generator.
+            layer_weights (List[float]): Non-normalized weights associated with each generator.
+            number_of_layer_weights (List[int], optional): If you want to specify some distribution over the number of layers. Defaults to None.
         """
         self.generators = generators
-        self.weights = [w / sum(weights) for w in weights]  # Normalize the weights
+        self.layer_weights = [w / sum(layer_weights) for w in layer_weights]  # Normalize the weights
+        self.number_of_layer_weights = number_of_layer_weights
 
     def choose_num_layers(self, min_layers: int, max_layers: int) -> int:
         """
@@ -26,7 +30,10 @@ class LayerSampler:
         Returns:
             int: The chosen number of layers.
         """
-        return random.randint(min_layers, max_layers)
+        if self.number_of_layer_weights:
+            return random.choices(range(min_layers, max_layers + 1), weights=self.number_of_layer_weights)[0]
+        else:
+            return random.randint(min_layers, max_layers)
 
     def sample(self, num_layers: int, replacement: bool) -> List[Callable[[], Any]]:
         """
@@ -40,7 +47,7 @@ class LayerSampler:
             List[Callable[[], Any]]: List of sampled generator functions.
         """
         if replacement:
-            return random.choices(self.generators, weights=self.weights, k=num_layers)
+            return random.choices(self.generators, weights=self.layer_weights, k=num_layers)
         else:
             return random.sample(self.generators, min(num_layers, len(self.generators)))
 

@@ -5,23 +5,32 @@ from pathlib import Path
 
 class LayerSampler:
     def __init__(self, generators: List[Callable[[], Any]],
-                 weights: List[float],
+                 layer_weights: List[float],
                  default_min_layers: int = None,
-                 default_max_layers: int = None):
+                 default_max_layers: int = None,
+                 number_of_layer_weights: List[int] = None):
         """
         Initialize the LayerSampler with generators and weights.
 
         Args:
             generators (List[Callable[[], Any]]): List of generator functions.
-            weights (List[float]): Non-normalized weights associated with each generator.
+            layer_weights (List[float]): Non-normalized weights associated with each generator.
+            default_min_layers (int, optional): Default minimum number of layers to be selected. Defaults to None.
+            default_max_layers (int, optional): Default maximum number of layers to be selected. Defaults to None.
+            number_of_layer_weights (List[int], optional): Weights associated with the number of layers. Defaults to None.
         """
         self.generators = generators
-        self.weights = [w / sum(weights) for w in weights]  # Normalize the weights
-        self.default_min_layers = default_min_layers if default_min_layers is not None else min(2, len(generators))
-        self.default_max_layers = default_max_layers if default_max_layers is not None else len(generators)
+        self.weights = [w / sum(layer_weights) for w in layer_weights]  # Normalize the weights
+        self.min_layers = default_min_layers if default_min_layers is not None else min(2, len(generators))
+        self.max_layers = min(default_max_layers, len(generators)) if default_max_layers is not None else len(generators)
+
+        if default_max_layers > len(generators):
+            print(f"WARNING: default_max_layers ({default_max_layers}) is greater than the number of generators ({len(generators)}). Setting default_max_layers to {len(generators)}.")
+
+        self.number_of_layer_weights = number_of_layer_weights
 
 
-    def choose_num_layers(self, min_layers: int, max_layers: int) -> int:
+    def choose_num_layers(self) -> int:
         """
         Randomly choose the number of layers between min_layers and max_layers.
 
@@ -32,7 +41,11 @@ class LayerSampler:
         Returns:
             int: The chosen number of layers.
         """
-        return random.randint(min_layers, max_layers)
+        if self.number_of_layer_weights:
+            return random.choices(range(self.min_layers, self.max_layers + 1)
+                                  , weights=self.number_of_layer_weights[:self.max_layers-self.min_layers+1])[0]
+        else:
+            return random.randint(self.min_layers, self.max_layers)
 
     def _sample(self, num_layers: int=None, replacement: bool=False) -> List[Callable[[], Any]]:
         """
@@ -51,7 +64,7 @@ class LayerSampler:
             return random.sample(self.generators, min(num_layers, len(self.generators)))
 
     def sample(self, replacement: bool=False) -> List[Callable[[], Any]]:
-        layers = self.choose_num_layers(self.default_min_layers, self.default_max_layers)
+        layers = self.choose_num_layers()
         return self._sample(num_layers=layers, replacement=replacement)
 
 

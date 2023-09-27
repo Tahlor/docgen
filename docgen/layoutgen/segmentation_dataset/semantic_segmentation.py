@@ -16,9 +16,13 @@ from PIL import Image
 from torchvision.transforms import ToPILImage
 from typing import List, Optional, Tuple, Union, Literal, Callable
 from docgen.layoutgen.layoutgen import composite_images_PIL
-from docgen.transforms.transforms import ResizeAndPad, IdentityTransform
+from docgen.transforms.transforms_torch import ResizeAndPad, IdentityTransform
 from docgen.image_composition.utils import CompositeImages, CalculateImageOriginForCompositing
 from docgen.image_composition.utils import seamless_composite, composite_the_images_numpy, composite_the_images_torch
+from docgen.image_composition.utils import compute_paste_origin_from_overlap_auto
+from docdegrade.degradation_objects import RandomDistortions, RuledSurfaceDistortions, Blur, Lighten, Blobs, \
+    BackgroundMultiscaleNoise, BackgroundFibrous, Contrast, ConditionalContrast
+
 
 to_pil = ToPILImage()
 """
@@ -103,6 +107,11 @@ class SoftMask(Mask):
         mask = torch.sigmoid(steepness * (mask - transition_point))
         return mask
 
+def compose(transform_list):
+    if isinstance(transform_list, (list,tuple)):
+        return transforms.Compose(transform_list)
+    else:
+        return transform_list
 class SemanticSegmentationDataset(Dataset):
     def __init__(self,
                  layer_contents: Union[tuple,str,list],
@@ -111,6 +120,11 @@ class SemanticSegmentationDataset(Dataset):
                  overfit_dataset_length=0,
                  size=448,
                  mask_maker: Union[Mask, bool]=None,
+                 layer_position=50,
+                 sample_weight=1.0,
+                 name="generic",
+                 percent_overlap=0.7,
+                 composite_function=None,
                  ):
         """
 
@@ -121,15 +135,24 @@ class SemanticSegmentationDataset(Dataset):
             overfit_dataset_length:
             size:
             mask_maker:
+            layer_position: 0 is the bottom layer, 1 is the next layer, etc., optional for AGGREGATOR
+            sample_weight: how much to weight this dataset when sampling in AGGREGATOR
+            name: name of the dataset
+            percent_overlap: how much of the image should overlap with the previous layer in AGGREGATOR
+            composite_function: function to use to composite the images in AGGREGATOR
         """
         # sort it so that the order is consistent
         self.layer_contents = (layer_contents,) if isinstance(layer_contents, str) else tuple(sorted(layer_contents))
-
+        self.layer_position = layer_position
         # if threshold is None, just use the pixel intensity as labellogit
-        self.transforms_before = transforms_before_mask_threshold
-        self.transforms_after = transforms_after_mask_threshold
+        self.transforms_before = compose(transforms_before_mask_threshold)
+        self.transforms_after = compose(transforms_after_mask_threshold)
         self.overfit_dataset_length = overfit_dataset_length
-        self.mask_object = mask_maker if mask_maker else Mask()
+        self.mask_maker = mask_maker if mask_maker else Mask()
+        self.sample_weight = sample_weight
+        self.name = name
+        self.percent_overlap = percent_overlap
+        self.composite_function = composite_function
 
         # Default transformations before thresholding
         if self.transforms_before is None:
@@ -170,7 +193,7 @@ class SemanticSegmentationDataset(Dataset):
         else:
             bw_img = img[0]
 
-        mask = self.mask_object(bw_img)
+        mask = self.mask_maker(bw_img)
 
         if self.transforms_after:
             img = self.transforms_after(img)
@@ -178,6 +201,8 @@ class SemanticSegmentationDataset(Dataset):
         sample = {'image': img, 'mask': mask}
 
         return sample
+
+    from hwgen.data.utils import show
 
     @staticmethod
     def collate_fn_simple(batch):
@@ -292,6 +317,7 @@ class AggregateSemanticSegmentationDataset(Dataset):
                  transforms_after_compositing=None,
                  output_channel_content_names=None,
                  layout_sampler=None,
+                 size=448,
                  composite_function: Union[seamless_composite, composite_the_images_torch]=composite_the_images_torch,):
 
         """
@@ -309,7 +335,8 @@ class AggregateSemanticSegmentationDataset(Dataset):
             layout_sampler (LayerSampler): a LayerSampler object that will be used to sample the layers
 
         """
-        self.subdatasets = subdatasets
+        self.size = size
+        self.subdatasets = sorted(subdatasets, key=lambda x: (x.layer_position, x.name))
         self.background_img_properties = background_img_properties
         self.overfit_dataset_length = overfit_dataset_length
         self.random_origin_composition = random_origin_composition
@@ -326,8 +353,36 @@ class AggregateSemanticSegmentationDataset(Dataset):
         self.config = self.get_combination_config(
             [subdataset.layer_contents for subdataset in self.subdatasets])
 
+
+        # Exclude naive masks from the channels to be visualized
+        naive_mask_datasets = [x for x in self.subdatasets if type(x.mask_maker) is NaiveMask]
+        self.naive_mask_channels = list(set([self.get_channel_idx(x.layer_contents) for x in naive_mask_datasets]))
+        self.naive_mask_channels.sort()
+        self.channels_to_be_visualized = list(set(range(len(self.output_channel_content_names))) - set(self.naive_mask_channels))
+
+
+
     def get_channel_idx(self, layer_name_tuple):
         return self.output_channel_content_names.index((layer_name_tuple,) if isinstance(layer_name_tuple, str) else tuple(layer_name_tuple))
+
+    def confirm_mask_consistency(self):
+        """ Make sure no naive masks are combined with non-naive masks
+
+        Returns:
+
+        """
+        mask_types = [None] * len(self.output_channel_content_names)
+        for dataset in self.subdatasets:
+            for layer_name in dataset.layer_contents:
+                channel = self.get_channel_idx(layer_name)
+                if mask_types[channel] is None:
+                    mask_types[channel] = "naive" if type(dataset.mask_maker)==NaiveMask else "normal"
+                else:
+                    if mask_types[channel] != type(dataset.mask_maker):
+                        raise ValueError(f"Mask types are inconsistent for channel {channel} ("
+                                         f"{mask_types[channel]} vs. {type(dataset.mask_maker)})")
+        return mask_types
+
 
     def get_layer_contents_to_output_channel_map(self):
         """ You need to make sure that ALL unique elements are found (i.e., they might only appear in a combined thing,
@@ -384,11 +439,17 @@ class AggregateSemanticSegmentationDataset(Dataset):
         else:
             chosen_datasets = self.layout_sampler.sample(replacement=False)
 
-        images_and_masks = [d[idx] for d in self.subdatasets]
+        # sort chosen datasets by layer position to ensure background is layered first
+        chosen_datasets = sorted(chosen_datasets, key=lambda x: x.layer_position)
+
+        images_and_masks = [d[idx] for d in chosen_datasets]
         images, masks = [x["image"] for x in images_and_masks], [x["mask"] for x in images_and_masks]
 
         # Calculate background size
-        bckg_size = self._calculate_background_size(images)
+        if self.size is not None:
+            bckg_size = (3, self.size, self.size)
+        else:
+            bckg_size = self._calculate_background_size(images)
 
         composite_image = torch.ones(bckg_size) * self.img_default_value
         composite_masks = torch.zeros((len(self.output_channel_content_names), *bckg_size[-2:]))
@@ -401,9 +462,12 @@ class AggregateSemanticSegmentationDataset(Dataset):
         combined_layers_in_current_iteration = [x.layer_contents for x in chosen_datasets if len(x.layer_contents) > 1]
         combined_layer_elements_in_current_iteration = set([item for sublist in combined_layers_in_current_iteration for item in sublist])
 
-        for dataset, (img, mask) in zip(chosen_datasets, zip(images, masks)):
-            start_x, start_y = self._determine_image_start_position(composite_image, img)
-            composite_image = self.composite_function(composite_image, img, start_x, start_y)
+        for i, (dataset, (img, mask)) in enumerate(zip(chosen_datasets, zip(images, masks))):
+            #start_x, start_y = self._determine_image_start_position(composite_image, img)
+            start_x, start_y, details = compute_paste_origin_from_overlap_auto(composite_image,
+                                                                               img,
+                                                                               min_overlap=dataset.percent_overlap,
+                                                                               image_format="CHW")
 
             # For mask, choose channel, paste at appropriate location, then take the max with existing mask
             channel = self.get_channel_idx(dataset.layer_contents)
@@ -411,13 +475,35 @@ class AggregateSemanticSegmentationDataset(Dataset):
             pasted_mask = composite_the_images_torch(pasted_mask, mask, start_x, start_y, method=torch.max)
             composite_masks[channel] = torch.max(composite_masks[channel], pasted_mask)
 
+            if i == 0: # no composition needed
+                composite_image = composite_the_images_torch(composite_image, img, start_x, start_y)
+            else:
+                # from hwgen.data.utils import show, display
+                # from torchvision.transforms import ToTensor
+                # from torch import Tensor
+                # composite_image = composite_the_images_torch(background_img, img, bckg_x, bckg_y, method=torch.mul)
+                # C = ConditionalContrast()
+                # x = self.composite_function(composite_image, Tensor(C(img.numpy().transpose([1,2,0]))), start_x, start_y)
+                # show(x)
+                # if "handwriting" in dataset.layer_contents:
+                #     binary_mask_from_pasted = torch.where(pasted_mask > .5, torch.tensor(1), torch.tensor(0)).unsqueeze(0).expand_as(composite_image)
+                #     # compute average darkness of background where masked
+                #
+                #     average_background_darkness = torch.mean(composite_image[binary_mask_from_pasted == 1])
+                #     average_foreground_darkness = torch.mean(img[:,][binary_mask_from_pasted == 1])
+                #     if torch.
+                if hasattr(dataset, "composite_function") and dataset.composite_function:
+                    composite_image = dataset.composite_function(composite_image, img, start_x, start_y)
+                else:
+                    composite_image = self.composite_function(composite_image, img, start_x, start_y)
+
         # Process the combined layers.
         for combined_layer in combined_layers_in_current_iteration:
             # loop through constituent channels, taking the max
-            channels = [self.get_channel_idx(layer) for layer in combined_layer]
+            channels = [self.get_channel_idx(layer) for layer in combined_layer] + [self.get_channel_idx(combined_layer)]
             combined_channel = self.get_channel_idx(combined_layer)
-            #composite_masks[combined_channel] = torch.max(composite_masks[combined_channel], torch.max(composite_masks[channels], dim=0)[0])
-            composite_masks[combined_channel] = torch.max(composite_masks[channels], dim=0)[0]
+            composite_masks[combined_channel] = torch.max(composite_masks[combined_channel], torch.max(composite_masks[channels], dim=0)[0])
+            #composite_masks[combined_channel] = torch.max(torch.index_select(composite_masks, 0, torch.tensor(channels)),dim=0)[0]
 
         for combined_layer_element in combined_layer_elements_in_current_iteration:
             channel = self.get_channel_idx(combined_layer_element)
@@ -479,7 +565,9 @@ class FlattenPILGenerators(torch.utils.data.Dataset):
         for d in self.datasets:
             overlay_img = d.get()
             if self.random_offset:
-                offset = more_random_offset(img.size[0],img.size[1], overlay_img.size[0],overlay_img.size[1])
+                #offset = more_random_offset(img.size[0],img.size[1], overlay_img.size[0],overlay_img.size[1])
+                x,y,details = compute_paste_origin_from_overlap_auto(img, overlay_img, min_overlap=.8, image_format="PIL")
+                offset = (x,y)
             else:
                 offset = (0,0)
             img = composite_images_PIL(img, overlay_img, pos=offset)
@@ -527,7 +615,7 @@ if __name__=="__main__":
 
     all_generators = [form_generator, hw_generator, printed_text_generator]
     layout_sampler = LayerSampler(all_generators,
-                                  [d.sampling_weight if hasattr(d, "sampling_weight") else 1 for d in all_generators]
+                                  [d.sample_weight if hasattr(d, "sample_weight") else 1 for d in all_generators]
                                   )
 
     aggregate_dataset = AggregateSemanticSegmentationDataset(all_generators,

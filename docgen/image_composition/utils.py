@@ -253,15 +253,21 @@ class CompositeImages(CalculateImageOriginForCompositing):
         return result_image
 
 COLORS = [
-            [1, 0, 0],
-            [0, 1, 0],
-            [0, 0, 1],
-            [1, 1, 0],
-            [1, 0, 1],
-            [0, 1, 1]
-        ]
+    [1, 0, 0],   # 0 RED
+    [0, 1, 0],   # 1 GREEN
+    [0, 0, 1],   # 2 BLUE
+    [1, 1, 0],   # 3 YELLOW
+    [1, 0, 1],   # 4 MAGENTA
+    [0, 1, 1],   # 5 CYAN
+    [0.5, 0, 0], # 6 DARK RED
+    [0, 0.5, 0], # 7 DARK GREEN
+    [0, 0, 0.5], # 8 DARK BLUE
+    [1, 0.5, 0], # 9 ORANGE
+    [0.5, 0, 1], # 10 PURPLE
+    [0, 1, 0.5]  # 11 SPRING GREEN
+]
 
-def encode_channels_to_colors_np(image: np.array, colors: list=None) -> np.array:
+def encode_channels_to_colors_np(image: np.array, colors: list=None, exclude_channels=None) -> np.array:
     """
     Encode each channel to a different color and composite to a single image.
     HWC
@@ -276,7 +282,7 @@ def encode_channels_to_colors_np(image: np.array, colors: list=None) -> np.array
         channel = image[:,:,i]
         channel_normalized = channel / 255.0 if channel.max() > 1 else channel
         from hwgen.data.utils import show
-        show(channel_normalized)
+        #show(channel_normalized)
         color = np.array(colors[i])
         colored_channel = channel_normalized[:, :, np.newaxis] * color
         output_img = np.maximum(output_img, colored_channel)
@@ -284,10 +290,12 @@ def encode_channels_to_colors_np(image: np.array, colors: list=None) -> np.array
     output_img = (output_img * 255).astype('uint8')
     return output_img
 
-def encode_channels_to_colors_torch(image: torch.Tensor, colors: list=None) -> torch.Tensor:
+def encode_channels_to_colors_torch(image: torch.Tensor, colors: list=None, exclude_channels=None) -> torch.Tensor:
     """
     Encode each channel to a different color and composite to a single PyTorch image.
     CHW
+
+    exclude_channels: not implemented
     """
     if colors is None:
         colors = COLORS
@@ -305,11 +313,11 @@ def encode_channels_to_colors_torch(image: torch.Tensor, colors: list=None) -> t
     output_img = (output_img * 255).clamp(0, 255).byte()
     return output_img
 
-def encode_channels_to_colors(image, colors: list=None):
+def encode_channels_to_colors(image, colors: list=None, exclude_channels=None):
     if isinstance(image, np.ndarray):
-        return encode_channels_to_colors_np(image, colors)
+        return encode_channels_to_colors_np(image, colors, exclude_channels)
     elif isinstance(image, torch.Tensor):
-        return encode_channels_to_colors_torch(image, colors)
+        return encode_channels_to_colors_torch(image, colors, exclude_channels)
     else:
         raise ValueError("Unsupported tensor type. Expected np.array or torch.Tensor.")
 def composite_the_images_numpy(base_image, overlay_image, origin_x, origin_y, composite_function=np.minimum):
@@ -462,6 +470,13 @@ def composite_the_images_torch(background_img, img, bckg_x, bckg_y, method: Call
                                                                img_x_start:img_x_end])
 
     return background_img
+
+class CompositerTorch:
+    def __init__(self, method: Callable = torch.min):
+        self.method = method
+
+    def __call__(self, background_img, img, bckg_x, bckg_y):
+        return composite_the_images_torch(background_img, img, bckg_x, bckg_y, self.method)
 
 
 if __name__ == '__main__':

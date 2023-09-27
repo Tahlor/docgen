@@ -14,9 +14,9 @@ from docgen.layoutgen.segmentation_dataset.gen import Gen
 
 
 class LineGenerator(Gen):
-    def __init__(self, size=(448, 448), shape_count_range=(2, 5), line_thickness_range=(1, 5)):
+    def __init__(self, img_size=(448, 448), shape_count_range=(2, 5), line_thickness_range=(1, 5)):
         super().__init__()
-        self.size = size
+        self.size = img_size
         self.shape_count_range = shape_count_range
         self.line_thickness_range = line_thickness_range
 
