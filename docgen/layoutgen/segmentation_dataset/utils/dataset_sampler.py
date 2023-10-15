@@ -10,7 +10,7 @@ class LayerSampler:
                  default_max_layers: int = None,
                  number_of_layer_weights: List[int] = None):
         """
-        Initialize the LayerSampler with generators and weights.
+        Initialize the LayerSampler with word_image_generators and weights.
 
         Args:
             generators (List[Callable[[], Any]]): List of generator functions.
@@ -25,7 +25,7 @@ class LayerSampler:
         self.max_layers = min(default_max_layers, len(generators)) if default_max_layers is not None else len(generators)
 
         if default_max_layers > len(generators):
-            print(f"WARNING: default_max_layers ({default_max_layers}) is greater than the number of generators ({len(generators)}). Setting default_max_layers to {len(generators)}.")
+            print(f"WARNING: default_max_layers ({default_max_layers}) is greater than the number of word_image_generators ({len(generators)}). Setting default_max_layers to {len(generators)}.")
 
         self.number_of_layer_weights = number_of_layer_weights
 
@@ -69,7 +69,7 @@ class LayerSampler:
 
 
 def main(min_layers: int, max_layers: int, with_replacement: bool):
-    # Example generators (they could be any functions you wish)
+    # Example word_image_generators (they could be any functions you wish)
     def gen1(): return "Layer1"
 
     def gen2(): return "Layer2"

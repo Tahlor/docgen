@@ -9,7 +9,7 @@ if sys.version_info >= (3, 8):
     from typing import Literal
 else:
     from typing_extensions import Literal
-from typing import Union, Optional, Tuple, Callable
+from typing import Union, Optional, Tuple, Callable, List, Dict
 from docgen.dataset_utils import ocr_dataset_to_coco
 from PIL import Image
 
@@ -43,7 +43,9 @@ class DocBox(BBox):
                  max_lines=None,
                  uncle=None,
                  nephews=None,
-                 vertically_centered=None):
+                 vertically_centered=None,
+                 indent=None,
+                 ):
         """
 
         Args:
@@ -75,6 +77,7 @@ class DocBox(BBox):
         self.uncle = uncle
         self.vertically_centered = vertically_centered
         self.root = root
+        self.indent = indent
 
         if self.root is None:
             if self.parent:
@@ -121,6 +124,8 @@ class SectionTemplate:
                  probability_existence=1.0,
                  probability_blank=0.0,
                  probability_vertically_centered=0,
+                 probability_indent=0,
+                 indent_factor_rng=(1,5),
                  ):
         """ Define possible ranges of font-rescaling factors, number of lines, margins, etc.
 
@@ -140,7 +145,8 @@ class SectionTemplate:
             probability_existence (float): The probability that this section generally exists at all on the PAGE (e.g., maybe no margin notes)
             probability_blank (float): The probability that a section box will be blank, i.e. not exist
             probability_vertically_centered (float): The probability that this section box will be vertically centered
-
+            probability_indent (float): The probability that this section box will be indented
+            indent_factor_rng (Tuple[float, float]): The range of possible indent factors; this is multiplied by the font size
         """
         self.lines_rng = lines_rng
         self.words_rng = words_rng
@@ -150,6 +156,8 @@ class SectionTemplate:
         self.probability_existence = probability_existence
         self.probability_blank = probability_blank
         self.probability_vertically_centered = probability_vertically_centered
+        self.probability_indent = probability_indent
+        self.indent_factor_rng = indent_factor_rng
 
         if ignore_margins:
             self.generate_margin_box = self.naive
@@ -325,6 +333,7 @@ class LayoutGenerator:
                   text_gen=None,
                   word_img_gen=None,
                   img_text_pair_gen=None,
+                  filler_options: List[Dict]=({},),
                   ):
         """ Generates a series of nested DocBoxes, which can be used to generate a document
             Each DocBox proposes a region, applies a margin, and then it is filled with text
@@ -416,15 +425,21 @@ class LayoutGenerator:
             self.pages_per_image = pages_per_image
 
         self.font_size_pixels = font_size_pixels
+
         self.text_gen = text_gen
         self.word_img_gen = word_img_gen
         self.img_text_pair_gen = img_text_pair_gen
 
-
         self.filler = BoxFiller(img_text_word_dict=self.img_text_pair_gen,
                                 word_img_gen=self.word_img_gen,
                                 text_gen=self.text_gen,
-                                random_word_idx=True)
+                                random_word_idx=True,
+                                use_random_vertical_offset=True,
+                                indent_after_newline_character_probability=0.8,
+                                random_horizontal_offset_sd=0.2,
+                                font_size_sd=0.05,
+                                slope_sd=0.0015,
+        )
 
     def make_one_image(self,i):
         """ Generates a single image, layout, and ocr
@@ -443,6 +458,7 @@ class LayoutGenerator:
         # Make sure the document is not completely blank
         while image is None:
             layout = self.generate_layout()
+            self.filler.reset_document_level_params()
             image = self.render_text(layout)
 
         if self.output_path:
@@ -660,7 +676,8 @@ class LayoutGenerator:
                       font_size=font_size,
                       id=id,
                       max_lines=lines,
-                      vertically_centered=flip(self.paragraph_template.probability_vertically_centered)
+                      vertically_centered=flip(self.paragraph_template.probability_vertically_centered),
+                      indent=flip(self.paragraph_template.probability_indent) * font_size * random.uniform(*self.paragraph_template.indent_factor_rng),
                       )
 
     def page_title_box(self, pg_box: DocBox, current_y):
@@ -776,9 +793,14 @@ class LayoutGenerator:
                     doc_box.update_bbox(doc_box.bbox_writable, format="XYXY")
                     self.blank_page = False
             if doc_box.category == "paragraph_note":
-                box_dict = self.filler.randomly_fill_box_with_words(doc_box,
-                                                                               max_words=random.randint(1,10),
+                max_words = random.randint(1, 10)
+
+                # Sometimes words don't fit, so we need more than the max_words
+                self.filler.override_text_generator("override_generator_style", {"style":"handwriting", "num_words":max_words*2})
+                box_dict = self.filler.randomly_fill_box_with_words(doc_box, max_words=max_words,
                                                                                **kwargs)
+                self.filler.override_text_generator("override_generator_style",
+                                                    {"style": "font", "num_words": None})
                 image = box_dict["img"]
                 localization = box_dict["bbox_list"]
                 styles = box_dict["styles"]

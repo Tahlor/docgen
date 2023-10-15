@@ -4,25 +4,18 @@ import os
 import sys
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 import numpy as np
-import random
 from pathlib import Path
-import matplotlib.pyplot as plt
 import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
-from torchvision.io import read_image
-from typing import List, Optional, Tuple, Union
 from PIL import Image
 from torchvision.transforms import ToPILImage
-from typing import List, Optional, Tuple, Union, Literal, Callable
+from typing import List, Tuple, Union
 from docgen.layoutgen.layoutgen import composite_images_PIL
 from docgen.transforms.transforms_torch import ResizeAndPad, IdentityTransform
-from docgen.image_composition.utils import CompositeImages, CalculateImageOriginForCompositing
-from docgen.image_composition.utils import seamless_composite, composite_the_images_numpy, composite_the_images_torch
+from docgen.image_composition.utils import CalculateImageOriginForCompositing
+from docgen.image_composition.utils import seamless_composite, composite_the_images_torch
 from docgen.image_composition.utils import compute_paste_origin_from_overlap_auto
-from docdegrade.degradation_objects import RandomDistortions, RuledSurfaceDistortions, Blur, Lighten, Blobs, \
-    BackgroundMultiscaleNoise, BackgroundFibrous, Contrast, ConditionalContrast
-
 
 to_pil = ToPILImage()
 """
@@ -202,8 +195,6 @@ class SemanticSegmentationDataset(Dataset):
 
         return sample
 
-    from hwgen.data.utils import show
-
     @staticmethod
     def collate_fn_simple(batch):
         images = [item['image'] for item in batch]
@@ -274,9 +265,6 @@ class SemanticSegmentationDatasetImageFolder(SemanticSegmentationDataset):
         img_path = self.img_paths[idx]
         img = Image.open(img_path).copy()
         return img
-
-
-import random
 
 
 def conservative_random_offset(bck_w, bck_h, img_w, img_h, ):
@@ -585,10 +573,10 @@ class FlattenDatasets(torch.utils.data.Dataset):
         raise NotImplementedError("Not implemented for torch yet")
 
 if __name__=="__main__":
-    from docgen.layoutgen.segmentation_dataset.word_gen import HWGenerator, PrintedTextGenerator
-    from docgen.layoutgen.segmentation_dataset.grid_gen import GridGenerator
-    from docgen.layoutgen.segmentation_dataset.line_gen import LineGenerator
-    from docgen.layoutgen.segmentation_dataset.box_gen import BoxGenerator
+    from docgen.layoutgen.writing_generators import HWGenerator, PrintedTextGenerator
+    from docgen.layoutgen.writing_generators import GridGenerator
+    from docgen.layoutgen.writing_generators import LineGenerator
+    from docgen.layoutgen.writing_generators import BoxGenerator
 
     if socket.gethostname() == "PW01AYJG":
         saved_fonts_folder = Path(r"G:/s3/synthetic_data/resources/fonts")

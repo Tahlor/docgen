@@ -1,6 +1,5 @@
 import re
 from docgen.layoutgen.segmentation_dataset.semantic_segmentation import SemanticSegmentationDataset
-import docgen.layoutgen.segmentation_dataset.image_folder
 from torch.utils.data import Dataset
 from pathlib import Path
 from PIL import Image
@@ -18,7 +17,8 @@ class PairedImgLabelImageFolderDataset(Dataset):
                  label_dir=None,
                  transform=None,
                  max_uniques=None,
-                 length_override=None
+                 length_override=None,
+                 label_name_pattern="label_{}.png",
                  ):
         super().__init__()
         if label_dir is None:
@@ -28,6 +28,7 @@ class PairedImgLabelImageFolderDataset(Dataset):
         self.img_dir = img_dir
         self.path_database = self.process_img_file_list(img_dir, label_dir)
         self.length = int(length_override) if length_override else len(self.path_database)
+        self.label_name_pattern = label_name_pattern
 
         if len(self.path_database) == 0:
             raise ValueError(f"No images found in {img_dir}")
@@ -49,25 +50,14 @@ class PairedImgLabelImageFolderDataset(Dataset):
 
         path_database = {}
         for img_path in imgs:
-            # Extract the id from the filename.
+            # Extract the id fro    m the filename.
             # The regular expression will match both "12345_input" and "input_12345".
             match = re.search(r"(\d+)", img_path.stem)
             if match:
                 id = match.group(1)
 
-                # Try both label formats.
-                label_path1 = label_folder / f"label_{id}.png"
-                label_path2 = label_folder / f"{id}_label.png"
-
-                # If one of the label paths exists, use it.
-                # If not, log a warning.
-                if label_path1.exists():
-                    label_path = label_path1
-                elif label_path2.exists():
-                    label_path = label_path2
-                else:
-                    logger.warning(f"No label file exists for {label_path1} or {label_path2}")
-                    continue  # Skip to next image file.
+                label_name_pattern = self.label_name_pattern.format(id=id)
+                label_path = label_folder / label_name_pattern
 
                 path_database[int(id)] = {"img_path": img_path,
                                           "label_path": label_path}

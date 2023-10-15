@@ -1,15 +1,9 @@
-import sys
-from docgen.bbox import BBox
-from docgen.render_doc import composite_images_PIL
-from PIL import Image
-
-import os
 import numpy as np
 from PIL import Image
 from random import choice
 import cv2
 from sklearn.utils import shuffle
-from docgen.layoutgen.segmentation_dataset.gen import Gen
+from docgen.layoutgen.writing_generators import Gen
 from pathlib import Path
 from docgen.image_composition.utils import CalculateImageOriginForCompositing
 from docgen.image_composition.utils import seamless_composite, composite_the_images_numpy

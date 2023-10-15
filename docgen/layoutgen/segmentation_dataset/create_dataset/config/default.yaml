@@ -18,10 +18,10 @@ layout_sampler_kwargs:
     - .1
 
 # restrict to only these datasets
-dataset_override:
+#dataset_override:
 #  - background
 #  - handwriting
-  - images
+#  - images
 
 
 datasets:
@@ -36,11 +36,12 @@ datasets:
     transforms:
       - ToNumpy
       - RandomChoice:
+        - ColorJitter
         - RandomDistortions
         - RuledSurfaceDistortions
         - Blur
         - Lighten
-        - Contrast
+        - ConditionalContrast
       - ToTensor
       - RandomResize:
           min_scale: .5
@@ -54,8 +55,12 @@ datasets:
     transforms:
       - ToNumpy
       - RandomChoice:
+          - ColorJitter
           - RandomDistortions
           - RuledSurfaceDistortions
+          - ConditionalContrast
+          - Lighten
+          - Blur
       - ToTensor
       - RandomResize:
           min_scale: .5
@@ -70,6 +75,7 @@ datasets:
     transforms:
       - ToNumpy
       - RandomChoice:
+        - ColorJitter
         - RandomDistortions
         - RuledSurfaceDistortions
         #- Blur
@@ -93,10 +99,11 @@ datasets:
     mask:
       type: mask
       kwargs:
-        threshold: .95
+        threshold: .99
     transforms:
       - ToNumpy
       - RandomChoice:
+        - ColorJitter
         - RandomDistortions
         - RuledSurfaceDistortions
         - Blur
@@ -116,11 +123,10 @@ datasets:
     percent_overlap: 1
     mask:
       type: naivemask
-      kwargs:
-
     transforms:
       - ToNumpy
       - RandomChoice:
+        - ColorJitter
         - RandomDistortions
         - RuledSurfaceDistortions
       - ToTensor
@@ -133,13 +139,14 @@ datasets:
     type: NaiveImageFolder
     base_dataset_kwargs:
       img_dir: "G:/s3/synthetic_data/resources/seals"
-    layer_contents: seals
+    layer_contents: seals # seals, text
     sample_weight: .5
     transforms:
       - ToNumpy
       - RandomChoice:
         - RandomDistortions
         - RuledSurfaceDistortions
+        - ColorJitter
       - ToTensor
       - ResizeLongestSide:
           longest_side: [ 24, 128 ]
@@ -157,6 +164,10 @@ datasets:
       - RandomChoice:
         - RandomDistortions
         - RuledSurfaceDistortions
+        - ConditionalContrast
+        - Lighten
+        - Blur
+
       - ToTensor
       - RandomResize:
           min_scale: .5
@@ -179,6 +190,10 @@ datasets:
       - RandomChoice:
         - RandomDistortions
         - RuledSurfaceDistortions
+        - ConditionalContrast
+        - Lighten
+        - Blur
+        - ColorJitter
       - ToTensor
       - RandomResize:
           min_scale: .5

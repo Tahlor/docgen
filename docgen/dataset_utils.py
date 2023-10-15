@@ -347,19 +347,20 @@ def change_key_recursive(reference_dict, my_dict, old_key, new_key):
         elif isinstance(ref_val, dict):
             change_key_recursive(ref_val, my_dict[i], old_key, new_key)
 
-def draw_boxes_paragraph(ocr_format, background_img, origin=[0,0]):
+def draw_boxes_paragraph(ocr_format, background_img, origin=[0,0], color="red"):
     if ocr_format["paragraphs"]:
         for paragraph in ocr_format["paragraphs"]:
             for line in paragraph["lines"]:
                 for word in line["words"]:
-                    BBox._draw_box(BBox._offset_origin(word["bbox"], *origin), background_img)
-                BBox._draw_box(BBox._offset_origin(line["bbox"], *origin), background_img)
-            BBox._draw_box(BBox._offset_origin(paragraph["bbox"], *origin), background_img)
+                    BBox._draw_box(BBox._offset_origin(word["bbox"], *origin), background_img, color=colors["word"])
+                BBox._draw_box(BBox._offset_origin(line["bbox"], *origin), background_img, color=colors["line"])
+            BBox._draw_box(BBox._offset_origin(paragraph["bbox"], *origin), background_img, color=color)
     return background_img
 
 def draw_boxes_sections(ocr_format, background_img):
     for section in ocr_format["sections"]:
-        draw_boxes_paragraph(section, background_img)
+        color = colors[section["category"]] if section["category"] in colors else "red"
+        draw_boxes_paragraph(section, background_img, color=color)
     return background_img
 
 
@@ -370,7 +371,8 @@ colors = {"paragraph": "red",
           "page_title": "orange",
           "page": "purple",
           "section": "pink",
-          "margin_note": "gray",}
+          "margin_note": "gray",
+          "page_header": "brown",}
 
 # Just so we can visualize the box, in case it overlaps
 enlarge_box_by_pixels = {"page_title":2,
@@ -466,13 +468,14 @@ def fix2(path):
     return dict
 
 
-def load_and_draw_and_display(image_path,
-                              dataset_dict=None,
-                              format:Literal['OCR', 'COCO']="OCR",
-                              category_id=None,
-                              draw_segmentations=False,
-                              draw_boxes=True,
-                              save_path=None,):
+def draw_gt_layout(image_path,
+                   dataset_dict=None,
+                   format:Literal['OCR', 'COCO']="OCR",
+                   category_id=None,
+                   draw_segmentations=False,
+                   draw_boxes=True,
+                   save_path=None,
+                   show=True):
     """ Will load a COCO/OCR format and display the image with the bounding boxes
 
     Args:
@@ -485,6 +488,10 @@ def load_and_draw_and_display(image_path,
     Returns:
 
     """
+    if not show and save_path is None:
+        logger.error("Must set show=True or provide save_path")
+        return
+
     if dataset_dict is None:
         dataset_dict = load_json(Path(image_path).parent / "OCR.json")
     elif isinstance(dataset_dict, (str, Path)):
@@ -498,7 +505,11 @@ def load_and_draw_and_display(image_path,
         img = img.convert("RGB")
 
     if format == "OCR":
-        out = draw_boxes_sections(dataset_dict[idx], img)
+        if draw_segmentations:
+            logger.error("draw_segmentations not supported for OCR format")
+            return
+        else:
+            out = draw_boxes_sections(dataset_dict[idx], img)
     elif format == "COCO":
         out = draw_boxes_sections_COCO(dataset_dict,
                                        category_id,
@@ -511,7 +522,8 @@ def load_and_draw_and_display(image_path,
         raise ValueError(f"format {format} not supported")
 
     #display(img)
-    out.show()
+    if show:
+        out.show()
     if save_path is not None:
         out.save(save_path)
 
@@ -617,7 +629,7 @@ def _test(path=r"C:\Users\tarchibald\github\data\synthetic\FRENCH_BMD_LAYOUTv0.0
 
     if False:
         p = "/home/taylor/anaconda3/DATASET_0021/0036011.jpg"
-        load_and_draw_and_display(p)
+        draw_gt_layout(p)
 
 
 ### FIX COCO JSONs

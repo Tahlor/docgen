@@ -1,44 +1,44 @@
-from pathlib import Path
-import logging
 import yaml
 from enum import Enum
-from hwgen.data.utils import show
-from tqdm import tqdm
-from docgen.layoutgen.segmentation_dataset.word_gen import HWGenerator, PrintedTextGenerator
-from docgen.layoutgen.segmentation_dataset.grid_gen import GridGenerator
-from docgen.layoutgen.segmentation_dataset.line_gen import LineGenerator
-from docgen.layoutgen.segmentation_dataset.box_gen import BoxGenerator
+from docgen.layoutgen.writing_generators import HWGenerator, PrintedTextGenerator
 from docgen.layoutgen.segmentation_dataset.semantic_segmentation import SemanticSegmentationDatasetGenerative, \
-AggregateSemanticSegmentationDataset, FlattenPILGenerators, SoftMask, Mask, NaiveMask, SemanticSegmentationDatasetImageFolder
-from docgen.layoutgen.segmentation_dataset.paired_image_folder_dataset import PairedImgLabelImageFolderDataset
+AggregateSemanticSegmentationDataset, SoftMask, Mask, NaiveMask
 import torch
-import socket
-from pathlib import Path
+from pathlib import Path, WindowsPath, PosixPath
 # get number of cores
 import multiprocessing
 import logging
-import random
-import numpy as np
 # import torch vision transforms
-from torchvision import transforms
-from PIL import Image
-from docgen.layoutgen.segmentation_dataset.image_paste_gen import CompositeImages
-from docgen.layoutgen.segmentation_dataset.image_folder import NaiveImageFolder
-from docgen.layoutgen.segmentation_dataset.gen import RandomSelectorDataset
-from docgen.image_composition.utils import encode_channels_to_colors
+from docgen.datasets.image_folder import NaiveImageFolder
 from docgen.layoutgen.segmentation_dataset.utils.dataset_sampler import LayerSampler
-import tifffile
 from torchvision.transforms import ToTensor
 from docgen.windows.utils import map_drive
 from docdegrade.torch_transforms import ToNumpy, CHWToHWC, HWCToCHW, RandomChoice, Squeeze
 from docgen.transforms.transforms_torch import ResizeAndPad, IdentityTransform, RandomResize, RandomCropIfTooBig, \
     ResizeLongestSide, RandomEdgeCrop
-from docgen.layoutgen.segmentation_dataset.preprinted_form_gen import PreprintedFormElementGenerator
+from docgen.layoutgen.writing_generators import PreprintedFormElementGenerator
 from typing import List, Union, Dict, Any
 from docdegrade.degradation_objects import RandomDistortions, RuledSurfaceDistortions, Blur, Lighten, Blobs, \
-    BackgroundMultiscaleNoise, BackgroundFibrous, Contrast, ConditionalContrast
+    BackgroundMultiscaleNoise, BackgroundFibrous, Contrast, ConditionalContrast, ColorJitter
 from easydict import EasyDict as edict
 from docgen.image_composition.utils import seamless_composite, composite_the_images_torch, CompositerTorch
+
+def easydict_representer(dumper, data):
+    return dumper.represent_dict(data.items())
+
+def to_yaml_path(dumper, data):
+    print(f"to_yaml_path called for {data}")  # Debug print
+    return dumper.represent_scalar('tag:yaml.org,2002:str', str(data))
+
+def tuple_to_list_representer(dumper, data):
+    return dumper.represent_list(list(data))
+
+yaml.add_representer(tuple, tuple_to_list_representer)
+yaml.add_representer(edict, easydict_representer)
+Path.to_yaml = to_yaml_path
+yaml.add_representer(Path, Path.to_yaml)
+yaml.add_representer(WindowsPath, Path.to_yaml)
+yaml.add_representer(PosixPath, Path.to_yaml)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -66,6 +66,7 @@ class TransformType(Enum):
     TOTENSOR = ToTensor
     RESIZELONGESTSIDE = ResizeLongestSide
     RANDOMEDGECROP = RandomEdgeCrop
+    COLORJITTER = ColorJitter
 
 class DatasetType(Enum):
     HWGENERATOR = HWGenerator
@@ -182,8 +183,8 @@ def parse_composite_function(composite_function_def):
         return None
     elif isinstance(composite_function_def, dict):
         composite_function_class_name = composite_function_def["type"]
-        composite_function_args = composite_function_def.get("kwargs", {})
-        method = composite_function_def.get("method", {})
+        composite_function_args = composite_function_def.get("kwargs") or {}
+        method = composite_function_def.get("method") or {}
         composite_function_class = CompositeFunctions[composite_function_class_name.upper()].value
         method = CompositeFunctions[method.upper()].value
         composite_function = composite_function_class(method=method,**composite_function_args)
@@ -201,17 +202,17 @@ def create_aggregate_dataset(config):
         if dataset is None:
             input(f"Problem with dataset config: {dataset_config}")
             continue
-        transforms = create_transforms(dataset_config.get("transforms", []))
+        transforms = create_transforms(dataset_config.get("transforms") or [])
         dataset.transforms = transforms
         generators.append(dataset)
 
     layout_sampler = LayerSampler(generators,
                                   [d.sample_weight if hasattr(d, "sample_weight") and d.sample_weight else 1 for d in generators],
-                                    **config.get("layout_sampler_kwargs", {}),
+                                    **(config.get("layout_sampler_kwargs") or {}),
                                   )
-    after_transforms = config.get("transforms_after_compositing", [])
+    after_transforms = config.get("transforms_after_compositing") or []
 
-    composite_function_def = config.get("composite_function", "seamless_composite")
+    composite_function_def = config.get("composite_function") or "seamless_composite"
     composite_function = parse_composite_function(composite_function_def)
 
     aggregate_dataset = AggregateSemanticSegmentationDataset(generators,
@@ -222,7 +223,16 @@ def create_aggregate_dataset(config):
                                                              size=config.get("output_img_size", 448),
                                                              composite_function=composite_function
                                                              )
+    # save out 1) the config used to create this dataset and 2) aggregate_dataset.config
+    config.combined_channel_mapping = aggregate_dataset.config
+    config.output_channel_content_names = aggregate_dataset.output_channel_content_names
+    save_config(config.output_path / "config.yaml", config)
     return aggregate_dataset
+
+def save_config(config_path, config):
+    with open(config_path, 'w') as file:
+        yaml.dump(config, file)
+
 
 if __name__ == "__main__":
     config_path = Path("./config/default.yaml")

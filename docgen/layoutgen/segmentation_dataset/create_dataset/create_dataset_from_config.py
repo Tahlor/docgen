@@ -1,36 +1,15 @@
-import os
 from docgen.layoutgen.segmentation_dataset.create_dataset.parse_config import parse_config
 from docgen.layoutgen.segmentation_dataset.create_dataset.parse_config import create_aggregate_dataset
-from hwgen.data.utils import show
 from tqdm import tqdm
-from docgen.layoutgen.segmentation_dataset.word_gen import HWGenerator, PrintedTextGenerator
-from docgen.layoutgen.segmentation_dataset.grid_gen import GridGenerator
-from docgen.layoutgen.segmentation_dataset.line_gen import LineGenerator
-from docgen.layoutgen.segmentation_dataset.box_gen import BoxGenerator
-from docgen.layoutgen.segmentation_dataset.semantic_segmentation import SemanticSegmentationDatasetGenerative, \
-AggregateSemanticSegmentationDataset, FlattenPILGenerators, SoftMask, Mask, NaiveMask, SemanticSegmentationDatasetImageFolder
-from docgen.layoutgen.segmentation_dataset.paired_image_folder_dataset import PairedImgLabelImageFolderDataset
 import torch
 import socket
 from pathlib import Path
 # get number of cores
-import multiprocessing
 import logging
-import random
-import numpy as np
 # import torch vision transforms
-from torchvision import transforms
-from PIL import Image
-from docgen.layoutgen.segmentation_dataset.image_paste_gen import CompositeImages
-from docgen.layoutgen.segmentation_dataset.image_folder import NaiveImageFolder
-from docgen.layoutgen.segmentation_dataset.gen import RandomSelectorDataset
 from docgen.image_composition.utils import encode_channels_to_colors
-from docgen.layoutgen.segmentation_dataset.utils.dataset_sampler import LayerSampler
 import tifffile
-from torchvision.transforms import ToTensor
-from docgen.windows.utils import map_drive
-from docdegrade.torch_transforms import ToNumpy, CHWToHWC, HWCToCHW, RandomChoice, Squeeze
-from docgen.transforms.transforms_torch import ResizeAndPad, IdentityTransform, RandomResize, RandomCropIfTooBig
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())

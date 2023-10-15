@@ -1,6 +1,6 @@
 import socket
 
-TESTING = False # TESTING = disables error handling
+TESTING = True # TESTING = disables error handling
 
 #from textgen.basic_text_dataset import BasicTextDataset
 
@@ -26,9 +26,9 @@ from docgen.layoutgen.layoutgen import LayoutGenerator, SectionTemplate
 #from docgen.layoutgen.layoutgen import *
 from hwgen.data.saved_handwriting_dataset import SavedHandwriting, SavedHandwritingRandomAuthor
 from textgen.unigram_dataset import Unigrams
-from textgen.rendertext.render_word import RenderImageTextPair
+from textgen.rendertext.render_word import RenderImageTextPair, RenderWordConsistentFont
 from pathlib import Path
-from docgen.dataset_utils import load_and_draw_and_display, save_json, ocr_dataset_to_coco
+from docgen.dataset_utils import draw_gt_layout, save_json, ocr_dataset_to_coco
 from docgen.degradation.degrade import degradation_function_composition2
 from docgen.utils.utils import file_incrementer, handler
 import multiprocessing
@@ -38,7 +38,8 @@ from hwgen.data.hw_generator import HWGenerator
 from textgen.basic_text_dataset import VOCABULARY, ALPHA_VOCABULARY
 import torch
 import site
-
+from docgen.word_image_generators.word_iterator_daemon import WordImgIterator
+from docgen.word_image_generators.word_and_printed_gen import MultiGeneratorFromPair, MultiGeneratorSmartParse
 import logging
 logger = logging.getLogger()
 
@@ -68,7 +69,7 @@ def parser(args=None):
     parser.add_argument("--wikipedia", default=None, help="Use wikipedia data for text generation, e.g., 20220301.fr, 20220301.en")
     parser.add_argument("--degradation", action="store_true", help="Apply degradation function to images")
     parser.add_argument("--workers", type=int, default=None, help="How many parallel processes to spin up for LAYOUT only? (default is number of cores - 2)")
-    parser.add_argument("--display_output", action="store_true", help="Display output images")
+    parser.add_argument("--render_gt_layout", action="store_true", help="Render output images")
     parser.add_argument("--verbose", action="store_true", help="Display warnings etc.")
     parser.add_argument("--device", default=None, help="cpu, cuda, cuda:0, etc.")
     parser.add_argument("--TESTING", action="store_true", help="Enable testing mode")
@@ -76,6 +77,7 @@ def parser(args=None):
     parser.add_argument("--exclude_chars", default="0123456789()+*;#:!/,.", type=str, help="Exclude these chars from the vocab")
     parser.add_argument("--daemon_buffer_size", type=int, default=1000,
                         help="How many batches to store in memory")
+    parser.add_argument("--use_hw_and_font_generator", action="store_true", help="Use HWGenerator and RenderWordConsistentFont instead of SavedHandwritingRandomAuthor and RenderWordFont")
 
     if args is not None:
         import shlex
@@ -132,83 +134,6 @@ def draw_layout(layout, image):
     image = lg.draw_doc_boxes(layout, image)
     image.show()
 
-
-class WordIterator:
-    def __init__(self, input_data_iterator, buffer_size=4000):
-        self.input_data_iterator = input_data_iterator
-        self.buffer_size = buffer_size
-        self.renderer_daemon = Daemon(self.input_data_iterator, buffer_size=self.buffer_size)
-        self.timeout = .2
-        self.renderer_daemon.start()
-
-    def restart_daemon_if_needed(self):
-        if not self.renderer_daemon.is_alive():
-            print("Daemon thread has died, restarting...")
-            old_daemon = self.renderer_daemon
-            self.renderer_daemon = Daemon(self.input_data_iterator, buffer_size=self.buffer_size)
-            self.renderer_daemon.start()
-            old_daemon.join()
-
-    def get_next_word_iterator(self):
-        failures = 0
-        while True:
-            item = None
-            try:
-                item = self.renderer_daemon.queue.get(block=True, timeout=self.timeout)
-            except Exception as e:
-                #logger.exception("Timeout waiting for next item")
-                failures += 1
-                if failures and failures % 10 == 0:
-                    logger.info(f"Timeout waiting for next item: {failures}")
-                    self.restart_daemon_if_needed()
-                continue
-
-            #print(item)
-            if item is not None:
-                failures = 0
-                for i in range(len(item["text_list"])):
-                    if 0 in item["word_imgs"][i].shape:
-                        continue  # kind of a bug, it's an empty image e.g. \n or something
-
-                    try:
-                        yield {"img": item["word_imgs"][i],
-                               "text": item["text_list"][i],
-                               "style": item["author_id"],
-                               "text_decode_vocab": item["text_list_decode_vocab"][i]
-                               }
-                    except Exception as e:
-                        #logger.exception(e)
-                        continue
-
-    def get_next_word_queue(self):
-        while True:
-            item = None
-            try:
-                item = self.renderer_daemon.queue.get(block=True, timeout=self.timeout)
-            except Exception as e:
-                #logger.exception("Timeout waiting for next item")
-                continue
-            #print(item)
-            if item is not None:
-                for i in range(len(item["text_list"])):
-                    if 0 in item["word_imgs"][i].shape:
-                        continue  # kind of a bug, it's an empty image e.g. \n or something
-
-                    try:
-                        yield {"img": item["word_imgs"][i],
-                               "text": item["text_list"][i],
-                               "style": item["author_id"],
-                               "text_decode_vocab": item["text_list_decode_vocab"][i]
-                               }
-                    except Exception as e:
-                        #logger.exception(e)
-                        continue
-    def stop(self):
-        self.renderer_daemon.stop()
-        self.renderer_daemon.join()
-
-
-
 def main(opts):
     global lg
 
@@ -226,6 +151,7 @@ def main(opts):
     if opts.wikipedia is not None:
         from datasets import load_dataset
         from textgen.wikipedia_dataset import WikipediaEncodedTextDataset, WikipediaWord
+        from textgen.basic_text_dataset import SingleWordIterator
 
         words_dataset = WikipediaEncodedTextDataset(
             use_unidecode=True,
@@ -248,9 +174,9 @@ def main(opts):
     else:
         words_dataset = Unigrams(csv_file=opts.unigrams, newline_freq=0)
 
-    render_text_pair = daemon_iterator = None
+    render_text_pair = hw_daemon_iterator = None
     def create_dataset():
-        nonlocal words_dataset, render_text_pair, daemon_iterator
+        nonlocal words_dataset, render_text_pair, hw_daemon_iterator
         if opts.renderer == "saved":
             renderer = SavedHandwritingRandomAuthor(
                 format="PIL",
@@ -275,11 +201,48 @@ def main(opts):
                                    style=opts.saved_hw_model,
                                    )
 
-            daemon_iterator = WordIterator(render_text_pair_gen, buffer_size=opts.daemon_buffer_size)
-            render_text_pair = daemon_iterator.get_next_word_iterator()
+            hw_daemon_iterator = WordImgIterator(render_text_pair_gen,
+                                                 buffer_size=opts.daemon_buffer_size,
+                                                 style="handwriting")
+            render_text_pair = hw_daemon_iterator.get_next_word_iterator()
             print("LOOPING")
             x = next(render_text_pair)
             print(x)
+        else:
+            raise NotImplementedError
+
+        if opts.use_hw_and_font_generator:
+            saved_fonts_folder = Path(r"G:/s3/synthetic_data/resources/fonts")
+            clear_fonts_path = Path(saved_fonts_folder) / "clear_fonts.csv"
+            font_generator = RenderWordConsistentFont(format="numpy",
+                                                      font_folder=saved_fonts_folder,
+                                                      clear_font_csv_path=clear_fonts_path,
+                                                      word_dataset=SingleWordIterator(words_dataset),
+                                                      range_before_font_change=(100,200)
+
+                                                      )
+
+            boxfiller_arg_overrides = [{"use_random_vertical_offset":False,
+                                        "indent_after_newline_character_probability":0.7,
+                                        "random_horizontal_offset_sd":0.05,
+                                        "font_size_sd":0,
+                                        "slope_sd":0.0005,},
+                                       {"use_random_vertical_offset": True,
+                                        "indent_after_newline_character_probability": 0.7,
+                                        "random_horizontal_offset_sd": 0.2,
+                                        "font_size_sd": 0.05,
+                                        "slope_sd": 0.0015, }
+                                    ]
+
+
+            render_text_pair = MultiGeneratorSmartParse(generators=[font_generator, hw_daemon_iterator],
+                                                        word_count_ranges=[(10, 30), (2, 9)],
+                                                        special_args_to_update_object_attributes_that_use_this_generator=boxfiller_arg_overrides,
+                                                        )
+            filler_options = {
+                               "handwriting" : {},
+                               "font" : {}
+                               }
 
         # Create a LayoutGenerator object with the parsed parameters
         lg = LayoutGenerator(paragraph_template=paragraph_template,
@@ -322,7 +285,8 @@ def main(opts):
             if iteration >= opts.count:
                 break
             elif iteration > start_iteration and iteration % 1000 == 0:
-                ocr_dataset = save_out(ocr_dataset, iteration, opts)
+                save_dataset(ocr_dataset, iteration, opts, add_iteration_suffix=True)
+                save_dataset(ocr_dataset, iteration, opts, format="COCO", add_iteration_suffix=True)
                 ocr_dataset = {}
 
             # batch size should just be 1 since there is no GPU acceleration on LayoutGeneration
@@ -334,61 +298,101 @@ def main(opts):
 
     except Exception as e:
         print(e)
+        if TESTING:
+            traceback.print_exc()
+            raise e
 
-    # Stop Daemon if needed
-    try:
-        daemon_iterator.stop()
-    except Exception as e:
-        print(f"Couldn't stop daemon, {e}")
-
-    save_out(ocr_dataset, iteration, opts)
-
+    _,ocr_path = save_dataset(ocr_dataset, iteration, opts)
+    coco_dataset,coco_path = save_dataset(ocr_dataset, iteration, opts, format="COCO", add_iteration_suffix=False)
 
     stop = time.time()
     print("TIME: ", stop-start)
 
-    if opts.display_output:
-        display_output(ocr_dataset)
+    if opts.render_gt_layout:
+        output_folder = opts.output / "segmentations"
+        output_folder.mkdir(parents=True, exist_ok=True)
+        render_all_gt_layout(coco_dataset, format="COCO", output_folder=output_folder)
+        render_all_gt_layout(ocr_dataset, format="OCR", output_folder=output_folder)
 
-def save_out(ocr_dataset, i, opts):
-    logger.info(f"Saving out at {i}")
-    coco_path, ocr_path = add_suffix_to_path(opts.coco_path, i), add_suffix_to_path(opts.ocr_path, i)
-    save_json(ocr_path, ocr_dataset)
-    coco = ocr_dataset_to_coco(ocr_dataset, "French BMD Layout - v0.0.0.3 pre-Alpha", exclude_cats="word")
-    save_json(coco_path, coco)
+    print("Done Saving")
 
+    # Stop Daemon if needed
+    try:
+        hw_daemon_iterator.stop()
+    except Exception as e:
+        print(f"Couldn't stop daemon, {e}")
+
+    print("DONE")
+
+def save_dataset(ocr_dataset, i, opts, format="OCR", add_iteration_suffix=True):
+    if format=="OCR":
+        path = add_suffix_to_path(opts.ocr_path, i) if add_iteration_suffix else opts.ocr_path
+        dataset = ocr_dataset
+    else:
+        path = add_suffix_to_path(opts.coco_path, i) if add_iteration_suffix else opts.coco_path
+        dataset = ocr_dataset_to_coco(ocr_dataset, "French BMD Layout - v0.0.0.4 pre-Alpha", exclude_cats="word")
+
+    logger.info(f"Saving out at {i} to {path}")
+    save_json(path, dataset)
+    return dataset, path
 
 def add_suffix_to_path(path, index):
     # use pathlib
     path = Path(path)
     return path.parent / (path.stem + f"_{index}" + path.suffix)
 
+def render_gt_layout(name, d, format="COCO", show=False, output_folder=None):
+    ## TEST LAST IMAGE - OCR AND COCO DATASET + BBOXS
+    image_path = opts.output / f"{name}.jpg"
+    if output_folder is None:
+        output_folder = image_path.parent
+
+    coco_seg = (output_folder / (image_path.stem + "_with_seg")).with_suffix(image_path.suffix)
+    coco_box = (output_folder / (image_path.stem + "_with_boxes")).with_suffix(image_path.suffix)
+
+    # load_and_draw_and_display(image_path, opts.ocr_path)
+    draw_gt_layout(image_path, d, format=format, draw_boxes=True, draw_segmentations=False, save_path=coco_box, show=show)
+    draw_gt_layout(image_path, d, format=format, draw_boxes=False, draw_segmentations=True, save_path=coco_seg, show=show)
+
 
 def display_output(ocr_dataset):
-        ## TEST LAST IMAGE - OCR AND COCO DATASET + BBOXS
-        name, d = next(iter(ocr_dataset.items()))
-        image_path = opts.output / f"{name}.jpg"
+    ## TEST LAST IMAGE - OCR AND COCO DATASET + BBOXS
+    name, d = next(iter(ocr_dataset.items()))
+    image_path = opts.output / f"{name}.jpg"
 
-        coco_seg = (image_path.parent / (image_path.stem + "_with_seg")).with_suffix(image_path.suffix)
-        coco_box = (image_path.parent / (image_path.stem + "_with_boxes")).with_suffix(image_path.suffix)
+    coco_seg = (image_path.parent / (image_path.stem + "_with_seg")).with_suffix(image_path.suffix)
+    coco_box = (image_path.parent / (image_path.stem + "_with_boxes")).with_suffix(image_path.suffix)
 
-        load_and_draw_and_display(image_path, opts.ocr_path)
-        load_and_draw_and_display(image_path, opts.coco_path, format="COCO", draw_boxes=True, draw_segmentations=False
-                                   , save_path=coco_box)
-        load_and_draw_and_display(image_path, opts.coco_path, format="COCO", draw_boxes=False, draw_segmentations=True, save_path=coco_seg)
+    draw_gt_layout(image_path, opts.ocr_path)
+    draw_gt_layout(image_path, opts.coco_path, format="COCO", draw_boxes=True, draw_segmentations=False
+                   , save_path=coco_box)
+    draw_gt_layout(image_path, opts.coco_path, format="COCO", draw_boxes=False, draw_segmentations=True,
+                   save_path=coco_seg)
+
+def render_all_gt_layout(dataset_dict, format="COCO", output_folder=None):
+    if format == "COCO":
+        for d in dataset_dict["images"]:
+            image_path = d["id"]
+            render_gt_layout(image_path, dataset_dict, format, output_folder=output_folder)
+    else:
+        for name,d in dataset_dict.items():
+            render_gt_layout(name, dataset_dict, format, output_folder=output_folder)
 
 if __name__ == "__main__":
+    # --output  /mnt/g/s3/synthetic_data/FRENCH_BMD
     if socket.gethostname() == "PW01AYJG":
         args = """
           --config ./config/default.yaml 
-          --count 1
+          --count 10000
           --renderer novel
-          --output  /mnt/g/s3/synthetic_data/FRENCH_BMD
+          --output  G:/s3/synthetic_data/FRENCH_BMD/v0
           --wikipedia 20220301.fr
           --saved_hw_model IAM
           --hw_batch_size 8
           --workers 0
-          --daemon_buffer_size 100
+          --daemon_buffer_size 500
+          --use_hw_and_font_generator
+          --render_gt_layout
         """
 
     elif socket.gethostname() == "Galois":

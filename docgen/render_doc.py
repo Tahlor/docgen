@@ -309,14 +309,17 @@ class BoxFiller:
                  text_gen=None,
                  channels=3,
                  slope_sd=0.0015,
-                 font_size_sd=0.01,
+                 font_size_sd=0.05,
                  random_word_idx=False,
                  default_font_size=32,
                  default_max_words=sys.maxsize,
                  default_max_lines=sys.maxsize,
                  default_error_mode="ignore",
                  word_img_format="auto",
-                 terminate_on_new_style=True
+                 terminate_on_new_style=True,
+                 indent_after_newline_character_probability=0.8,
+                 random_horizontal_offset_sd=0.2,
+                 use_random_vertical_offset=True,
                  ):
         """ Initiate the BoxFiller object
 
@@ -333,10 +336,16 @@ class BoxFiller:
             default_max_lines: Default maximum number of lines to put in a box
             word_img_format: Format of the word images; only numpy01, PIL and auto implemented
                                                         numpy01 -> 0-255 PIL
+            indent_after_newline_character_probability: Probability of indenting after a newline character \n in a word
+
+            Challenges between dealing with the filler, the layout, and the word generators:
+                * The filling is easier to do before the layout is finalized
+                * We need to be able to change word generators (font/hw) mid-paragraph
+                * We may want ot adjust paragraph filling parameters based on the generator
 
         """
         self.word_img_format = word_img_format
-
+        self.indent_after_newline_character_probability = indent_after_newline_character_probability
         self.img_text_pair_gen, self.word_img_gen, self.text_gen = img_text_word_dict, word_img_gen, text_gen
 
         if self.img_text_pair_gen is not None or self.word_img_gen is not None or self.text_gen is not None:
@@ -350,7 +359,8 @@ class BoxFiller:
         self.default_max_words = default_max_words
         self.default_max_lines = default_max_lines
         self.default_error_mode = default_error_mode
-        self.styles = set()
+        self.horizontal_offset_sd = random_horizontal_offset_sd
+        self.use_random_vertical_offset = use_random_vertical_offset
 
     def setup_content_gen(self, img_text_pair_gen, word_img_gen, text_gen):
         if img_text_pair_gen is None and word_img_gen is None:
@@ -378,6 +388,33 @@ class BoxFiller:
             self.dataset_length = len(word_img_gen)
 
         return img_text_pair_gen, word_img_gen, text_gen
+
+    def override_text_generator(self, func_name, kwargs):
+        """ Maybe we need to forcibly change which generator is being used
+
+        Args:
+            func_name:
+            kwargs:
+
+        Returns:
+
+        """
+        # if has func self.img_text_pair_gen func
+        if hasattr(self.img_text_pair_gen, func_name):
+            func = getattr(self.img_text_pair_gen, func_name)
+            if callable(func):
+                func(**kwargs)
+
+    def try_to_update_BoxFiller_parameters_based_on_generator(self):
+        if hasattr(self.img_text_pair_gen, "you_should_update_object_attributes_that_use_this_generator"):
+            kwargs = self.img_text_pair_gen.you_should_update_object_attributes_that_use_this_generator()
+            if kwargs:
+                self.update_object_attributes(**kwargs)
+
+    def update_object_attributes(self, **kwargs):
+        for k,v in kwargs.items():
+            if hasattr(self, k):
+                setattr(self, k, v)
 
     def gen_slope(self):
         return random.gauss(0, self.slope_sd)
@@ -451,6 +488,8 @@ class BoxFiller:
             i = self.input_word_idx
         i = i % self.dataset_length
 
+        self.try_to_update_BoxFiller_parameters_based_on_generator()
+
         word_dict = self._get_word(i)
         img, self.last_word_text = word_dict["img"], word_dict["text"]
 
@@ -488,17 +527,21 @@ class BoxFiller:
         return random.uniform(.2, .4)
     def vert_space_min_gen(self):
         return random.uniform(0, .2)
-    def reset(self, bbox, img=None,
-              max_lines=None,
-              max_words=None,
-              img_text_pair_gen=None,
-              word_img_gen=None,
-              text_gen=None,
-              error_mode=None,
-              font_size_override=None
-              ):
-        """ Reset the BoxFiller object, usually done for each new box
 
+    def reset_document_level_params(self):
+        self.vertical_space_min_max = (self.vert_space_min_gen(), self.vert_space_max_gen())
+
+    def reset_box_leveL_params(self, bbox, img=None,
+                               max_lines=None,
+                               max_words=None,
+                               img_text_pair_gen=None,
+                               word_img_gen=None,
+                               text_gen=None,
+                               error_mode=None,
+                               font_size_override=None
+                               ):
+        """ Reset the BoxFiller object, usually done for each new box
+            If you have "\n" in a word, then it will move to the next line and indent
         Args:
             bbox: The BBox object to fill
             img: The background image to fill the box with
@@ -538,7 +581,6 @@ class BoxFiller:
             self.font_size = self.bbox.font_size
         else:
             self.font_size = self.default_font_size
-
 
         if hasattr_not_none(self.bbox, "max_lines"):
             max_lines = bbox.max_lines
@@ -587,12 +629,11 @@ class BoxFiller:
 
         self.skip_count = 0
         self.skip_limit = 3
-        self.font_size_sd = .1
         self.next_is_last_line = False
         self.slope = self.gen_slope()
 
         self.starting_x1 = self.round(random.uniform(0, self.font_size * .3))
-        self.reset_line_variation()
+        self.reset_horizontal_line_variation_for_each_new_line()
 
         if hasattr_not_none(self.bbox, "max_lines") and hasattr_not_none(self.bbox, "vertically_centered"):
             estimated_height = self.bbox.max_lines * (self.font_size* (1+np.mean(self.vertical_space_min_max))) * 1.05
@@ -602,7 +643,7 @@ class BoxFiller:
                 random.uniform(0, self.max_line_pixel_overlap))  # this allows for no margin on first line
         self.abs_y2_func_prev_line = lambda x: np.interp(x, [0, self.bbox.width], [self.y1, self.y1])
 
-    def reset_line_variation(self):
+    def reset_horizontal_line_variation_for_each_new_line(self):
         """ Used as part of reset, to reset some of the idiosyncratic priors of HW
 
         Args:
@@ -614,10 +655,9 @@ class BoxFiller:
         # vert offset
         # horiz space
         # slope
-        self.starting_x1 += int(random.gauss(0,.3) * self.font_size )
+        self.starting_x1 += int(random.gauss(0,self.horizontal_offset_sd) * self.font_size )
         self.starting_x1 = abs(self.starting_x1)
         self.horizontal_space_min_max = (.2, .6)
-        self.vertical_space_min_max = (self.vert_space_min_gen(), self.vert_space_max_gen())
 
     def reset_word_variation(self):
         """ Randomize font size between words
@@ -639,7 +679,7 @@ class BoxFiller:
             The vertical offset for the word
 
         """
-        base_offset = self.slope * x1
+        base_offset_from_slope = self.slope * x1
 
         # Word goes out the bottom of the bbox
         _max = self.bbox.height - self.y1 - word_height
@@ -656,18 +696,28 @@ class BoxFiller:
         if _min > _max:
             return None
 
-        offset = base_offset + random.uniform(_min, _max)
+        offset = base_offset_from_slope + self.random_vertical_offset(_min, _max)
         offset = max(_min, min(_max, offset))
         offset = self.round(offset)
         assert offset + self.y1 + word_height <= self.bbox.height
 
         return offset
 
-    def random_horizontal_space(self, height=32):
+    def random_vertical_offset(self, _min, _max):
+        if self.use_random_vertical_offset:
+            return random.uniform(_min, _max)
+        else:
+            return 0
+
+    def generate_random_total_horizontal_space_for_line_in_px(self, height=32):
         return int(random.uniform(*self.horizontal_space_min_max)*height)
 
-    def random_vertical_space(self, height=32):
-        return int(random.uniform(*self.vertical_space_min_max)*height)
+    def generate_random_total_vertical_space_for_line_in_px(self, height=32):
+        if self.use_random_vertical_offset:
+            return int(random.uniform(*self.vertical_space_min_max)*height)
+        else:
+            # average vertical space * height
+            return int(np.mean(self.vertical_space_min_max)*height)
 
     def make_line(self):
         """ keep adding words until you can't fit anymore in the line
@@ -686,7 +736,11 @@ class BoxFiller:
                 return "newline_indent"
 
             next_word_width, next_word_height = shape(next_word_img)[:2]
-            horizontal_space = self.random_horizontal_space(next_word_height)
+            horizontal_space = self.generate_random_total_horizontal_space_for_line_in_px(next_word_height)
+
+            if hasattr(self.img_text_pair_gen,"get_added_space"):
+                horizontal_space += self.img_text_pair_gen.get_added_space() * next_word_height
+
             proposed_x1_after_adding = self.x1 + horizontal_space + next_word_width
 
             if proposed_x1_after_adding > self.bbox.width and self.line_word_idx > 0:
@@ -790,8 +844,12 @@ class BoxFiller:
             Localization stored in self.bbox_list
         """
         while self.line_idx < self.max_lines:
-            self.reset_line_variation()
+            self.reset_horizontal_line_variation_for_each_new_line()
             self.x1 = self.starting_x1
+
+            if self.line_idx == 0 and hasattr_not_none(self.bbox, "indent"):
+                self.x1 += self.bbox.indent
+
             self.x1s, self.y2s = [], []
 
             # Realistic paragraph ending on last line
@@ -804,9 +862,9 @@ class BoxFiller:
                 self.line_idx += 1
                 self.line_word_idx = 0
                 self.abs_y2_func_prev_line = lambda x, _x1s=tuple(self.x1s), _y2s=tuple(self.y2s),: np.interp(x, _x1s,_y2s)
-                self.y1 = max(self.y2s) + self.random_vertical_space(height=height(self.last_word_img))
-            if "indent" in  result:
-                self.starting_x1 += self.random_horizontal_space(height=width(self.last_word_img))*self.tab_spaces
+                self.y1 = max(self.y2s) + self.generate_random_total_vertical_space_for_line_in_px(height=height(self.last_word_img))
+            if "indent" in result and flip(self.indent_after_newline_character_probability):
+                self.starting_x1 += self.generate_random_total_horizontal_space_for_line_in_px(height=width(self.last_word_img)) * self.tab_spaces
             elif result == "complete":
                 return "complete"
 
@@ -821,8 +879,8 @@ class BoxFiller:
         Returns:
 
         """
-        self.reset(bbox,
-                   *args, **kwargs)
+        self.reset_box_leveL_params(bbox,
+                                    *args, **kwargs)
         self.gen_box_layout()
         self.paste_images()
 
@@ -848,7 +906,7 @@ class BoxFiller:
         Returns:
 
         """
-        self.reset(bbox, *args, **kwargs)
+        self.reset_box_leveL_params(bbox, *args, **kwargs)
         self.words_attempted = 0
         failures = 0
 
@@ -914,7 +972,6 @@ class BoxFiller:
 
             composite_images_PIL(self.img, bbox.img, bbox, offset=self.paste_offset)
             bbox.img = None # free up memory
-
 
         return self.img, self.bbox_list
 
