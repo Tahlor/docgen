@@ -13,6 +13,9 @@ from docgen.utils.utils import *
 from docgen.bbox import BBox, BBoxNGon
 import logging
 import sys
+from typing import List, Tuple, Union, Optional
+import ctypes
+
 if sys.version_info >= (3, 8):
     from typing import Literal
 else:
@@ -691,6 +694,39 @@ def test_coco():
     p = draw_boxes_sections_COCO(coco, category_id="paragraph", draw_boxes=False, draw_segmentations=True, image_root=Path(path).parent)
     p.show()
     pass
+
+def get_adjusted_path(path: Union[str, Path]) -> str:
+    """
+    Get an adjusted path that uses UNC notation if necessary, i.e., the path is too long
+
+    Args:
+        path (Union[str, Path]): The original file or directory path.
+
+    Returns:
+        str: The adjusted path.
+    """
+    path_str = str(path)
+    if len(path_str) > 260:  # Windows max path length
+        return f"\\\\?\\{path_str}"
+    return path_str
+
+def get_short_path_name(long_name: Union[str, Path]) -> Optional[str]:
+    """
+    Get the short 8.3-style pathname.
+
+    Args:
+        long_name (Union[str, Path]): The original long file path.
+
+    Returns:
+        Optional[str]: The short path if it can be obtained, otherwise None.
+    """
+    buffer_size = 500
+    buffer = ctypes.create_unicode_buffer(buffer_size)
+    get_short_path_name_func = ctypes.windll.kernel32.GetShortPathNameW
+    if get_short_path_name_func(str(long_name), buffer, buffer_size):
+        return buffer.value
+    return None
+
 
 def test():
     root = Path("/home/taylor/anaconda3/DATASET_0021")

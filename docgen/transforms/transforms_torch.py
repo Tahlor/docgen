@@ -96,6 +96,12 @@ class RandomCropIfTooBig:
 
 class ResizeAndPad:
     def __init__(self, longest_side, div):
+        """
+
+        Args:
+            longest_side:
+            div:
+        """
         self.resize = ResizeLongestSide(longest_side) if longest_side else None
         self.div = div
 
@@ -205,7 +211,7 @@ class ToTensorIfNeeded:
         else:
             return x
 
-class RandomEdgeCrop:
+class RandomBottomLeftEdgeCrop:
     def __init__(self, left_crop=37, bottom_crop=52):
         self.left_crop = left_crop
         self.bottom_crop = bottom_crop
@@ -215,6 +221,39 @@ class RandomEdgeCrop:
             return image[:, :, self.left_crop:]
         else:
             return image[:, :-self.bottom_crop, :]
+
+class RandomBottomLeftEdgeCropSquare:
+    def __init__(self, edge_crop_size=52):
+        self.RandomBottomLeftEdgeCrop = RandomBottomLeftEdgeCrop(left_crop=edge_crop_size, bottom_crop=edge_crop_size)
+
+    def __call__(self, image):
+        cropped_img = self.RandomBottomLeftEdgeCrop(image)
+        min_dim, max_dim = sorted(cropped_img.shape[1:3])
+        offset = random.randint(0, max_dim - min_dim)
+        cropped_img = F.crop(cropped_img, offset, 0, min_dim, min_dim)
+        return cropped_img
+
+class CropBorder:
+    def __init__(self, border_size_rng):
+        self.border_size = border_size_rng
+
+    def sample_border_size(self):
+        if isinstance(self.border_size, int):
+            return self.border_size
+        else:
+            return random.randint(self.border_size[0], self.border_size[1])
+    def __call__(self, img):
+        """
+
+        Args:
+            img:
+            crop: (top left corner) y, x, height, width
+        Returns:
+
+        """
+        border_size = self.sample_border_size()
+        img_cropped = F.crop(img, border_size, border_size, img.shape[-2]-border_size*2, img.shape[-1]-border_size*2)
+        return img_cropped
 
 class RandomScaleResize(transforms.Resize):
     def __init__(self, min_scale=0.5, max_scale=3, interpolation=Image.BILINEAR):

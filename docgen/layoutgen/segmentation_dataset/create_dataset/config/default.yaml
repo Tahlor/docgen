@@ -130,7 +130,7 @@ datasets:
         - RandomDistortions
         - RuledSurfaceDistortions
       - ToTensor
-      - RandomEdgeCrop
+      - RandomBottomLeftEdgeCrop
       - RandomResize:
           min_scale: .5
           max_scale: 2

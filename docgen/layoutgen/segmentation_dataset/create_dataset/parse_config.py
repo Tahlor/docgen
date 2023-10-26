@@ -1,8 +1,8 @@
 import yaml
 from enum import Enum
-from docgen.layoutgen.writing_generators import HWGenerator, PrintedTextGenerator
-from docgen.layoutgen.segmentation_dataset.semantic_segmentation import SemanticSegmentationDatasetGenerative, \
-AggregateSemanticSegmentationDataset, SoftMask, Mask, NaiveMask
+from docgen.layoutgen.segmentation_dataset.layer_generator.word_gen import HWGenerator, PrintedTextGenerator
+from docgen.layoutgen.segmentation_dataset.semantic_segmentation import SemanticSegmentationCompositionDatasetGenerative, \
+AggregateSemanticSegmentationCompositionDataset
 import torch
 from pathlib import Path, WindowsPath, PosixPath
 # get number of cores
@@ -15,14 +15,16 @@ from torchvision.transforms import ToTensor
 from docgen.windows.utils import map_drive
 from docdegrade.torch_transforms import ToNumpy, CHWToHWC, HWCToCHW, RandomChoice, Squeeze
 from docgen.transforms.transforms_torch import ResizeAndPad, IdentityTransform, RandomResize, RandomCropIfTooBig, \
-    ResizeLongestSide, RandomEdgeCrop
-from docgen.layoutgen.writing_generators import PreprintedFormElementGenerator
+    ResizeLongestSide, RandomBottomLeftEdgeCrop, CropBorder
+from docgen.transforms.transforms_torch import *
+from docgen.layoutgen.segmentation_dataset.layer_generator.preprinted_form_gen import PreprintedFormElementGenerator
 from typing import List, Union, Dict, Any
 from docdegrade.degradation_objects import RandomDistortions, RuledSurfaceDistortions, Blur, Lighten, Blobs, \
     BackgroundMultiscaleNoise, BackgroundFibrous, Contrast, ConditionalContrast, ColorJitter
 from easydict import EasyDict as edict
 from docgen.image_composition.utils import seamless_composite, composite_the_images_torch, CompositerTorch
-
+from docgen.datasets.utils.dataset_filters import RejectIfEmpty, RejectIfTooManyPixelsAreBelowThreshold
+from docgen.layoutgen.segmentation_dataset.masks import Mask, NaiveMask, SoftMask
 def easydict_representer(dumper, data):
     return dumper.represent_dict(data.items())
 
@@ -65,13 +67,15 @@ class TransformType(Enum):
     RESIZEANDPAD = ResizeAndPad
     TOTENSOR = ToTensor
     RESIZELONGESTSIDE = ResizeLongestSide
-    RANDOMEDGECROP = RandomEdgeCrop
+    RANDOMBOTTOMLEFTEDGECROP = RandomBottomLeftEdgeCrop
     COLORJITTER = ColorJitter
+    CROPBORDER = CropBorder
+
 
 class DatasetType(Enum):
     HWGENERATOR = HWGenerator
     NAIVEIMAGEFOLDER = NaiveImageFolder
-    SEMANTICSEGMENTATIONDATASETGENERATIVE = SemanticSegmentationDatasetGenerative
+    SEMANTICSEGMENTATIONCOMPOSITIONDATASETGENERATIVE = SemanticSegmentationCompositionDatasetGenerative
     PREPRINTEDFORMELEMENTGENERATOR = PreprintedFormElementGenerator
     PRINTEDTEXTGENERATOR = PrintedTextGenerator
 
@@ -92,6 +96,10 @@ class Masks(Enum):
     SOFTMASK = SoftMask
     MASK = Mask
     NAIVEMASK = NaiveMask
+
+class DatasetFilters(Enum):
+    REJECTIFEMPTY = RejectIfEmpty
+    REJECTIFTOOMANYPIXELSAREBELOWTHRESHOLD = RejectIfTooManyPixelsAreBelowThreshold
 
 def parse_config(config_file_path: Path):
     with open(config_file_path, 'r') as file:
@@ -126,18 +134,27 @@ def create_individual_dataset(config):
     mask_maker = mask_type(**mask_config.get("kwargs", {}))
 
     dataset_cls = DatasetType[dataset_type.upper()].value
+
+    if dataset_type.upper() == "NAIVEIMAGEFOLDER": # TODO: this is a hack, ALL transforms should be applied to this lower level dataset
+        filters = config.get("filters", [])
+        if filters:
+            filters = [DatasetFilters[list(f.keys())[0].upper()].value() for f in filters]
+            base_dataset_kwargs["filters"] = filters
+        base_dataset_kwargs["transforms"] = transforms
+        transforms = None
+
     dataset = dataset_cls(**base_dataset_kwargs)
 
-    segmentation_dataset = SemanticSegmentationDatasetGenerative(layer_contents=config.get("layer_contents"),
-                                                 generator=dataset,
-                                                 name=config.get("name"),
-                                                 percent_overlap=config.get("percent_overlap", 0.7),
-                                                 mask_maker=mask_maker,
-                                                 transforms_before_mask_threshold=transforms,
-                                                                 sample_weight=sample_weight,
-                                                                 composite_function=composite_function,
-                                                                 layer_position=config.get("layer_position", 50)
-                                                                 )
+    segmentation_dataset = SemanticSegmentationCompositionDatasetGenerative(layer_contents=config.get("layer_contents"),
+                                                                            generator=dataset,
+                                                                            name=config.get("name"),
+                                                                            percent_overlap=config.get("percent_overlap", 0.7),
+                                                                            mask_maker=mask_maker,
+                                                                            transforms_before_mask_threshold=transforms,
+                                                                            sample_weight=sample_weight,
+                                                                            composite_function=composite_function,
+                                                                            layer_position=config.get("layer_position", 50)
+    )
     return segmentation_dataset
 
 
@@ -215,7 +232,7 @@ def create_aggregate_dataset(config):
     composite_function_def = config.get("composite_function") or "seamless_composite"
     composite_function = parse_composite_function(composite_function_def)
 
-    aggregate_dataset = AggregateSemanticSegmentationDataset(generators,
+    aggregate_dataset = AggregateSemanticSegmentationCompositionDataset(generators,
                                                              background_img_properties='max',
                                                              dataset_length=config.get("dataset_length", 100000),
                                                              transforms_after_compositing=after_transforms,

@@ -326,20 +326,23 @@ def main(opts):
 
 def save_dataset(ocr_dataset, i, opts, format="OCR", add_iteration_suffix=True):
     if format=="OCR":
-        path = add_suffix_to_path(opts.ocr_path, i) if add_iteration_suffix else opts.ocr_path
+        path = add_suffix_to_path(opts.ocr_path, i, new_subfolder="partial_jsons") if add_iteration_suffix else opts.ocr_path
         dataset = ocr_dataset
     else:
-        path = add_suffix_to_path(opts.coco_path, i) if add_iteration_suffix else opts.coco_path
+        path = add_suffix_to_path(opts.coco_path, i, new_subfolder="partial_jsons") if add_iteration_suffix else opts.coco_path
         dataset = ocr_dataset_to_coco(ocr_dataset, "French BMD Layout - v0.0.0.4 pre-Alpha", exclude_cats="word")
 
     logger.info(f"Saving out at {i} to {path}")
     save_json(path, dataset)
     return dataset, path
 
-def add_suffix_to_path(path, index):
+def add_suffix_to_path(path, index, new_subfolder=None):
     # use pathlib
     path = Path(path)
-    return path.parent / (path.stem + f"_{index}" + path.suffix)
+    if new_subfolder is not None:
+        return path.parent / new_subfolder / (path.stem + f"_{index}" + path.suffix)
+    else:
+        return path.parent / (path.stem + f"_{index}" + path.suffix)
 
 def render_gt_layout(name, d, format="COCO", show=False, output_folder=None):
     ## TEST LAST IMAGE - OCR AND COCO DATASET + BBOXS

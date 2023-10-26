@@ -1,7 +1,8 @@
+import numpy as np
 import sys
 from typing import Dict, Tuple
 import math
-from docgen.layoutgen.segmentation_dataset.semantic_segmentation import SemanticSegmentationDataset
+from docgen.layoutgen.segmentation_dataset.semantic_segmentation import SemanticSegmentationCompositionDataset
 from torch.utils.data import Dataset
 from pathlib import Path
 from PIL import Image
@@ -17,13 +18,15 @@ import random
 
 class NaiveImageFolder(Dataset):
     def __init__(self, img_dir,
-                 transform_list=None,
+                 transforms=None,
                  max_length=None,
                  color_scheme="RGB",
                  recursive=True,
-                 extensions=(".jpg", ".png"),
+                 extensions=(".jpg", ".png", ".jfif"),
                  return_format="just_image",
                  shuffle=True,
+                 require_non_empty_result=False,
+                 filters=None,
                  **kwargs):
         """
         Common transforms:
@@ -33,7 +36,7 @@ class NaiveImageFolder(Dataset):
 
         Args:
             img_dir:
-            transform_list:
+            transforms:
             max_length:
             color_scheme:
             longest_side:
@@ -46,20 +49,22 @@ class NaiveImageFolder(Dataset):
 
         super().__init__()
         self.shuffle = shuffle
-        img_dirs = img_dir
+        self.require_non_empty_result = require_non_empty_result
+        self.img_dirs = img_dir
         if not isinstance(img_dir, (tuple, list)):
-            img_dirs = [img_dir]
+            self.img_dirs = [img_dir]
 
         self.imgs = []
         extensions = set([ext.lower() for ext in extensions])
-        for img_dir in img_dirs:
+        for img_dir in self.img_dirs:
             img_dir = Path(img_dir)
             if recursive:
                 self.imgs += list(img_dir.rglob("*.*"))
             else:
                 self.imgs += list(img_dir.glob("*.*"))
         self.imgs = [img for img in self.imgs if img.suffix.lower() in extensions]
-
+        self.filters = list(filters) if filters is not None else []
+        self.failed_filters_count = 0
 
         if self.shuffle:
             random.shuffle(self.imgs)
@@ -71,9 +76,11 @@ class NaiveImageFolder(Dataset):
         if len(self.imgs) == 0:
             raise ValueError(f"No images found in {img_dir}")
 
-        self.transform_list = transform_list
-        if self.transform_list is None:
+        self.transform_list = transforms
+        if self.transform_list:
             self.transform_composition = Compose(self.transform_list)
+        else:
+            self.transform_composition = Compose([])
 
         self.max_length = max_length if max_length is not None else len(self.imgs)
         self.current_img_idx = 0
@@ -83,15 +90,20 @@ class NaiveImageFolder(Dataset):
         return min(len(self.imgs), self.max_length)
 
     def _get(self, idx):
+        empty_results = 0
         while True:
             try:
                 idx = idx % len(self.imgs)
                 img_path = self.imgs[idx]
 
                 # load from png and convert to tensor
-                img = Image.open(img_path).convert(self.color_scheme)
+                img = Image.open(str(img_path)).convert(self.color_scheme)
                 if self.transform_composition.transforms is not None:
                     img = self.transform_composition(img)
+
+                if self.filters and self.reject_because_of_filter(img):
+                    idx += 1
+                    continue
 
                 if self.return_format == "just_image":
                     return img
@@ -103,6 +115,16 @@ class NaiveImageFolder(Dataset):
             except:
                 logger.exception(f"Error loading image {img_path}")
                 idx += 1
+
+    def reject_because_of_filter(self, img):
+        for filter in self.filters:
+            if filter(img):
+                self.failed_filters_count += 1
+                if self.failed_filters_count and self.failed_filters_count % 5 == 0:
+                    logger.warning(f"Filters failed {self.failed_filters_count} times (current filter: {filter})")
+                return True
+        self.failed_filters_count = 0
+        return False
 
     def get(self, idx=None):
         if idx is None:
@@ -124,25 +146,25 @@ class NaiveImageFolder(Dataset):
 
     @staticmethod
     def collate_fn(batch):
-        return SemanticSegmentationDataset.collate_fn(batch, no_tensor_keys=["name"])
+        return SemanticSegmentationCompositionDataset.collate_fn(batch, no_tensor_keys=["name"])
 
 
 class NaiveImageFolderPatch(NaiveImageFolder):
-    def __init__(self, img_dir, patch_size: Tuple[int, int], transform_list=None, max_length=None,
+    def __init__(self, img_dir, patch_size: Tuple[int, int], transforms=None, max_length=None,
                  color_scheme="RGB", longest_side=None, pad_to_be_divisible_by=32, **kwargs):
         """ Safer as an iterator, might work as a indexable dataset, but length changes dynamically
 
         Args:
             img_dir:
             patch_size:
-            transform_list:
+            transforms:
             max_length:
             color_scheme:
             longest_side:
             pad_to_be_divisible_by:
             **kwargs:
         """
-        super().__init__(img_dir, transform_list, max_length, color_scheme, longest_side, pad_to_be_divisible_by, **kwargs)
+        super().__init__(img_dir, transforms, max_length, color_scheme, longest_side, pad_to_be_divisible_by, **kwargs)
         self.patch_size = patch_size
         self.patch_idx = 0
         self.current_img_patches = None
@@ -261,7 +283,7 @@ class NaiveImageFolderPatch(NaiveImageFolder):
 
     @staticmethod
     def collate_fn(batch):
-        return SemanticSegmentationDataset.collate_fn(batch, no_tensor_keys=["name", "abs_coordinate", "patch_coordinate"])
+        return SemanticSegmentationCompositionDataset.collate_fn(batch, no_tensor_keys=["name", "abs_coordinate", "patch_coordinate"])
 
     def __iter__(self):
         self.current_img_idx = 0

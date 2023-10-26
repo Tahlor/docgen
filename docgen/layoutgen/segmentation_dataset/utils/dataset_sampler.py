@@ -1,7 +1,7 @@
 import random
 from typing import List, Any, Callable, Tuple, Union
 from pathlib import Path
-
+import numpy as np
 
 class LayerSampler:
     def __init__(self, generators: List[Callable[[], Any]],
@@ -47,25 +47,30 @@ class LayerSampler:
         else:
             return random.randint(self.min_layers, self.max_layers)
 
-    def _sample(self, num_layers: int=None, replacement: bool=False) -> List[Callable[[], Any]]:
+    def _sample(self, num_layers: int=None, sample_with_replacement: bool=False) -> List[Callable[[], Any]]:
         """
         Sample layers based on their weights.
 
         Args:
             num_layers (int): Number of layers to be sampled.
-            replacement (bool): If True, sampling is done with replacement. Else, without replacement.
+            sample_with_replacement (bool): If True, sampling is done with replacement. Else, without replacement.
 
         Returns:
             List[Callable[[], Any]]: List of sampled generator functions.
         """
-        if replacement:
+        if sample_with_replacement:
             return random.choices(self.generators, weights=self.weights, k=num_layers)
         else:
-            return random.sample(self.generators, min(num_layers, len(self.generators)))
+            #return list(set(random.choices(self.generators, weights=self.weights, k=min(num_layers, len(self.generators)))))
+            # sample using weights, but without replacement
+            choices = np.random.choice(len(self.generators), size=min(num_layers, len(self.generators)),
+                                    replace=False, p=np.array(self.weights)/sum(self.weights))
+            return [self.generators[i] for i in choices]
+
 
     def sample(self, replacement: bool=False) -> List[Callable[[], Any]]:
         layers = self.choose_num_layers()
-        return self._sample(num_layers=layers, replacement=replacement)
+        return self._sample(num_layers=layers, sample_with_replacement=replacement)
 
 
 def main(min_layers: int, max_layers: int, with_replacement: bool):

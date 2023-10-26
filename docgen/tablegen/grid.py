@@ -1,7 +1,7 @@
 import random
 from PIL import Image
 from docgen.drawing.pil_image_draw import CustomImageDraw
-from docgen.layoutgen.writing_generators import Gen
+from docgen.layoutgen.segmentation_dataset.layer_generator.gen import Gen
 
 class Grid(Gen):
     def __init__(self, width,

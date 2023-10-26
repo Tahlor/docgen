@@ -1,5 +1,5 @@
 from docgen.tablegen.grid import Grid
-from docgen.layoutgen.writing_generators import Gen
+from docgen.layoutgen.segmentation_dataset.layer_generator.gen import Gen
 
 class GridGenerator(Gen):
     def __init__(self, img_size=(512,512)):

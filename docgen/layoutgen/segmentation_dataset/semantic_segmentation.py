@@ -16,7 +16,8 @@ from docgen.transforms.transforms_torch import ResizeAndPad, IdentityTransform
 from docgen.image_composition.utils import CalculateImageOriginForCompositing
 from docgen.image_composition.utils import seamless_composite, composite_the_images_torch
 from docgen.image_composition.utils import compute_paste_origin_from_overlap_auto
-
+from docgen.transforms.transforms_torch import ToTensorIfNeeded
+from docgen.layoutgen.segmentation_dataset.masks import Mask, NaiveMask
 to_pil = ToPILImage()
 """
 # compose random words, tables, and handwriting into a document
@@ -67,45 +68,13 @@ https://fonts.google.com/?category=Handwriting
 
 """
 
-
-class NaiveMask:
-    """ It's not even a mask, it's just pixel intensity
-    """
-    def __init__(self, *args, **kwargs):
-        pass
-
-    def __call__(self, img):
-        # convert to grayscale using luminance
-        if img.shape[0] == 3:
-            img = torch.sum(img, dim=0) / 3
-        return img
-
-class Mask(NaiveMask):
-    def __init__(self, threshold=.5, *args, **kwargs):
-        self.threshold01 = threshold if threshold < 1 else threshold * 255
-
-    def __call__(self, img):
-        return torch.where(img < self.threshold01, torch.tensor(1), torch.tensor(0))
-
-class SoftMask(Mask):
-    def __init__(self, soft_mask_threshold=.3, soft_mask_steepness=20):
-        super().__init__()
-        self.soft_mask_threshold = soft_mask_threshold
-        self.soft_mask_steepness = soft_mask_steepness
-
-    def __call__(self, img):
-        mask = 1.0 - img
-        transition_point = self.soft_mask_threshold
-        steepness = self.soft_mask_steepness
-        mask = torch.sigmoid(steepness * (mask - transition_point))
-        return mask
-
 def compose(transform_list):
     if isinstance(transform_list, (list,tuple)):
         return transforms.Compose(transform_list)
     else:
         return transform_list
-class SemanticSegmentationDataset(Dataset):
+
+class SemanticSegmentationCompositionDataset(Dataset):
     def __init__(self,
                  layer_contents: Union[tuple,str,list],
                  transforms_before_mask_threshold=None,
@@ -133,12 +102,13 @@ class SemanticSegmentationDataset(Dataset):
             name: name of the dataset
             percent_overlap: how much of the image should overlap with the previous layer in AGGREGATOR
             composite_function: function to use to composite the images in AGGREGATOR
+
+            Transforms: should be pytorch CHW divisible by e.g. 32
         """
         # sort it so that the order is consistent
         self.layer_contents = (layer_contents,) if isinstance(layer_contents, str) else tuple(sorted(layer_contents))
         self.layer_position = layer_position
         # if threshold is None, just use the pixel intensity as labellogit
-        self.transforms_before = compose(transforms_before_mask_threshold)
         self.transforms_after = compose(transforms_after_mask_threshold)
         self.overfit_dataset_length = overfit_dataset_length
         self.mask_maker = mask_maker if mask_maker else Mask()
@@ -148,15 +118,18 @@ class SemanticSegmentationDataset(Dataset):
         self.composite_function = composite_function
 
         # Default transformations before thresholding
-        if self.transforms_before is None:
+        if transforms_before_mask_threshold is None:
             self.transforms_before = transforms.Compose([
-                #transforms.ToPILImage(),
-                transforms.ToTensor(),
-                #resize_so_largest_side_is(size=size) if size else IdentityTransform(),
-                #pad_image,
+                ToTensorIfNeeded(),
+            ])
+        elif transforms_before_mask_threshold == "default":
+            self.transforms_before = transforms.Compose([
+                ToTensorIfNeeded(),
                 ResizeAndPad(size, 32) if size else IdentityTransform()
             ])
-            
+        else:
+            self.transforms_before = compose(transforms_before_mask_threshold)
+
         # Default transformations after thresholding
         if self.transforms_after is None:
             self.transforms_after = transforms.Compose([
@@ -227,7 +200,7 @@ class SemanticSegmentationDataset(Dataset):
         raise NotImplementedError()
 
 
-class SemanticSegmentationDatasetGenerative(SemanticSegmentationDataset):
+class SemanticSegmentationCompositionDatasetGenerative(SemanticSegmentationCompositionDataset):
     def __init__(self,
                  layer_contents,
                  generator,
@@ -242,7 +215,7 @@ class SemanticSegmentationDatasetGenerative(SemanticSegmentationDataset):
     def __len__(self):
         return sys.maxsize
 
-class SemanticSegmentationDatasetImageFolder(SemanticSegmentationDataset):
+class SemanticSegmentationCompositionDatasetImageFolder(SemanticSegmentationCompositionDataset):
     def __init__(self, layer_contents, img_dir,
                  *args,
                  **kwargs):
@@ -294,8 +267,8 @@ def more_random_offset(bck_w, bck_h, img_w, img_h, percent=0.9):
     return start_x, start_y
 
 
-class AggregateSemanticSegmentationDataset(Dataset):
-    def __init__(self, subdatasets:List[SemanticSegmentationDataset],
+class AggregateSemanticSegmentationCompositionDataset(Dataset):
+    def __init__(self, subdatasets:List[SemanticSegmentationCompositionDataset],
                  background_img_properties=None,
                  overfit_dataset_length=0,
                  random_origin_composition=True,
@@ -306,7 +279,7 @@ class AggregateSemanticSegmentationDataset(Dataset):
                  output_channel_content_names=None,
                  layout_sampler=None,
                  size=448,
-                 composite_function: Union[seamless_composite, composite_the_images_torch]=composite_the_images_torch,):
+                 composite_function: Union[seamless_composite, composite_the_images_torch]=composite_the_images_torch, ):
 
         """
 
@@ -432,7 +405,7 @@ class AggregateSemanticSegmentationDataset(Dataset):
 
         images_and_masks = [d[idx] for d in chosen_datasets]
         images, masks = [x["image"] for x in images_and_masks], [x["mask"] for x in images_and_masks]
-
+        img_names = [x["name"] if "name" in x else None for x in images_and_masks]
         # Calculate background size
         if self.size is not None:
             bckg_size = (3, self.size, self.size)
@@ -501,7 +474,9 @@ class AggregateSemanticSegmentationDataset(Dataset):
             composite_image = self.transforms_after_compositing(composite_image)
 
 
-        return {'image': composite_image, 'mask': composite_masks}
+        return {'image': composite_image,
+                'mask': composite_masks,
+                'name': img_names,}
 
     def _calculate_background_size(self, images: List[torch.Tensor]) -> Tuple:
         """Calculate the background size for compositing."""
@@ -573,10 +548,8 @@ class FlattenDatasets(torch.utils.data.Dataset):
         raise NotImplementedError("Not implemented for torch yet")
 
 if __name__=="__main__":
-    from docgen.layoutgen.writing_generators import HWGenerator, PrintedTextGenerator
-    from docgen.layoutgen.writing_generators import GridGenerator
-    from docgen.layoutgen.writing_generators import LineGenerator
-    from docgen.layoutgen.writing_generators import BoxGenerator
+    from docgen.layoutgen.segmentation_dataset.layer_generator import HWGenerator, PrintedTextGenerator,\
+        GridGenerator, LineGenerator, BoxGenerator
 
     if socket.gethostname() == "PW01AYJG":
         saved_fonts_folder = Path(r"G:/s3/synthetic_data/resources/fonts")
@@ -596,9 +569,9 @@ if __name__=="__main__":
     form_generator = FlattenPILGenerators([grid_generator, line_generator, box_generator])
 
     # form elements
-    form_dataset = SemanticSegmentationDatasetGenerative(form_generator)
-    hw_dataset = SemanticSegmentationDatasetGenerative(hw_generator)
-    printed_dataset = SemanticSegmentationDatasetGenerative(printed_text_generator)
+    form_dataset = SemanticSegmentationCompositionDatasetGenerative(form_generator)
+    hw_dataset = SemanticSegmentationCompositionDatasetGenerative(hw_generator)
+    printed_dataset = SemanticSegmentationCompositionDatasetGenerative(printed_text_generator)
 
 
     all_generators = [form_generator, hw_generator, printed_text_generator]
@@ -606,7 +579,7 @@ if __name__=="__main__":
                                   [d.sample_weight if hasattr(d, "sample_weight") else 1 for d in all_generators]
                                   )
 
-    aggregate_dataset = AggregateSemanticSegmentationDataset(all_generators,
+    aggregate_dataset = AggregateSemanticSegmentationCompositionDataset(all_generators,
                                                              background_img_properties='max',
                                                              layout_sampler=layout_sampler,
                                                              )

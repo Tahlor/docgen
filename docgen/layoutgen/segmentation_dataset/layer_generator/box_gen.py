@@ -1,4 +1,4 @@
-from docgen.layoutgen.writing_generators import LineGenerator
+from docgen.layoutgen.segmentation_dataset.layer_generator.line_gen import LineGenerator
 import numpy as np
 import aggdraw
 from PIL import Image

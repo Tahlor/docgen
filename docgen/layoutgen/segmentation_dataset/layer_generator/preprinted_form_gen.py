@@ -1,8 +1,8 @@
 from docgen.layoutgen.segmentation_dataset.semantic_segmentation import FlattenPILGenerators
-from docgen.layoutgen.writing_generators import GridGenerator
-from docgen.layoutgen.writing_generators import LineGenerator
-from docgen.layoutgen.writing_generators import BoxGenerator
-from docgen.layoutgen.writing_generators import Gen
+from docgen.layoutgen.segmentation_dataset.layer_generator.grid_gen import GridGenerator
+from docgen.layoutgen.segmentation_dataset.layer_generator.line_gen import LineGenerator
+from docgen.layoutgen.segmentation_dataset.layer_generator.box_gen import BoxGenerator
+from docgen.layoutgen.segmentation_dataset.layer_generator.gen import Gen
 class PreprintedFormElementGenerator(Gen):
     def __init__(self, img_size=(448, 448)):
         super().__init__()

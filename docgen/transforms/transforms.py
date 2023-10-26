@@ -1,9 +1,12 @@
-from albumentations import DualTransform, ImageOnlyTransform, NoOp, PadIfNeeded, RandomScale, LongestMaxSize
-import cv2
+import albumentations as A
 import random
-import numpy as np
+from albumentations import Compose, VerticalFlip, HorizontalFlip, Crop, RandomCrop, RandomRotate90
+from albumentations.pytorch import ToTensorV2
 import random
-import cv2
+import cv2  # OpenCV, used for the crop operation
+from albumentations import DualTransform, ImageOnlyTransform, NoOp, PadIfNeeded, RandomScale, LongestMaxSize, Rotate
+import random
+import random
 import numpy as np
 import torch
 from torchvision.transforms import functional as F
@@ -75,7 +78,7 @@ class PadToBeDivisibleByAlbumentations(ImageOnlyTransform):
             return cv2.copyMakeBorder(img, 0, pad_h, 0, pad_w, cv2.BORDER_CONSTANT, value=[1, 1, 1])
 
 
-# Remaining transformations such as 'IdentityTransform', 'ToTensorIfNeeded', 'RandomEdgeCrop' can follow the same pattern as above.
+# Remaining transformations such as 'IdentityTransform', 'ToTensorIfNeeded', 'RandomBottomLeftEdgeCrop' can follow the same pattern as above.
 
 class ToTensorIfNeededAlbumentations(ImageOnlyTransform):
     def __init__(self, always_apply=False, p=0.5):
@@ -96,9 +99,9 @@ class IdentityTransformAlbumentations(ImageOnlyTransform):
         return img
 
 
-class RandomEdgeCropAlbumentations(ImageOnlyTransform):
+class RandomBottomLeftEdgeCropAlbumentations(ImageOnlyTransform):
     def __init__(self, left_crop=37, bottom_crop=52, always_apply=True, p=0.5):
-        super(RandomEdgeCropAlbumentations, self).__init__(always_apply, p)
+        super(RandomBottomLeftEdgeCropAlbumentations, self).__init__(always_apply, p)
         self.left_crop = left_crop
         self.bottom_crop = bottom_crop
 
@@ -122,3 +125,35 @@ class RandomCropIfTooBig(DualTransform):
             return img[y1:y1+self.size[0], x1:x1+self.size[1]]
 
         return img
+
+class RandomBottomLeftEdgeCrop(A.DualTransform):
+    def __init__(self, left_crop=37, bottom_crop=52, always_apply=False, p=1.0):
+        super().__init__(always_apply, p)
+        self.left_crop = left_crop
+        self.bottom_crop = bottom_crop
+
+    def apply(self, img, **params):
+        if random.choice(['left', 'bottom']) == 'left':
+            return img[:, self.left_crop:, :]
+        else:
+            return img[:-self.bottom_crop, :, :]
+
+    def get_transform_init_args_names(self):
+        return ("left_crop", "bottom_crop")
+
+class RandomBottomLeftEdgeCropSquare(A.DualTransform):
+    def __init__(self, edge_crop_size=52, always_apply=False, p=1.0):
+        super().__init__(always_apply, p)
+        self.edge_crop = RandomBottomLeftEdgeCrop(left_crop=edge_crop_size, bottom_crop=edge_crop_size)
+
+    def apply(self, img, **params):
+        cropped_img = self.edge_crop.apply(img)
+        min_dim, max_dim = sorted(cropped_img.shape[:2])
+        offset = random.randint(0, max_dim - min_dim)
+        return cv2.resize(cropped_img[offset:offset+min_dim, :min_dim], (min_dim, min_dim))
+
+    def get_transform_init_args_names(self):
+        return ("edge_crop_size",)
+
+
+

@@ -101,5 +101,13 @@ def save_dataset(config_path=None):
             # label_read = tifffile.imread(label_path)
 
 
+def parse_args():
+    import argparse
+    parser = argparse.ArgumentParser(description="Create a dataset")
+    parser.add_argument("--config", type=str, default=None, help="Path to config file")
+    args = parser.parse_args()
+    return args
+
 if __name__ == "__main__":
-    save_dataset()
+    args = parse_args()
+    save_dataset(args.config)

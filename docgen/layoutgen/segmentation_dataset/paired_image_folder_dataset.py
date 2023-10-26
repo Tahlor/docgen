@@ -1,11 +1,13 @@
+import numpy as np
 import re
-from docgen.layoutgen.segmentation_dataset.semantic_segmentation import SemanticSegmentationDataset
+from docgen.layoutgen.segmentation_dataset.semantic_segmentation import SemanticSegmentationCompositionDataset
 from torch.utils.data import Dataset
 from pathlib import Path
 from PIL import Image
 from torchvision import transforms
 from torchvision.transforms import Compose
 import logging
+from tifffile import imread, imsave
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -26,9 +28,9 @@ class PairedImgLabelImageFolderDataset(Dataset):
         self.max_uniques = int(max_uniques) if max_uniques else None
         self.label_dir = label_dir
         self.img_dir = img_dir
-        self.path_database = self.process_img_file_list(img_dir, label_dir)
-        self.length = int(length_override) if length_override else len(self.path_database)
         self.label_name_pattern = label_name_pattern
+        self.length = int(length_override) if length_override else len(self.path_database)
+        self.path_database = self.process_img_file_list(img_dir, label_dir)
 
         if len(self.path_database) == 0:
             raise ValueError(f"No images found in {img_dir}")
@@ -56,7 +58,7 @@ class PairedImgLabelImageFolderDataset(Dataset):
             if match:
                 id = match.group(1)
 
-                label_name_pattern = self.label_name_pattern.format(id=id)
+                label_name_pattern = self.label_name_pattern.format(id)
                 label_path = label_folder / label_name_pattern
 
                 path_database[int(id)] = {"img_path": img_path,
@@ -91,7 +93,12 @@ class PairedImgLabelImageFolderDataset(Dataset):
 
                 # load from png and convert to tensor
                 img = Image.open(img_path).convert("RGB")
-                label = Image.open(label_path).convert("RGB")
+                # if TIFF, open as TIFF
+                if label_path.suffix==".tiff":
+                    label_chw = imread(label_path)
+                    label = np.transpose(label_chw, (1, 2, 0))
+                else:
+                    label = Image.open(label_path)
                 if self.transform is not None:
                     img = self.transform(img)
                     label = self.transform(label)
@@ -115,4 +122,5 @@ class PairedImgLabelImageFolderDataset(Dataset):
 
     @staticmethod
     def collate_fn(batch):
-        return SemanticSegmentationDataset.collate_fn(batch)
+        return SemanticSegmentationCompositionDataset.collate_fn(batch,
+                                                                 no_tensor_keys=["name"])

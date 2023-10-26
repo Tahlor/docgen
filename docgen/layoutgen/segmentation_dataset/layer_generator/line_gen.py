@@ -2,7 +2,7 @@ from PIL import ImageDraw
 import aggdraw
 import numpy as np
 from PIL import Image
-from docgen.layoutgen.writing_generators import Gen
+from docgen.layoutgen.segmentation_dataset.layer_generator.gen import Gen
 
 
 class LineGenerator(Gen):
