@@ -29,8 +29,9 @@ class PairedImgLabelImageFolderDataset(Dataset):
         self.label_dir = label_dir
         self.img_dir = img_dir
         self.label_name_pattern = label_name_pattern
-        self.length = int(length_override) if length_override else len(self.path_database)
+        self.length_override = int(length_override) if length_override else None
         self.path_database = self.process_img_file_list(img_dir, label_dir)
+
 
         if len(self.path_database) == 0:
             raise ValueError(f"No images found in {img_dir}")
@@ -63,9 +64,12 @@ class PairedImgLabelImageFolderDataset(Dataset):
 
                 path_database[int(id)] = {"img_path": img_path,
                                           "label_path": label_path}
+                if self.length_override and len(path_database) >= self.length_override:
+                    break
             else:
                 logger.warning(f"No id found in filename {img_path}")
 
+        self.length = len(path_database)
         return path_database
 
     @property
