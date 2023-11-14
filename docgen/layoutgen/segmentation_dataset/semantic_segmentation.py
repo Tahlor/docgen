@@ -1,3 +1,4 @@
+from typing import Any, Dict, List, Tuple, Union
 from docgen.layoutgen.segmentation_dataset.utils.dataset_sampler import LayerSampler
 import socket
 import os
@@ -175,12 +176,12 @@ class SemanticSegmentationCompositionDataset(Dataset):
         return {'image': torch.stack(images, dim=0), 'mask': torch.stack(masks, dim=0)}
 
     @staticmethod
-    def collate_fn(batch, no_tensor_keys=None):
+    def collate_fn(batch, tensor_keys=("image", "mask")):
         """
 
         Args:
             batch:
-            no_tensor_keys: keys in dict that should be collated as a list instead of a tensor
+            tensor_keys: keys in dict that should be collated as a tensor instead of a list
 
         Returns:
             batch:
@@ -190,10 +191,10 @@ class SemanticSegmentationCompositionDataset(Dataset):
         collated_batch = {}
 
         for key in keys:
-            if no_tensor_keys and key in no_tensor_keys:
-                collated_batch[key] = [item[key] for item in batch]
-            else:
+            if tensor_keys and key in tensor_keys:
                 collated_batch[key] = torch.stack([item[key] for item in batch], dim=0)
+            else:
+                collated_batch[key] = [item[key] for item in batch]
         return collated_batch
 
     def get_image(self, idx):
@@ -273,6 +274,7 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
                  overfit_dataset_length=0,
                  random_origin_composition=True,
                  mask_default_value=0,
+                 mask_null_value=-100,
                  img_default_value=1,
                  dataset_length=5000,
                  transforms_after_compositing=None,
@@ -289,6 +291,9 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
             overfit_dataset_length:
             random_origin_composition (bool): randomize image composition
             mask_default_value (int): what value should the mask be by default
+                 (e.g., 0 when there's no element, 1 when there is, 0 is the default)
+            mask_null_value (int): what value should the mask be if it's not used
+                 (e.g., -100 when we don't want this mask evaluated, perhaps it doesn't exist on the image)
             img_default_value (int): if pasting on to a blank image, what value should it be by default
             dataset_length (int): how many images to generate in one epoch
             transforms_after_compositing:
@@ -313,15 +318,13 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
             ) if output_channel_content_names is None else output_channel_content_names
         self.config = self.get_combination_config(
             [subdataset.layer_contents for subdataset in self.subdatasets])
-
+        self.mask_null_value = mask_null_value
 
         # Exclude naive masks from the channels to be visualized
         naive_mask_datasets = [x for x in self.subdatasets if type(x.mask_maker) is NaiveMask]
         self.naive_mask_channels = list(set([self.get_channel_idx(x.layer_contents) for x in naive_mask_datasets]))
         self.naive_mask_channels.sort()
         self.channels_to_be_visualized = list(set(range(len(self.output_channel_content_names))) - set(self.naive_mask_channels))
-
-
 
     def get_channel_idx(self, layer_name_tuple):
         return self.output_channel_content_names.index((layer_name_tuple,) if isinstance(layer_name_tuple, str) else tuple(layer_name_tuple))
@@ -405,7 +408,7 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
 
         images_and_masks = [d[idx] for d in chosen_datasets]
         images, masks = [x["image"] for x in images_and_masks], [x["mask"] for x in images_and_masks]
-        img_names = [x["name"] if "name" in x else None for x in images_and_masks]
+
         # Calculate background size
         if self.size is not None:
             bckg_size = (3, self.size, self.size)
@@ -414,10 +417,11 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
 
         composite_image = torch.ones(bckg_size) * self.img_default_value
         composite_masks = torch.zeros((len(self.output_channel_content_names), *bckg_size[-2:]))
-        if self.mask_default_value:
-            composite_masks += self.mask_default_value
+        if self.mask_null_value:
+            composite_masks += -100
 
-        composite_masks[len(self.unique_layers):] = -100
+        # Set the mask for composite layers to -100
+        # composite_masks[len(self.unique_layers):] = -100
 
         layers = [x.layer_contents for x in chosen_datasets]
         combined_layers_in_current_iteration = [x.layer_contents for x in chosen_datasets if len(x.layer_contents) > 1]
@@ -432,27 +436,13 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
 
             # For mask, choose channel, paste at appropriate location, then take the max with existing mask
             channel = self.get_channel_idx(dataset.layer_contents)
-            pasted_mask = torch.zeros(bckg_size[-2:]) + self.mask_default_value
-            pasted_mask = composite_the_images_torch(pasted_mask, mask, start_x, start_y, method=torch.max)
-            composite_masks[channel] = torch.max(composite_masks[channel], pasted_mask)
+            mask_for_current_dataset = torch.zeros(bckg_size[-2:]) + self.mask_default_value
+            mask_for_current_dataset = composite_the_images_torch(mask_for_current_dataset, mask, start_x, start_y, method=torch.max)
+            composite_masks[channel] = torch.max(composite_masks[channel], mask_for_current_dataset)
 
             if i == 0: # no composition needed
                 composite_image = composite_the_images_torch(composite_image, img, start_x, start_y)
             else:
-                # from hwgen.data.utils import show, display
-                # from torchvision.transforms import ToTensor
-                # from torch import Tensor
-                # composite_image = composite_the_images_torch(background_img, img, bckg_x, bckg_y, method=torch.mul)
-                # C = ConditionalContrast()
-                # x = self.composite_function(composite_image, Tensor(C(img.numpy().transpose([1,2,0]))), start_x, start_y)
-                # show(x)
-                # if "handwriting" in dataset.layer_contents:
-                #     binary_mask_from_pasted = torch.where(pasted_mask > .5, torch.tensor(1), torch.tensor(0)).unsqueeze(0).expand_as(composite_image)
-                #     # compute average darkness of background where masked
-                #
-                #     average_background_darkness = torch.mean(composite_image[binary_mask_from_pasted == 1])
-                #     average_foreground_darkness = torch.mean(img[:,][binary_mask_from_pasted == 1])
-                #     if torch.
                 if hasattr(dataset, "composite_function") and dataset.composite_function:
                     composite_image = dataset.composite_function(composite_image, img, start_x, start_y)
                 else:
@@ -461,22 +451,28 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
         # Process the combined layers.
         for combined_layer in combined_layers_in_current_iteration:
             # loop through constituent channels, taking the max
-            channels = [self.get_channel_idx(layer) for layer in combined_layer] + [self.get_channel_idx(combined_layer)]
-            combined_channel = self.get_channel_idx(combined_layer)
-            composite_masks[combined_channel] = torch.max(composite_masks[combined_channel], torch.max(composite_masks[channels], dim=0)[0])
+            channel_indices = [self.get_channel_idx(layer) for layer in combined_layer] + [self.get_channel_idx(combined_layer)]
+            combined_channel_idx = self.get_channel_idx(combined_layer)
+            composite_masks[combined_channel_idx] = torch.max(composite_masks[combined_channel_idx], torch.max(composite_masks[channel_indices], dim=0)[0])
             #composite_masks[combined_channel] = torch.max(torch.index_select(composite_masks, 0, torch.tensor(channels)),dim=0)[0]
 
+        active_channel_indices = set([self.get_channel_idx(layer) for layer in layers])
+        # Set the mask for constituent layers of a combined layer to -100 and remove from active channels
         for combined_layer_element in combined_layer_elements_in_current_iteration:
             channel = self.get_channel_idx(combined_layer_element)
             composite_masks[channel] = -100
+            active_channel_indices.remove(channel)
 
         if self.transforms_after_compositing:
             composite_image = self.transforms_after_compositing(composite_image)
 
-
-        return {'image': composite_image,
+        return {
+                'image': composite_image,
                 'mask': composite_masks,
-                'name': img_names,}
+                'name': [x["name"] if "name" in x else None for x in images_and_masks],
+                'datasets': {x.name : self.get_channel_idx(x.layer_contents) for x in chosen_datasets},
+                'active_channel_indices': active_channel_indices
+                }
 
     def _calculate_background_size(self, images: List[torch.Tensor]) -> Tuple:
         """Calculate the background size for compositing."""
@@ -503,10 +499,35 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
         else:
             start_x, start_y = 0, 0
         return start_x, start_y
-    def collate_fn(self, batch):
-        images = [item['image'] for item in batch]
-        masks = [item['mask'] for item in batch]
-        return {'image': torch.stack(images, dim=0), 'mask': torch.stack(masks, dim=0)}
+
+    def collate_fn(self, batch: List[Dict[str, Any]],
+                   stack_keys: List[str] = ["image", "mask"]) -> Dict[str, Any]:
+        """
+        Collates a batch of data into a single dictionary. For keys specified in stack_keys,
+        the data is stacked, otherwise it's collected into a list.
+
+        Args:
+            batch: A list of dictionaries containing the data to collate.
+            stack_keys: A list of keys for which the data should be stacked using torch.stack.
+
+        Returns:
+            A dictionary with the collated data.
+        """
+        collated_batch = {}
+
+        # Initialize a set for the keys to stack to avoid repeated look-ups.
+        stack_keys_set = set(stack_keys)
+
+        # Go through each key and collate the data accordingly.
+        for key in batch[0]:  # Assume all dictionaries have the same structure.
+            items = [item[key] for item in batch]
+
+            if key in stack_keys_set:
+                collated_batch[key] = torch.stack(items, dim=0)
+            else:
+                collated_batch[key] = items
+
+        return collated_batch
 
 
 class FlattenPILGenerators(torch.utils.data.Dataset):

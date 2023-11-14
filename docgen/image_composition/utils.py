@@ -479,6 +479,7 @@ class CompositerTorch:
         return composite_the_images_torch(background_img, img, bckg_x, bckg_y, self.method)
 
 
+
 if __name__ == '__main__':
     import cv2
     scanned_doc_path = Path("G:/s3/forms/HTSNet_scanned_documents")

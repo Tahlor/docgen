@@ -444,6 +444,9 @@ class BoxFiller:
 
     def _get_from_joint_iterator(self, i):
         word_dict = next(self.img_text_pair_gen)
+        if isinstance(word_dict, (tuple, list)):
+            word_dict = {"img": word_dict[0],
+                         "text": word_dict[1]}
         word_dict["img"]  = self.convert_img_format( word_dict["img"])
         if "style" in word_dict:
             self.styles.add(word_dict["style"])

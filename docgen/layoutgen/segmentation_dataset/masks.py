@@ -27,7 +27,7 @@ class NaiveMask:
 
 class Mask(NaiveMask):
     def __init__(self, threshold=.5, *args, **kwargs):
-        self.threshold01 = threshold if threshold < 1 else threshold * 255
+        self.threshold01 = threshold if threshold < 1 else threshold / 255
 
     def __call__(self, img):
         return torch.where(img < self.threshold01, torch.tensor(1), torch.tensor(0))

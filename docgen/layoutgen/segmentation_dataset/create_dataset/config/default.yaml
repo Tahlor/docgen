@@ -122,7 +122,9 @@ datasets:
     sample_weight: .5
     percent_overlap: 1
     mask:
-      type: naivemask
+      type: mask
+      kwargs:
+        threshold: .5
     transforms:
       - ToNumpy
       - RandomChoice:
@@ -199,6 +201,11 @@ datasets:
           min_scale: .5
           max_scale: 2
           max_upscale: 3
+    mask:
+      type: mask
+      kwargs:
+        threshold: .95
+
 
 
 #  - name: preprinted_text_and_forms

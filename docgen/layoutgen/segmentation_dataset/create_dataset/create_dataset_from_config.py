@@ -1,3 +1,5 @@
+import numpy as np
+import json
 from docgen.layoutgen.segmentation_dataset.create_dataset.parse_config import parse_config
 from docgen.layoutgen.segmentation_dataset.create_dataset.parse_config import create_aggregate_dataset
 from tqdm import tqdm
@@ -18,20 +20,12 @@ PARENT = Path(__file__).parent
 
 """
     # Idea: predict noise pixel levels, invert, apply soft-MASK, add to predicted HW-mask, compare to comparable GT;
-    # UGH too much work, just use the HW generator for now
+        # UGH too much work, just use the HW generator for now
 
-    Some before transforms leave a gray box
-    CROP bing images
-    export CONFIG somehow?
-    IGNORE naive mask for now? nah you can predict it, just can't combine it
-    FIX default transform - if NONE, NO TRANSFORMS SHOULD BE PERFORMED!
-    CROPPING and resizing the images/seals
-    Make sure background is fully covered - use the improved COMPOSITION thing
-    PULLING the same image every time
-    Make sure the HANDWRITING is fully composited and visible on the degraded paper :(
-        # Each layer dataset can be background or foreground, do the background ones first?
-    Would be good if we layer the paper on a background of white/black noise or something; or maybe use the with background dataset and segmentation (too much)
-    
+    MAJOR ISSUES:
+        Some before transforms leave a gray box
+        Make sure background is fully covered - use the improved COMPOSITION thing
+        HAVE to do something about GREY BOXES FOR FORM ELEMENTS    
 """
 
 def get_config(config=None):
@@ -58,7 +52,7 @@ def save_dataset(config_path=None):
     all_files = list(config.output_path.rglob("*.png"))
     logger.info("Found {} files in output folder".format(len(all_files)))
 
-    # get all indices where the mask is naive
+    # get all indices where the mask is naive, i.e., don't visualize NOISE
     channels_to_be_visualized = dataset.channels_to_be_visualized
 
     if config.overwrite:
@@ -89,16 +83,72 @@ def save_dataset(config_path=None):
             input_img = to_pil(input_img)
             input_img.save(img_path)
 
-            # exclude naive_indices from the label
+            # exclude non-naive channels (like NOISE) from the label
             visualized_img = encode_channels_to_colors(label[:, :, channels_to_be_visualized])
             to_pil(visualized_img).save(label_path_visual)
 
-            label_formatted = (label * 255).astype('uint8').transpose([2,0,1])
-            tifffile.imwrite(label_path, label_formatted, compression="jpeg", compressionargs={'level': 20})
+            if "active_channel_indices" in batch:
+                active_channels = batch["active_channel_indices"][j]
+            else:
+                active_channels = [i for i in range(label.shape[2]) if not label[0, 0, i] == config.mask_null_value]
+
+            label_formatted = label.copy().transpose([2,0,1])
+            if False:
+                lossless_tiff_save(label_formatted, label_path, active_channels=active_channels)
+            else:
+                jpg_tiff_save(label_formatted, label_path, active_channels=active_channels)
+
             # file_size = os.path.getsize(label_path)
             # print(file_size)
             # # read in
             # label_read = tifffile.imread(label_path)
+
+def prep_metadata(active_channels):
+    # channels
+    # any channel where MASK_NULL_VALUE appears
+    metadata = {'ActiveChannels': active_channels}
+    metadata_json = json.dumps(metadata)
+    return {'image_description': metadata_json}
+
+
+def jpg_tiff_save(label_formatted, label_path, active_channels):
+    """ MUST BE UINT8, NO SAVING -100 VALUES
+
+    When you read this in with PIL.Image and combine with ToTensor, it will scale to 0-1
+
+    Returns:
+
+    """
+    # multiply by 255 if active, otherwise 0
+    channel_dim = label_formatted.shape[0]
+    bit_scale = np.asarray([255 if i in active_channels else 0 for i in range(channel_dim)])[:,None,None]
+    label_formatted *= bit_scale
+    metadata = prep_metadata(active_channels)
+    label_formatted = label_formatted.astype("uint8")
+    tifffile.imwrite(label_path, label_formatted,
+                     compression="jpeg",
+                     compressionargs={'level': 20},
+                     metadata=metadata)
+
+
+def lossless_tiff_save(label_formatted, label_path, active_channels):
+    """ IMPORTANT: When you read this in with PIL.Image and combine with ToTensor, an uint8 0-255 image will scale to 0-1
+        However, an int16 will NOT be rescaled (so -100,255 will still be -100,255)
+
+    Args:
+        label_formatted:
+        label_path:
+        active_channels:
+
+    Returns:
+
+    """
+    metadata = prep_metadata(active_channels)
+    label_formatted = label_formatted.astype("int16")
+    tifffile.imwrite(label_path, label_formatted,
+                     compression='zstd',
+                     compressionargs={"level": 9},
+                     metadata=metadata)
 
 
 def parse_args():

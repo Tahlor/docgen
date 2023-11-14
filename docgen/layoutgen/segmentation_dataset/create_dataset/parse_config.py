@@ -1,3 +1,4 @@
+from docgen.utils.yaml_utils import MySafeYAMLDumper, ReallySafeDumper
 import yaml
 from enum import Enum
 from docgen.layoutgen.segmentation_dataset.layer_generator.word_gen import HWGenerator, PrintedTextGenerator
@@ -12,7 +13,7 @@ import logging
 from docgen.datasets.image_folder import NaiveImageFolder
 from docgen.layoutgen.segmentation_dataset.utils.dataset_sampler import LayerSampler
 from torchvision.transforms import ToTensor
-from docgen.windows.utils import map_drive
+from docgen.windows.utils import map_drive, unmap_drive
 from docdegrade.torch_transforms import ToNumpy, CHWToHWC, HWCToCHW, RandomChoice, Squeeze
 from docgen.transforms.transforms_torch import ResizeAndPad, IdentityTransform, RandomResize, RandomCropIfTooBig, \
     ResizeLongestSide, RandomBottomLeftEdgeCrop, CropBorder
@@ -45,6 +46,7 @@ yaml.add_representer(PosixPath, Path.to_yaml)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
+
 
 class TransformType(Enum):
     TONUMPY = ToNumpy
@@ -114,6 +116,8 @@ def parse_config(config_file_path: Path):
 
     if not config.get("workers") and config.get("workers") != 0:
         config.workers = multiprocessing.cpu_count() - 2
+
+    config.mask_null_value = config.get("mask_null_value", -100)
 
     return config
 
@@ -238,7 +242,8 @@ def create_aggregate_dataset(config):
                                                              transforms_after_compositing=after_transforms,
                                                              layout_sampler=layout_sampler,
                                                              size=config.get("output_img_size", 448),
-                                                             composite_function=composite_function
+                                                             composite_function=composite_function,
+                                                             mask_null_value=config.mask_null_value
                                                              )
     # save out 1) the config used to create this dataset and 2) aggregate_dataset.config
     config.combined_channel_mapping = aggregate_dataset.config
@@ -249,6 +254,20 @@ def create_aggregate_dataset(config):
 def save_config(config_path, config):
     with open(config_path, 'w') as file:
         yaml.dump(config, file)
+
+def convert_config(config):
+    """
+    Convert non-serializable items to strings within a configuration dictionary.
+    """
+    if isinstance(config, dict):
+        return {k: convert_config(v) for k, v in config.items()}
+    elif isinstance(config, list):
+        return [convert_config(item) for item in config]
+    try:
+        yaml.safe_dump(config)
+        return config
+    except yaml.representer.RepresenterError:
+        return str(config)  # Convert non-serializable objects to strings
 
 
 if __name__ == "__main__":

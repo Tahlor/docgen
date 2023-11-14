@@ -15,10 +15,11 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
 import random
+from docgen.datasets.generic_dataset import GenericDataset
 
-class NaiveImageFolder(Dataset):
+class NaiveImageFolder(GenericDataset):
     def __init__(self, img_dir,
-                 transforms=None,
+                 transform_list=None,
                  max_length=None,
                  color_scheme="RGB",
                  recursive=True,
@@ -27,11 +28,13 @@ class NaiveImageFolder(Dataset):
                  shuffle=True,
                  require_non_empty_result=False,
                  filters=None,
+                 max_uniques=None,
+                 max_length_override=None,
+                 collate_fn=None,
                  **kwargs):
         """
         Common transforms:
         - By default it returns a PIL image
-        - ResizeAndPad( longest_side=448, pad_to_be_divisible_by=32)
         - ToTensorIfNeeded() # converts to tensor if not already a tensor
 
         Args:
@@ -39,15 +42,24 @@ class NaiveImageFolder(Dataset):
             transforms:
             max_length:
             color_scheme:
-            longest_side:
-            pad_to_be_divisible_by:
             recursive:
             extensions:
             return_format: "dict" or "just_image"
             **kwargs:
         """
+        if collate_fn is None:
+            if return_format == "just_image":
+                collate_fn = GenericDataset.tensor_collate_fn
+            elif return_format == "dict":
+                collate_fn = GenericDataset.dict_collate_fn
 
-        super().__init__()
+        super().__init__(
+            max_uniques=max_uniques,
+            max_length_override=max_length_override,
+            transform_list=transform_list,
+            collate_fn=collate_fn,
+        )
+
         self.shuffle = shuffle
         self.require_non_empty_result = require_non_empty_result
         self.img_dirs = img_dir
@@ -76,12 +88,6 @@ class NaiveImageFolder(Dataset):
         if len(self.imgs) == 0:
             raise ValueError(f"No images found in {img_dir}")
 
-        self.transform_list = transforms
-        if self.transform_list:
-            self.transform_composition = Compose(self.transform_list)
-        else:
-            self.transform_composition = Compose([])
-
         self.max_length = max_length if max_length is not None else len(self.imgs)
         self.current_img_idx = 0
         self.return_format = return_format
@@ -93,7 +99,7 @@ class NaiveImageFolder(Dataset):
         empty_results = 0
         while True:
             try:
-                idx = idx % len(self.imgs)
+                idx = self._validate_idx(idx)
                 img_path = self.imgs[idx]
 
                 # load from png and convert to tensor
@@ -146,25 +152,39 @@ class NaiveImageFolder(Dataset):
 
     @staticmethod
     def collate_fn(batch):
-        return SemanticSegmentationCompositionDataset.collate_fn(batch, no_tensor_keys=["name"])
+        return SemanticSegmentationCompositionDataset.collate_fn(batch)
 
 
 class NaiveImageFolderPatch(NaiveImageFolder):
-    def __init__(self, img_dir, patch_size: Tuple[int, int], transforms=None, max_length=None,
-                 color_scheme="RGB", longest_side=None, pad_to_be_divisible_by=32, **kwargs):
+    def __init__(self, img_dir,
+                 patch_size: Tuple[int, int],
+                 transform_list=None,
+                 max_length=None,
+                 color_scheme="RGB",
+                 longest_side=None,
+                 pad_to_be_divisible_by=32,
+                 max_uniques=None,
+                 max_length_override=None,
+                 **kwargs):
         """ Safer as an iterator, might work as a indexable dataset, but length changes dynamically
 
         Args:
             img_dir:
             patch_size:
-            transforms:
+            transform_list:
             max_length:
             color_scheme:
             longest_side:
             pad_to_be_divisible_by:
             **kwargs:
         """
-        super().__init__(img_dir, transforms, max_length, color_scheme, longest_side, pad_to_be_divisible_by, **kwargs)
+        super().__init__(
+            img_dir=img_dir,
+            transform_list=[ResizeAndPad( longest_side=448, pad_to_be_divisible_by=pad_to_be_divisible_by)],
+            color_scheme=color_scheme,
+            max_uniques=None,
+            max_length_override=None,
+            **kwargs)
         self.patch_size = patch_size
         self.patch_idx = 0
         self.current_img_patches = None
@@ -276,14 +296,14 @@ class NaiveImageFolderPatch(NaiveImageFolder):
                 self.current_img_idx += 1
 
             except:
-                logger.exception(f"Error loading image {img_path}")
+                logger.exception(f"Error loading image {self.current_img_path}")
                 self.current_img_idx += 1
                 self.current_img_patches = None
                 self.patch_idx = 0
 
     @staticmethod
     def collate_fn(batch):
-        return SemanticSegmentationCompositionDataset.collate_fn(batch, no_tensor_keys=["name", "abs_coordinate", "patch_coordinate"])
+        return SemanticSegmentationCompositionDataset.collate_fn(batch)
 
     def __iter__(self):
         self.current_img_idx = 0
