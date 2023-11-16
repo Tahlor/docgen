@@ -1,3 +1,4 @@
+import warnings
 import torch
 import numpy as np
 import re
@@ -106,9 +107,11 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                     return_dict["label_active_channels"] = label_dict["label_active_channels"]
 
                 return return_dict
-            except:
+            except Exception as e:
                 logger.exception(f"Error loading image {idx} {img_path}")
                 idx += 1
+                if not self.continue_on_error:
+                    raise e
 
     def __getitem__(self, idx):
         """

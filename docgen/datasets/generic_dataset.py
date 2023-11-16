@@ -8,6 +8,7 @@ class GenericDataset(Dataset):
                  max_uniques=None,
                  max_length_override=None,
                  collate_fn=None,
+                 continue_on_error=True
                  ):
         """ * You must sent .length attribute
             * When creating the dataset, stop when length override is reached
@@ -33,6 +34,8 @@ class GenericDataset(Dataset):
             self.transform_composition = Compose(self.transform_list)
         else:
             self.transform_composition = Compose([])
+
+        self.continue_on_error = continue_on_error
 
     @property
     def unique_length(self):

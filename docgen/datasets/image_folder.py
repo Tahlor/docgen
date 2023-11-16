@@ -118,9 +118,11 @@ class NaiveImageFolder(GenericDataset):
                 else:
                     raise NotImplementedError(f"return_format {self.return_format} not implemented")
 
-            except:
+            except Exception as e:
                 logger.exception(f"Error loading image {img_path}")
                 idx += 1
+                if not self.continue_on_error:
+                    raise e
 
     def reject_because_of_filter(self, img):
         for filter in self.filters:
@@ -180,10 +182,10 @@ class NaiveImageFolderPatch(NaiveImageFolder):
         """
         super().__init__(
             img_dir=img_dir,
-            transform_list=[ResizeAndPad( longest_side=448, pad_to_be_divisible_by=pad_to_be_divisible_by)],
+            transform_list=[ResizeAndPad( longest_side=longest_side, pad_to_be_divisible_by=pad_to_be_divisible_by)],
             color_scheme=color_scheme,
-            max_uniques=None,
-            max_length_override=None,
+            max_uniques=max_uniques,
+            max_length_override=max_length_override,
             **kwargs)
         self.patch_size = patch_size
         self.patch_idx = 0
@@ -295,11 +297,13 @@ class NaiveImageFolderPatch(NaiveImageFolder):
                 self.patch_idx = 0
                 self.current_img_idx += 1
 
-            except:
+            except Exception as e:
                 logger.exception(f"Error loading image {self.current_img_path}")
                 self.current_img_idx += 1
                 self.current_img_patches = None
                 self.patch_idx = 0
+                if not self.continue_on_error:
+                    raise e
 
     @staticmethod
     def collate_fn(batch):
