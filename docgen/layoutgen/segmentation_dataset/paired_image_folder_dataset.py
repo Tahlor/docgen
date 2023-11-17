@@ -141,7 +141,7 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
         return collated_batch
 
     @staticmethod
-    def generate_active_channel_mask(input_img, active_channels_list):
+    def generate_active_channel_mask(input_img, active_channels_list=None):
         """
             Convert a list of active channels of length batch_size to a mask of shape batch_size, num_channels, 1, 1
             designating which channels are active. We want a mask we can use to 0 out inactive channels.
@@ -157,8 +157,11 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
         mask = torch.zeros(batch_size, num_channels, 1, 1)
 
         # Set active channel indices to 1
-        for idx, active_channels in enumerate(active_channels_list):
-            mask[idx, list(active_channels), ...] = 1
+        if active_channels_list and active_channels_list[0] is not None:
+            for idx, active_channels in enumerate(active_channels_list):
+                mask[idx, list(active_channels), ...] = 1
+        else:
+            mask[:, :, ...] = 1
         return mask
 
 def read_label_img(path):
