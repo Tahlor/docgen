@@ -106,7 +106,7 @@ def save_dataset(config_path=None):
 def prep_metadata(active_channels):
     # channels
     # any channel where MASK_NULL_VALUE appears
-    metadata = {'ActiveChannels': active_channels}
+    metadata = {'ActiveChannels': tuple(active_channels)}
     metadata_json = json.dumps(metadata)
     return {'image_description': metadata_json}
 

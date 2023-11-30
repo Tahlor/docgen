@@ -144,7 +144,7 @@ def create_individual_dataset(config):
         if filters:
             filters = [DatasetFilters[list(f.keys())[0].upper()].value() for f in filters]
             base_dataset_kwargs["filters"] = filters
-        base_dataset_kwargs["transforms"] = transforms
+        base_dataset_kwargs["transform_list"] = transforms
         transforms = None
 
     dataset = dataset_cls(**base_dataset_kwargs)
@@ -253,7 +253,10 @@ def create_aggregate_dataset(config):
 
 def save_config(config_path, config):
     with open(config_path, 'w') as file:
-        yaml.dump(config, file)
+        safe_config = {
+            "output_channel_content_names":config.output_channel_content_names
+        }
+        yaml.dump(safe_config, file)
 
 def convert_config(config):
     """

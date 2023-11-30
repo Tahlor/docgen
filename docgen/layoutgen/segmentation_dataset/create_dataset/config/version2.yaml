@@ -1,0 +1,180 @@
+workers: 0
+final_size: 448
+dataset_length: 100000
+drive_mappings:
+  "B:": "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle"
+output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v7_100k"
+overwrite: false
+output_img_size: 448
+composite_function: composite_the_images_torch
+layout_sampler_kwargs:
+  default_min_layers: 1
+  default_max_layers: 5
+  number_of_layer_weights:
+    - .05 # 1 layer
+    - .3
+    - .3
+    - .1
+    - 0
+
+datasets:
+  - name: RenderedFonts
+    type: PrintedTextGenerator
+    layer_contents: "text"
+    base_dataset_kwargs:
+      saved_fonts_folder: "G:/s3/synthetic_data/resources/fonts"
+      font_size_rng: [ 8, 40 ]
+      word_count_rng: [ 10, 20 ]
+    sample_weight: 2
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - ColorJitter
+        - RandomDistortions
+        - RuledSurfaceDistortions
+        - Blur
+        - Lighten
+        - ConditionalContrast
+      - ToTensor
+      - RandomResize:
+          min_scale: .5
+          max_scale: 2
+
+  - name: handwriting
+    type: HWGenerator
+    layer_contents: handwriting
+    base_dataset_kwargs:
+        img_dir: "C:/Users/tarchibald/Anaconda3/envs/docgen_windows/hwgen/resources/generated"
+    sample_weight: 2
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - ColorJitter
+        - RandomDistortions
+        - RuledSurfaceDistortions
+        #- Blur
+        - ConditionalContrast
+      - ToTensor
+      - RandomResize:
+          min_scale: .8
+          max_scale: 1.2
+    composite_function:
+        type: CompositerTorch
+        method: torchmul
+
+  - name: background
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      img_dir: "B:/document_backgrounds/paper_only"
+    layer_contents: noise
+    layer_position: 0 # background layer
+    sample_weight: .5
+    percent_overlap: 1
+    mask:
+      type: mask
+      kwargs:
+        threshold: .5
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - ColorJitter
+        - RandomDistortions
+        - RuledSurfaceDistortions
+      - ToTensor
+      - RandomBottomLeftEdgeCrop
+      - RandomResize:
+          min_scale: .5
+          max_scale: 2
+
+  - name: pdf_text
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      img_dir:
+        - "G:/s3/forms/PDF/OPM/text/images"
+        - "G:/s3/forms/PDF/SSA/text/images"
+    layer_contents: text
+    sample_weight: 1
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - RandomDistortions
+        - RuledSurfaceDistortions
+        - ConditionalContrast
+        - Lighten
+        - Blur
+
+      - ToTensor
+      - RandomResize:
+          min_scale: .5
+          max_scale: 2
+          max_upscale: 3
+
+  - name: pdf_form_elements
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      img_dir:
+        - "G:/s3/forms/PDF/IRS/other_elements/images"
+        - "G:/s3/forms/PDF/GDC/other_elements/images"
+        - "G:/s3/forms/PDF/OPM/other_elements/images"
+        - "G:/s3/forms/PDF/SSA/other_elements/images"
+    layer_contents: form_elements
+    sample_weight: 1
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - RandomDistortions
+        - RuledSurfaceDistortions
+        - ConditionalContrast
+        - Lighten
+        - Blur
+        - ColorJitter
+      - ToTensor
+      - RandomResize:
+          min_scale: .5
+          max_scale: 2
+          max_upscale: 3
+    mask:
+      type: SoftMask
+      kwargs:
+        threshold: .85
+
+
+  - name: handwriting_images
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      img_dir:
+        #- "G:/s3/synthetic_data/FRENCH_BMD/v2.4.3_10k_french_with_fonts"
+        #- "G:/s3/synthetic_data/FRENCH_BMD/FRENCH_BMD_LAYOUTv2.1.0/1000"
+        - "B:/document_backgrounds/handwriting"
+      recursive: true
+    layer_contents: handwriting
+    sample_weight: 1
+    filters:
+      - RejectIfTooManyPixelsAreBelowThreshold:
+          threshold: 0.9
+          max_percent_of_pixels_allowed_below_threshold: 0.3
+    mask:
+      type: SoftMask
+      kwargs:
+        threshold: .6
+
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - ColorJitter
+        - RandomDistortions
+        - RuledSurfaceDistortions
+        #- Blur
+        #- ConditionalContrast
+      - ToTensor
+      - RandomResize:
+          min_scale: .8
+          max_scale: 1.2
+      - CropBorder:
+            border_size_rng: 200
+    composite_function:
+        type: CompositerTorch
+        method: torchmul
+
+
+transforms_after_compositing:

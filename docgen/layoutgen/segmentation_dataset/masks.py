@@ -26,6 +26,9 @@ class NaiveMask:
         plt.show()
 
 class Mask(NaiveMask):
+    """ Darker than threshold becomes GT / 1
+
+    """
     def __init__(self, threshold=.5, *args, **kwargs):
         self.threshold01 = threshold if threshold < 1 else threshold / 255
 
@@ -33,16 +36,26 @@ class Mask(NaiveMask):
         return torch.where(img < self.threshold01, torch.tensor(1), torch.tensor(0))
 
 class SoftMask(Mask):
-    def __init__(self, soft_mask_threshold=.3, soft_mask_steepness=20):
+    def __init__(self, threshold=.7,
+                 soft_mask_steepness=40,
+                 roundoff_threshold=.02, ):
+        """
+        Args:
+            threshold: Darker than this becomes 1
+            soft_mask_steepness:
+        """
         super().__init__()
-        self.soft_mask_threshold = soft_mask_threshold
+        self.soft_mask_threshold = threshold
         self.soft_mask_steepness = soft_mask_steepness
+        self.roundoff_threshold = roundoff_threshold
 
     def __call__(self, img):
-        mask = 1.0 - img
         transition_point = self.soft_mask_threshold
         steepness = self.soft_mask_steepness
-        mask = torch.sigmoid(steepness * (mask - transition_point))
+        mask = torch.sigmoid(steepness * (transition_point-img))
+
+        mask = torch.where(mask > 1-self.roundoff_threshold, torch.tensor(1), mask)
+        mask = torch.where(mask < self.roundoff_threshold, torch.tensor(0), mask)
         return mask
 
 

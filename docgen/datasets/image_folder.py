@@ -107,7 +107,7 @@ class NaiveImageFolder(GenericDataset):
                 if self.transform_composition.transforms is not None:
                     img = self.transform_composition(img)
 
-                if self.filters and self.reject_because_of_filter(img):
+                if self.filters and self.reject_because_of_filter(img, path=img_path):
                     idx += 1
                     continue
 
@@ -124,9 +124,9 @@ class NaiveImageFolder(GenericDataset):
                 if not self.continue_on_error:
                     raise e
 
-    def reject_because_of_filter(self, img):
+    def reject_because_of_filter(self, img, path=None):
         for filter in self.filters:
-            if filter(img):
+            if filter(img, name=path):
                 self.failed_filters_count += 1
                 if self.failed_filters_count and self.failed_filters_count % 5 == 0:
                     logger.warning(f"Filters failed {self.failed_filters_count} times (current filter: {filter})")

@@ -26,8 +26,13 @@ datasets:
     sample_weight: 10
     filters:
       - RejectIfTooManyPixelsAreBelowThreshold:
-#          threshold: 0.6
-#          min_pixels: 0.3
+          threshold: 0.9
+          max_percent_of_pixels_allowed_below_threshold: 0.3
+    mask:
+      type: SoftMask
+      kwargs:
+        threshold: .6
+
     transforms:
       - ToNumpy
       - RandomChoice:
@@ -41,7 +46,7 @@ datasets:
           min_scale: .8
           max_scale: 1.2
       - CropBorder:
-            border_size_rng: 256
+            border_size_rng: 200
     composite_function:
         type: CompositerTorch
         method: torchmul

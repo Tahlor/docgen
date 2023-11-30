@@ -361,6 +361,7 @@ class BoxFiller:
         self.default_error_mode = default_error_mode
         self.horizontal_offset_sd = random_horizontal_offset_sd
         self.use_random_vertical_offset = use_random_vertical_offset
+        self.reset_document_level_params()
 
     def setup_content_gen(self, img_text_pair_gen, word_img_gen, text_gen):
         if img_text_pair_gen is None and word_img_gen is None:
