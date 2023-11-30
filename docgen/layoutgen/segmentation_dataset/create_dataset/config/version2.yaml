@@ -138,6 +138,10 @@ datasets:
       kwargs:
         threshold: .85
 
+    filters:
+      - RejectIfTooManyPixelsAreBelowThreshold:
+          threshold: 0.9
+          max_percent_of_pixels_allowed_below_threshold: 0.15
 
   - name: handwriting_images
     type: NaiveImageFolder
