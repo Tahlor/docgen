@@ -2,6 +2,12 @@ import random
 from typing import List, Any, Callable, Tuple, Union
 from pathlib import Path
 import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logger.addHandler(logging.StreamHandler())
+
 
 class LayerSampler:
     def __init__(self, generators: List[Callable[[], Any]],
@@ -42,6 +48,11 @@ class LayerSampler:
             int: The chosen number of layers.
         """
         if self.number_of_layer_weights:
+            if len(self.number_of_layer_weights) < self.max_layers - self.min_layers + 1:
+                self.max_layers = len(self.number_of_layer_weights) + self.min_layers - 1
+                logger.error("Length of number_of_layer_weights should be equal to max_layers - min_layers + 1.")
+                logger.error(f"Setting max_layers to {self.max_layers}")
+
             return random.choices(range(self.min_layers, self.max_layers + 1)
                                   , weights=self.number_of_layer_weights[:self.max_layers-self.min_layers+1])[0]
         else:

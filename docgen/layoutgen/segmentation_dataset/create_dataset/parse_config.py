@@ -139,11 +139,11 @@ def create_individual_dataset(config):
 
     dataset_cls = DatasetType[dataset_type.upper()].value
 
-    if dataset_type.upper() == "NAIVEIMAGEFOLDER": # TODO: this is a hack, ALL transforms should be applied to this lower level dataset
-        filters = config.get("filters", [])
-        if filters:
-            filters = [DatasetFilters[list(f.keys())[0].upper()].value() for f in filters]
-            base_dataset_kwargs["filters"] = filters
+    if dataset_type.upper() == "NAIVEIMAGEFOLDER":
+        filter_configs = config.get("filters", [])
+        if filter_configs:
+            instantiated_filters = [DatasetFilters[list(f.keys())[0].upper()].value(**list(f.values())[0], dataset_name=config.name) for f in filter_configs]
+            base_dataset_kwargs["filters"] = instantiated_filters
         base_dataset_kwargs["transform_list"] = transforms
         transforms = None
 

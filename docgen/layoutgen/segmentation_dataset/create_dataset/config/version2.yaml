@@ -3,7 +3,7 @@ final_size: 448
 dataset_length: 100000
 drive_mappings:
   "B:": "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle"
-output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v7_100k"
+output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v8_100k"
 overwrite: false
 output_img_size: 448
 composite_function: composite_the_images_torch
@@ -11,11 +11,10 @@ layout_sampler_kwargs:
   default_min_layers: 1
   default_max_layers: 5
   number_of_layer_weights:
-    - .05 # 1 layer
+    - .01 # 1 layer
     - .3
     - .3
     - .1
-    - 0
 
 datasets:
   - name: RenderedFonts
@@ -45,7 +44,7 @@ datasets:
     layer_contents: handwriting
     base_dataset_kwargs:
         img_dir: "C:/Users/tarchibald/Anaconda3/envs/docgen_windows/hwgen/resources/generated"
-    sample_weight: 2
+    sample_weight: 1
     transforms:
       - ToNumpy
       - RandomChoice:
@@ -61,14 +60,30 @@ datasets:
     composite_function:
         type: CompositerTorch
         method: torchmul
+    mask:
+      type: SoftMask
+      kwargs:
+        threshold: .7
 
   - name: background
     type: NaiveImageFolder
     base_dataset_kwargs:
-      img_dir: "B:/document_backgrounds/paper_only"
+      # "B:/document_backgrounds/paper_only"
+      img_dir:
+        - "B:/document_backgrounds/paper_only/old paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting"
+        - "B:/document_backgrounds/paper_only/paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting"
+        - "B:/document_backgrounds/paper_only/white paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting"
+        - "B:/document_backgrounds/paper_only/aged blank letter with imprints of text from the reverse side, as if some vestiges of the ink permeated through the paper, but impossible to read; full frame"
+        - "B:/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frame"
+        - "B:/document_backgrounds/paper_only/blank paper with a some random highlighter and marker marks, full frame"
+        - "B:/document_backgrounds/paper_only/blank paper with mold damage, full frame"
+        - "B:/document_backgrounds/paper_only/old blank paper with a some random highlighter and marker marks, full frame"
+        - "B:/document_backgrounds/paper_only/old blank paper with water or coffee stains, full frame"
+        - "B:/document_backgrounds/paper_only/old blank paper, some wrinkles and imperfections, variable lighting"
+        - "B:/document_backgrounds/paper_only/old paper with ink marks, crinkles, wrinkles, and imperfections and variable lighting"
     layer_contents: noise
     layer_position: 0 # background layer
-    sample_weight: .5
+    sample_weight: 2
     percent_overlap: 1
     mask:
       type: mask
@@ -136,12 +151,12 @@ datasets:
     mask:
       type: SoftMask
       kwargs:
-        threshold: .85
+        threshold: .6
 
     filters:
       - RejectIfTooManyPixelsAreBelowThreshold:
           threshold: 0.9
-          max_percent_of_pixels_allowed_below_threshold: 0.15
+          max_percent_of_pixels_allowed_below_threshold: 0.1
 
   - name: handwriting_images
     type: NaiveImageFolder
@@ -155,8 +170,8 @@ datasets:
     sample_weight: 1
     filters:
       - RejectIfTooManyPixelsAreBelowThreshold:
-          threshold: 0.9
-          max_percent_of_pixels_allowed_below_threshold: 0.3
+          threshold: 0.8
+          max_percent_of_pixels_allowed_below_threshold: 0.4
     mask:
       type: SoftMask
       kwargs:
@@ -179,6 +194,25 @@ datasets:
     composite_function:
         type: CompositerTorch
         method: torchmul
+
+  - name: generated_form_elements
+    type: PreprintedFormElementGenerator
+    layer_contents:
+      - form_elements
+    sample_weight: .5
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+          - ColorJitter
+#          - RandomDistortions
+#          - RuledSurfaceDistortions
+          - ConditionalContrast
+          - Lighten
+          - Blur
+      - ToTensor
+      - RandomResize:
+          min_scale: .8
+          max_scale: 3
 
 
 transforms_after_compositing:
