@@ -38,7 +38,7 @@ class RejectIfTooManyPixelsAreBelowThreshold(Reject):
                 img = img.mean(axis=0)
             dark_pixel_percent = np.sum(img < self.threshold_brightness) / img.size
             if dark_pixel_percent > self.percent_of_pixels:
-                show(img)
+                # show(img)
                 logger.debug(f"{self.dataset_name} Rejecting image because too many pixels are below threshold")
                 logger.debug(f"Dark pixel percent: {dark_pixel_percent}")
                 if name is not None:
