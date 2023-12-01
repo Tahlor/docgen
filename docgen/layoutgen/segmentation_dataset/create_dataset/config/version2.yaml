@@ -1,4 +1,4 @@
-workers: 0
+workers: 5
 final_size: 448
 dataset_length: 100000
 drive_mappings:
