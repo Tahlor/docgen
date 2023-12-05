@@ -20,6 +20,7 @@ credentials*
 projects/*/*_output_*
 *.log
 *.out
+output/
 
 # C extensions
 *.so

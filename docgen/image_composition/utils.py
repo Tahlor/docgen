@@ -460,6 +460,9 @@ def composite_the_images_torch(background_img, img, bckg_x, bckg_y, method: Call
 
     if x_end <= x_start or y_end <= y_start:
         print("No overlap between the images.")
+        print(f"background_img.shape: {background_img.shape}")
+        print(f"img.shape: {img.shape}")
+
 
     # Clone the background image to avoid modifying the original
     background_img = background_img.clone()

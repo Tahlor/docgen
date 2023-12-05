@@ -6,10 +6,10 @@ from docgen.layoutgen.segmentation_dataset.layer_generator.gen import Gen
 class Grid(Gen):
     def __init__(self, width,
                  height,
-                 row_height_range=(50, 200),
-                 col_width_range=(100, 200),
-                 color_scheme="L"
-
+                 row_height_range=(40, 200),
+                 col_width_range=(50, 300),
+                 color_scheme="L",
+                 max_color_brightness=.8
                  ):
         """
 
@@ -19,6 +19,7 @@ class Grid(Gen):
             row_height_range:
             col_width_range:
             color_scheme: "L" for grayscale, "RGB" for color
+            max_color_brightness: 0-1, 0 is black, 1 is white
         """
         self.set_size(width, height)
         self.row_height_range = row_height_range
@@ -27,6 +28,7 @@ class Grid(Gen):
         self.draw = None
         self.cells = []
         self.slant = True
+        self.max_color_brightness = max_color_brightness
         """
         """
 
@@ -88,34 +90,40 @@ class Grid(Gen):
             self.cells.append(((x2, y1), (x2 + cell_width, y2)))
 
     def add_checkboxes_or_circles(self, count):
-        for _ in range(count):
-            cell = random.choice(self.cells)
+        color = self.random_grayscale(max=self.max_color_brightness)
+        # randomly choose cells (count), without replacement
+        cells = random.choices(self.cells, k=count)
+        for cell in cells:
             x1, y1 = cell[0]
             x2, y2 = cell[1]
             margin_x = random.randint(2, max(2, (x2 - x1) // 4))  # Margin for x-axis
             margin_y = random.randint(2, max(2, (y2 - y1) // 4))  # Margin for y-axis
-            checkbox_or_circle = random.choice(['checkbox', 'circle'])
-            shape_count = random.randint(1, 4)  # Random number of shapes to add in a cell
+            shape_count = random.randint(1, 2)  # Random number of shapes to add in a cell
             for _ in range(shape_count):
+                checkbox_or_circle = random.choice(['checkbox', 'circle'])
                 if checkbox_or_circle == 'checkbox':
                     size = random.randint(min(5, (x2 - x1) // 2), min(10, (x2 - x1) // 2))
                     self.draw.rectangle(((x1 + margin_x, y1 + margin_y),
                                          (x1 + margin_x + size, y1 + margin_y + size)),
-                                        outline="black")
-                    margin_x += size + 2  # Update margin for the next shape
+                                        outline=color)
+                    # Update margin for the next shape
+                    margin_x += size + random.randint(5, 10)
+
                 else:  # circle
                     try: # TODO: Fix this, sometimes x0/x1 problem, the wrong one is bigger
                         radius = random.randint(min(5, (x2 - x1) // 4), min(10, (x2 - x1) // 4))
                         self.draw.ellipse(((x1 + margin_x, y1 + margin_y),
                                            (x1 + margin_x + 2 * radius, y1 + margin_y + 2 * radius)),
-                                          outline="black")
-                        margin_x += 2 * radius + 2  # Update margin for the next shape
+                                          outline=color)
+                        margin_x += 2 * radius + random.randint(5, 10)  # Update margin for the next shape
                     except:
                         pass
 
     def draw_cells(self):
         for cell in self.cells:
-            self.draw.rectangle(cell, outline="black")
+            colors = [self.random_grayscale(max=self.max_color_brightness) for _ in range(4)]
+            #color = "#cccccc"
+            self.draw.rectangle(cell, colors=colors)
 
     def show(self):
         self.draw_cells()

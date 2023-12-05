@@ -1,3 +1,4 @@
+
 page_template:
     top_margin: [0, 0]
     bottom_margin: [0, 0]
@@ -10,6 +11,8 @@ page_template:
     probability_vertically_centered: 0
     probability_existence: 1.0
     probability_blank: 0.01
+    probability_left_margin: 1
+
 page_title_template:
     top_margin: null
     bottom_margin: null
@@ -35,11 +38,11 @@ paragraph_template:
   bottom_margin: [-0.03, 0.05]
   left_margin: [-0.03, 0.02]
   right_margin: [-0.03, 0.02]
-  lines_rng: [4, 30]
+  lines_rng: [2, 8]
   font_scale_factor_rng: [.85, 1.15]
   min_height_pixels: 100
   probability_vertically_centered: .5 # inheritable
-  probability_indent: .8
+  probability_indent: .6
   indent_factor_rng: [1,5]
 margin_notes_template:
   top_margin: [-0.03, 0.2]

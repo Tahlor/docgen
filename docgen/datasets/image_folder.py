@@ -1,3 +1,4 @@
+import re
 import numpy as np
 import sys
 from typing import Dict, Tuple
@@ -31,6 +32,7 @@ class NaiveImageFolder(GenericDataset):
                  max_uniques=None,
                  max_length_override=None,
                  collate_fn=None,
+                 file_name_filter=None,
                  **kwargs):
         """
         Common transforms:
@@ -39,12 +41,19 @@ class NaiveImageFolder(GenericDataset):
 
         Args:
             img_dir:
-            transforms:
+            transform_list:
             max_length:
             color_scheme:
             recursive:
             extensions:
-            return_format: "dict" or "just_image"
+            return_format:
+            shuffle:
+            require_non_empty_result:
+            filters: list of functions that take an image and return True if the image should be rejected
+            max_uniques:
+            max_length_override:
+            collate_fn:
+            file_name_filter: regex to filter file names
             **kwargs:
         """
         if collate_fn is None:
@@ -74,8 +83,14 @@ class NaiveImageFolder(GenericDataset):
                 self.imgs += list(img_dir.rglob("*.*"))
             else:
                 self.imgs += list(img_dir.glob("*.*"))
+        if file_name_filter:
+            # compile regex
+            name_filter = re.compile(file_name_filter)
+            self.imgs = [img for img in self.imgs if name_filter.search(img.name)]
+
         self.imgs = [img for img in self.imgs if img.suffix.lower() in extensions]
         self.filters = list(filters) if filters is not None else []
+        self.file_name_filter = file_name_filter
         self.failed_filters_count = 0
 
         if self.shuffle:
@@ -101,13 +116,14 @@ class NaiveImageFolder(GenericDataset):
             try:
                 idx = self._validate_idx(idx)
                 img_path = self.imgs[idx]
-
+                # if "iam" in str(img_path).lower():
+                #     print("WTF")
                 # load from png and convert to tensor
                 img = Image.open(str(img_path)).convert(self.color_scheme)
                 if self.transform_composition.transforms is not None:
                     img = self.transform_composition(img)
 
-                if self.filters and self.reject_because_of_filter(img):
+                if self.filters and self.reject_because_of_filter(img, path=img_path):
                     idx += 1
                     continue
 
@@ -124,9 +140,9 @@ class NaiveImageFolder(GenericDataset):
                 if not self.continue_on_error:
                     raise e
 
-    def reject_because_of_filter(self, img):
+    def reject_because_of_filter(self, img, path=None):
         for filter in self.filters:
-            if filter(img):
+            if filter(img, name=path):
                 self.failed_filters_count += 1
                 if self.failed_filters_count and self.failed_filters_count % 5 == 0:
                     logger.warning(f"Filters failed {self.failed_filters_count} times (current filter: {filter})")

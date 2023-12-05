@@ -88,7 +88,7 @@ class SortByContrast:
 
             folder_glob = folder_path.rglob if self.recursive else folder_path.glob
             for i, image_path in tqdm(enumerate(folder_glob("*"))):
-                if image_path.name[:2].isdigit():
+                if image_path.name[:2].isdigit() and "_" in image_path.name[4]:
                     continue
                 if image_path.is_dir():
                     continue
@@ -133,9 +133,14 @@ def main(args=None):
 
 if __name__ == "__main__":
     from docgen.windows.utils import map_drive
-    path = r'G:\s3\synthetic_data\resources\backgrounds\synthetic_backgrounds\dalle\document_backgrounds\paper_only'
-    map_drive(path, "B:")
+    if False:
+        path = r'G:\s3\synthetic_data\resources\backgrounds\synthetic_backgrounds\dalle\document_backgrounds\paper_only'
+        map_drive(path, "B:")
 
-    args = r"'G:\s3\synthetic_data\resources\backgrounds\synthetic_backgrounds\dalle\document_backgrounds\paper_only\white paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting'"
-    args = r"'B:\' -r "
+        args = r"'G:\s3\synthetic_data\resources\backgrounds\synthetic_backgrounds\dalle\document_backgrounds\paper_only\white paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting'"
+        args = r"'B:\' -r "
+    else:
+        path = r'G:\s3\synthetic_data\resources\backgrounds\synthetic_backgrounds\dalle'
+        map_drive(path, "B:")
+        args = "'B:/document_backgrounds/handwriting' -r"
     main(args)

@@ -15,6 +15,7 @@ import logging
 import sys
 from typing import List, Tuple, Union, Optional
 import ctypes
+import warnings
 
 if sys.version_info >= (3, 8):
     from typing import Literal
@@ -509,7 +510,7 @@ def draw_gt_layout(image_path,
 
     if format == "OCR":
         if draw_segmentations:
-            logger.error("draw_segmentations not supported for OCR format")
+            warnings.warn("draw_segmentations not supported for OCR format")
             return
         else:
             out = draw_boxes_sections(dataset_dict[idx], img)

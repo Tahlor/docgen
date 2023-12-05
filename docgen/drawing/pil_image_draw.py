@@ -5,7 +5,7 @@ class CustomImageDraw(ImageDraw.ImageDraw):
     def __init__(self, *args, max_line_thickness=5, **kwargs):
         super().__init__(*args, **kwargs)
         self.max_line_thickness = max_line_thickness
-        self.thickness_generator = RandomGenerator(values = [1, 2, 3, 4], weights = [50, 25, 12, 6])
+        self.thickness_generator = RandomGenerator(values = [1, 2, 3, 4], weights = [50, 25, 5, 2])
 
     def rectangle(self, xy, fill=None, outline=None, *, styles=None, colors=None, thicknesses=None):
         """

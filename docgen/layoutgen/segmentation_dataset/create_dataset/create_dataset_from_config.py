@@ -11,6 +11,9 @@ import logging
 # import torch vision transforms
 from docgen.image_composition.utils import encode_channels_to_colors
 import tifffile
+from torchvision.transforms import ToPILImage
+import re
+import pickle
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -40,73 +43,87 @@ def get_config(config=None):
     return path
 
 
-def save_dataset(config_path=None):
-    from torchvision.transforms import ToPILImage
-    to_pil = ToPILImage()
-    config = parse_config(get_config(config_path))
-    logger.info("Saving dataset to {}".format(config.get("output_folder")))
-    dataset = create_aggregate_dataset(config)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=dataset.collate_fn, num_workers=config.workers)
+class DatasetSaver:
+    def __init__(self, config_path=None):
+        self.config = parse_config(get_config(config_path))
+        self.to_pil = ToPILImage()
+        self.metadata_dict = {}
+        self.lossless = False
 
-    # get max file in folder using regex
-    all_files = list(config.output_path.rglob("*.png"))
-    logger.info("Found {} files in output folder".format(len(all_files)))
+    def save_dataset(self):
+        logger.info(f"Saving dataset to {self.config.get('output_folder')}")
+        dataset = create_aggregate_dataset(self.config)
+        dataloader = torch.utils.data.DataLoader(
+            dataset, batch_size=1, collate_fn=dataset.collate_fn, num_workers=self.config.workers
+        )
+        all_files = list(self.config.output_path.rglob("*.png"))
+        logger.info(f"Found {len(all_files)} files in output folder")
 
-    # get all indices where the mask is naive, i.e., don't visualize NOISE
-    channels_to_be_visualized = dataset.channels_to_be_visualized
+        if self.config.overwrite or len(all_files) == 0:
+            step = 0
+        else:
+            max_file = max(all_files, key=lambda x: int(re.findall(r"\d+", x.name)[0]))
+            step = int(re.findall(r"\d+", max_file.name)[0])
 
-    if config.overwrite:
-        step = 0
-    elif len(all_files) > 0:
-        import re
-        max_file = max(all_files, key=lambda x: int(re.findall(r"\d+", x.name)[0]))
-        step = int(re.findall(r"\d+", max_file.name)[0])
-    else:
-        step = 0
+        self.channels_to_be_visualized = dataset.channels_to_be_visualized
 
-    for i, batch in tqdm(enumerate(dataloader)):
-        step+=1
-        img_path = config.output_path / f"{step:07d}_input.png"
-        label_path = config.output_path / f"{step:07d}_label.tiff"
-        label_path_visual = config.output_path / f"{step:07d}_label_visual.jpg"
+        try:
+            self.save_all(dataloader, step)
+        except Exception as e:
+            logger.info("Saving dataset interrupted by user")
+            logger.info(e)
 
-        inputs, labels = batch['image'], batch['mask']
+        self.save_metadata()
 
-        # convert to numpy and switch to HWC, handle batch or not
-        labels = labels.numpy().transpose(0, 2, 3, 1) if len(labels.shape) == 4 else labels.numpy().transpose(1, 2, 0)
+    def save_all(self, dataloader, step):
+        for i, batch in tqdm(enumerate(dataloader)):
+            step += 1
+            img_path = self.config.output_path / f"{step:07d}_input.png"
+            label_path = self.config.output_path / f"{step:07d}_label.tiff"
+            label_path_visual = self.config.output_path / f"{step:07d}_label_visual.jpg"
+            inputs, labels = batch['image'], batch['mask']
+            labels = labels.numpy().transpose(0, 2, 3, 1) if len(labels.shape) == 4 else labels.numpy().transpose(1, 2,
+                                                                                                                  0)
+            for j in range(inputs.shape[0]):
+                for j in range(inputs.shape[0]):
+                    input_img = inputs[j]
+                    label = labels[j]
 
-        for j in range(inputs.shape[0]):
-            input_img = inputs[j]
-            label = labels[j]
+                    # save as images
+                    input_img = self.to_pil(input_img)
+                    input_img.save(img_path)
 
-            # save as images
-            input_img = to_pil(input_img)
-            input_img.save(img_path)
+                    # exclude non-naive channels (like NOISE) from the label
+                    visualized_img = encode_channels_to_colors(label[:, :, self.channels_to_be_visualized])
+                    self.to_pil(visualized_img).save(label_path_visual)
 
-            # exclude non-naive channels (like NOISE) from the label
-            visualized_img = encode_channels_to_colors(label[:, :, channels_to_be_visualized])
-            to_pil(visualized_img).save(label_path_visual)
+                    if "active_channel_indices" in batch:
+                        active_channels = batch["active_channel_indices"][j]
+                    else:
+                        active_channels = [i for i in range(label.shape[2]) if
+                                           not label[0, 0, i] == self.config.mask_null_value]
 
-            if "active_channel_indices" in batch:
-                active_channels = batch["active_channel_indices"][j]
-            else:
-                active_channels = [i for i in range(label.shape[2]) if not label[0, 0, i] == config.mask_null_value]
+                    label_formatted = label.copy().transpose([2, 0, 1])
+                    if self.lossless:
+                        lossless_tiff_save(label_formatted, label_path, active_channels=active_channels)
+                    else:
+                        jpg_tiff_save(label_formatted, label_path, active_channels=active_channels)
 
-            label_formatted = label.copy().transpose([2,0,1])
-            if False:
-                lossless_tiff_save(label_formatted, label_path, active_channels=active_channels)
-            else:
-                jpg_tiff_save(label_formatted, label_path, active_channels=active_channels)
+            # Collect metadata for each batch (excluding image and mask)
+            batch_metadata = {k: v for k, v in batch.items() if k not in ['image', 'mask']}
+            self.metadata_dict[img_path.name] = batch_metadata
+            if i % 1000 == 0:
+                self.save_metadata()
 
-            # file_size = os.path.getsize(label_path)
-            # print(file_size)
-            # # read in
-            # label_read = tifffile.imread(label_path)
+    def save_metadata(self):
+        with open(self.config.output_path / 'metadata.pkl', 'wb') as file:
+            pickle.dump(self.metadata_dict, file)
+
 
 def prep_metadata(active_channels):
     # channels
     # any channel where MASK_NULL_VALUE appears
-    metadata = {'ActiveChannels': active_channels}
+    metadata = {'ActiveChannels': tuple(active_channels)}
     metadata_json = json.dumps(metadata)
     return {'image_description': metadata_json}
 
@@ -160,4 +177,5 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
-    save_dataset(args.config)
+    d = DatasetSaver(args.config)
+    d.save_dataset()

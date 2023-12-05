@@ -140,14 +140,14 @@ def get_y(item):
         return item.size[1]
 height = get_y
 
-def estimate_space(word_imgs, vertical_space, horizontal_space):
+def estimate_space(word_imgs, vertical_space, interword_space):
     """ Estimate how much space is needed for horizontal_min_to_fit
         Also scale option...ugh
 
     Returns:
 
     """
-    widths = [word.shape[0] + horizontal_space for word in word_imgs]
+    widths = [word.shape[0] + interword_space for word in word_imgs]
     total_length_concat = np.cumsum(widths)
 
 def identity(x):
@@ -317,9 +317,10 @@ class BoxFiller:
                  default_error_mode="ignore",
                  word_img_format="auto",
                  terminate_on_new_style=True,
-                 indent_after_newline_character_probability=0.8,
+                 indent_after_newline_character_probability=0.7,
                  random_horizontal_offset_sd=0.2,
                  use_random_vertical_offset=True,
+                 special_char_generator=None,
                  ):
         """ Initiate the BoxFiller object
 
@@ -361,6 +362,8 @@ class BoxFiller:
         self.default_error_mode = default_error_mode
         self.horizontal_offset_sd = random_horizontal_offset_sd
         self.use_random_vertical_offset = use_random_vertical_offset
+        self.reset_document_level_params()
+        self.special_char_generator = special_char_generator
 
     def setup_content_gen(self, img_text_pair_gen, word_img_gen, text_gen):
         if img_text_pair_gen is None and word_img_gen is None:
@@ -415,6 +418,9 @@ class BoxFiller:
         for k,v in kwargs.items():
             if hasattr(self, k):
                 setattr(self, k, v)
+
+    def get_special_char_to_begin_paragraph(self):
+        return self.special_char_generator.get()
 
     def gen_slope(self):
         return random.gauss(0, self.slope_sd)
@@ -493,7 +499,10 @@ class BoxFiller:
 
         self.try_to_update_BoxFiller_parameters_based_on_generator()
 
-        word_dict = self._get_word(i)
+        if not self.is_new_paragraph() or self.special_char_generator is None:
+            word_dict = self._get_word(i)
+        else:
+            word_dict = self.get_special_char_to_begin_paragraph()
         img, self.last_word_text = word_dict["img"], word_dict["text"]
 
         if "text_decode_vocab" in word_dict:
@@ -624,7 +633,7 @@ class BoxFiller:
         self.last_word_img = None
         self.last_word_text = ""
         self.last_word_text_decode_vocab = ""
-        self.tab_spaces = 5
+        self.spaces_in_tab = 5
         if error_mode is not None:
             self.error_mode = error_mode # skip+, ignore, expand, terminate
         else:
@@ -646,6 +655,9 @@ class BoxFiller:
                 random.uniform(0, self.max_line_pixel_overlap))  # this allows for no margin on first line
         self.abs_y2_func_prev_line = lambda x: np.interp(x, [0, self.bbox.width], [self.y1, self.y1])
 
+    def is_new_paragraph(self):
+        return self.line_idx == 0 and self.line_word_idx == 0 and self.bbox.category == "paragraph"
+
     def reset_horizontal_line_variation_for_each_new_line(self):
         """ Used as part of reset, to reset some of the idiosyncratic priors of HW
 
@@ -660,7 +672,7 @@ class BoxFiller:
         # slope
         self.starting_x1 += int(random.gauss(0,self.horizontal_offset_sd) * self.font_size )
         self.starting_x1 = abs(self.starting_x1)
-        self.horizontal_space_min_max = (.2, .6)
+        self.interword_space_min_max = (.2, .6)
 
     def reset_word_variation(self):
         """ Randomize font size between words
@@ -712,8 +724,8 @@ class BoxFiller:
         else:
             return 0
 
-    def generate_random_total_horizontal_space_for_line_in_px(self, height=32):
-        return int(random.uniform(*self.horizontal_space_min_max)*height)
+    def generate_random_interword_space_width_for_line_in_px(self, height=32):
+        return int(random.uniform(*self.interword_space_min_max) * height)
 
     def generate_random_total_vertical_space_for_line_in_px(self, height=32):
         if self.use_random_vertical_offset:
@@ -739,12 +751,12 @@ class BoxFiller:
                 return "newline_indent"
 
             next_word_width, next_word_height = shape(next_word_img)[:2]
-            horizontal_space = self.generate_random_total_horizontal_space_for_line_in_px(next_word_height)
+            interword_space_width = self.generate_random_interword_space_width_for_line_in_px(next_word_height)
 
             if hasattr(self.img_text_pair_gen,"get_added_space"):
-                horizontal_space += self.img_text_pair_gen.get_added_space() * next_word_height
+                interword_space_width += self.img_text_pair_gen.get_added_space() * next_word_height
 
-            proposed_x1_after_adding = self.x1 + horizontal_space + next_word_width
+            proposed_x1_after_adding = self.x1 + interword_space_width + next_word_width
 
             if proposed_x1_after_adding > self.bbox.width and self.line_word_idx > 0:
                 return "newline"
@@ -784,7 +796,7 @@ class BoxFiller:
             self.bbox_list.append(new_box)
 
             # Set for next iteration
-            self.x1 = x2 + horizontal_space
+            self.x1 = x2 + interword_space_width
             self.line_word_idx += 1
             self.input_word_idx += 1
         return "complete"
@@ -867,7 +879,7 @@ class BoxFiller:
                 self.abs_y2_func_prev_line = lambda x, _x1s=tuple(self.x1s), _y2s=tuple(self.y2s),: np.interp(x, _x1s,_y2s)
                 self.y1 = max(self.y2s) + self.generate_random_total_vertical_space_for_line_in_px(height=height(self.last_word_img))
             if "indent" in result and flip(self.indent_after_newline_character_probability):
-                self.starting_x1 += self.generate_random_total_horizontal_space_for_line_in_px(height=width(self.last_word_img)) * self.tab_spaces
+                self.starting_x1 += self.generate_random_interword_space_width_for_line_in_px(height=height(self.last_word_img)) * self.spaces_in_tab
             elif result == "complete":
                 return "complete"
 
@@ -982,7 +994,7 @@ class BoxFiller:
 def fill_area_with_words(word_imgs,
                          bbox,
                          text_list: List[str],
-                         horizontal_space_min_max=[.2,.5],
+                         interword_space_min_max=[.2, .5],
                          vertical_space_min_max=[.3,.4],
                          max_vertical_offset_between_words=1,
                          horizontal_min_to_fit=False,
@@ -1016,7 +1028,7 @@ def fill_area_with_words(word_imgs,
         word_imgs:
         bbox (x1,y1,x2,y2):
         text_list List[str]: list of text words to put in, necessary because all may not fit and needs to return actual list
-        horizontal_space_min_max (0,1): spacing as a % of image height
+        interword_space_min_max (0,1): spacing as a % of image height
         vertical_space_min_max (0,1): spacing as a % of image height
         TODO: horizontal_min_to_fit (bool): use minimum horizontal space if it probably won't fit
         TODO: vertical_min_to_fit (bool): use minimum vertical space if it probably won't fit
@@ -1093,8 +1105,8 @@ def fill_area_with_words(word_imgs,
     max_line_width = int(bbox[2]-bbox[0])
     max_height = int(bbox[3]-bbox[1])
 
-    def random_horizontal_space(height):
-        return int(random.uniform(*horizontal_space_min_max)*height)
+    def random_interword_space_width(height):
+        return int(random.uniform(*interword_space_min_max) * height)
 
     def end_of_the_line():
         nonlocal abs_y2_func_prev_line, y1s_within_line, current_line, x1s_within_line, line_attempts, x1_start, x_end, cum_y1_pos, slope
@@ -1211,15 +1223,15 @@ def fill_area_with_words(word_imgs,
         )
 
         # x_start for new word - must be after localization
-        horizontal_space = random_horizontal_space(word_img.shape[0])
-        x1_start = x_end + horizontal_space
+        interword_space = random_interword_space_width(word_img.shape[0])
+        x1_start = x_end + interword_space
         return True
 
     def new_paragraph(word_img):
         nonlocal x1_start, paragraph_number
         if utils.flip(indent_new_paragraph_prob):
-            horizontal_space = random_horizontal_space(word_img.shape[0]) * random.randint(0,6)
-            x1_start += min(horizontal_space, int(max_line_width/4))
+            interword_space = random_interword_space_width(word_img.shape[0]) * random.randint(0,6)
+            x1_start += min(interword_space, int(max_line_width/4))
         paragraph_number += 1
 
     """

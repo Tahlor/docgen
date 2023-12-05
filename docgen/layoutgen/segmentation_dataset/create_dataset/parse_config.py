@@ -21,11 +21,11 @@ from docgen.transforms.transforms_torch import *
 from docgen.layoutgen.segmentation_dataset.layer_generator.preprinted_form_gen import PreprintedFormElementGenerator
 from typing import List, Union, Dict, Any
 from docdegrade.degradation_objects import RandomDistortions, RuledSurfaceDistortions, Blur, Lighten, Blobs, \
-    BackgroundMultiscaleNoise, BackgroundFibrous, Contrast, ConditionalContrast, ColorJitter
+    BackgroundMultiscaleNoise, BackgroundFibrous, Contrast, ConditionalContrast, ColorJitter, RandomRotate
 from easydict import EasyDict as edict
 from docgen.image_composition.utils import seamless_composite, composite_the_images_torch, CompositerTorch
 from docgen.datasets.utils.dataset_filters import RejectIfEmpty, RejectIfTooManyPixelsAreBelowThreshold
-from docgen.layoutgen.segmentation_dataset.masks import Mask, NaiveMask, SoftMask
+from docgen.layoutgen.segmentation_dataset.masks import Mask, NaiveMask, SoftMask, GrayscaleMask
 def easydict_representer(dumper, data):
     return dumper.represent_dict(data.items())
 
@@ -72,6 +72,7 @@ class TransformType(Enum):
     RANDOMBOTTOMLEFTEDGECROP = RandomBottomLeftEdgeCrop
     COLORJITTER = ColorJitter
     CROPBORDER = CropBorder
+    RANDOMROTATE = RandomRotate
 
 
 class DatasetType(Enum):
@@ -98,6 +99,7 @@ class Masks(Enum):
     SOFTMASK = SoftMask
     MASK = Mask
     NAIVEMASK = NaiveMask
+    GRAYSCALEMASK = GrayscaleMask
 
 class DatasetFilters(Enum):
     REJECTIFEMPTY = RejectIfEmpty
@@ -139,12 +141,13 @@ def create_individual_dataset(config):
 
     dataset_cls = DatasetType[dataset_type.upper()].value
 
-    if dataset_type.upper() == "NAIVEIMAGEFOLDER": # TODO: this is a hack, ALL transforms should be applied to this lower level dataset
-        filters = config.get("filters", [])
-        if filters:
-            filters = [DatasetFilters[list(f.keys())[0].upper()].value() for f in filters]
-            base_dataset_kwargs["filters"] = filters
-        base_dataset_kwargs["transforms"] = transforms
+    if dataset_type.upper() == "NAIVEIMAGEFOLDER":
+        filter_configs = config.get("filters", [])
+        if filter_configs:
+            instantiated_filters = [DatasetFilters[list(f.keys())[0].upper()].value(**list(f.values())[0], dataset_name=config.name) for f in filter_configs]
+            base_dataset_kwargs["filters"] = instantiated_filters
+        base_dataset_kwargs["transform_list"] = transforms
+        base_dataset_kwargs["return_format"] = "dict"
         transforms = None
 
     dataset = dataset_cls(**base_dataset_kwargs)
@@ -253,7 +256,10 @@ def create_aggregate_dataset(config):
 
 def save_config(config_path, config):
     with open(config_path, 'w') as file:
-        yaml.dump(config, file)
+        safe_config = {
+            "output_channel_content_names":config.output_channel_content_names
+        }
+        yaml.dump(safe_config, file)
 
 def convert_config(config):
     """

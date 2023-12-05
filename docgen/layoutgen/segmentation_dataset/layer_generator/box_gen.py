@@ -14,7 +14,7 @@ class BoxGenerator(LineGenerator):
     def draw_no_alias(self):
         img = Image.new('RGB', self.size, "white")
         draw = aggdraw.Draw(img)
-        pen = aggdraw.Pen("black")
+        pen = aggdraw.Pen(self.random_grayscale(max=self.max_color_brightness))
         for _ in range(np.random.randint(*self.shape_count_range)):
             xy, width = self._random_box()
             pen.width = width
@@ -26,12 +26,15 @@ class BoxGenerator(LineGenerator):
         return self.draw_alias()["image"]
 
 
-def test_box_dataset():
+def box_dataset_test():
     dataset = LineGenerator()
     for i in range(10):
         sample = dataset[i]
-        img = Image.fromarray(sample['image'].numpy().astype('uint8'), 'RGB')
+        if isinstance(sample,dict):
+            sample = sample["image"]
+        #img = Image.fromarray(sample.numpy().astype('uint8'), 'RGB')
+        img = sample
         img.show()
 
 if __name__=="__main__":
-    test_box_dataset()
+    box_dataset_test()

@@ -6,11 +6,15 @@ from docgen.layoutgen.segmentation_dataset.layer_generator.gen import Gen
 
 
 class LineGenerator(Gen):
-    def __init__(self, img_size=(448, 448), shape_count_range=(2, 5), line_thickness_range=(1, 5)):
+    def __init__(self, img_size=(448, 448), shape_count_range=(2, 5), line_thickness_range=(1, 5),
+                 max_color_brightness=.8):
         super().__init__()
         self.size = img_size
         self.shape_count_range = shape_count_range
         self.line_thickness_range = line_thickness_range
+        self.max_color_brightness = max_color_brightness
+
+    # def get_line_thickness(self, weights=[1,.5,.25,.25,.25]):
 
     def _random_line(self):
         start_point = np.random.randint(0, self.size[0]), np.random.randint(0, self.size[1])
@@ -42,13 +46,13 @@ class LineGenerator(Gen):
         img = Image.new('RGB', self.size, "white")
         draw = ImageDraw.Draw(img)
         for _ in range(np.random.randint(*self.shape_count_range)):
-            draw.line(**self._random_line(), fill="black")
+            draw.line(**self._random_line(), fill=self.random_grayscale(max=self.max_color_brightness))
         return {'image': img}
 
     def draw_no_alias(self):
         img = Image.new('RGB', self.size, "white")
         draw = aggdraw.Draw(img)
-        pen = aggdraw.Pen("black")
+        pen = aggdraw.Pen(self.random_grayscale(max=self.max_color_brightness))
         for _ in range(np.random.randint(*self.shape_count_range)):
             xy, width = self._random_line()
             pen.width = width
@@ -59,7 +63,7 @@ class LineGenerator(Gen):
     def get(self):
         return self.draw_alias()['image']
 
-def test_random_line_dataset():
+def random_line_dataset_test():
     dataset = LineGenerator()
     for i in range(3):
         img = dataset[i]
@@ -67,4 +71,4 @@ def test_random_line_dataset():
 
 
 if __name__=="__main__":
-    test_random_line_dataset()
+    random_line_dataset_test()

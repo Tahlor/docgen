@@ -22,6 +22,15 @@ class Gen:
     def __next__(self):
         return self.get()
 
+    def get_grayscale(self, value):
+        if not 0 <= value <= 1:
+            raise ValueError("Value must be between 0 and 1")
+        int_value = int(value * 255)
+        return f"#{int_value:02x}{int_value:02x}{int_value:02x}"
+
+    def random_grayscale(self, min=0, max=1):
+        return self.get_grayscale(random.uniform(min, max))
+
     def get_random_bbox(self, img_size=None, font_size=10):
         if img_size is None:
             img_size = self.img_size

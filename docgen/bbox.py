@@ -31,7 +31,8 @@ class BBox:
                  img=None,
                  font_size=None,
                  format:Literal['XYXY', 'XYWH']="XYXY",
-                 height_ll=None):
+                 height_ll=None,
+                 category=None):
         """
         Store BBox as UL XYXY TUPLE to prevent accidental modification
         The only functions that should modify in place are: update_bbox, enlarge, expand, offset_origin
@@ -66,6 +67,7 @@ class BBox:
         self.parent_bbox = parent_obj_bbox
         self.paragraph_index = paragraph_index
         self.font_size = font_size
+        self.category = category
 
     def update_bbox(self, bbox, format:Literal['XYXY', 'XYWH']="XYXY", origin="ul"):
         if isinstance(bbox, tuple):
@@ -719,6 +721,13 @@ class BBoxNGon(BBox):
         centroid = np.mean(coords, axis=0)
         sorted_coords = coords[np.argsort(np.arctan2(coords[:, 1] - centroid[1], coords[:, 0] - centroid[0])), :]
         return sorted_coords
+
+    @staticmethod
+    def print_categories_recursively(layout, level=0):
+        print(f"{'   '*level}{layout.category} {layout.bbox}")
+        for child in layout.children:
+            BBox.print_categories_recursively(child)
+
 
 def flatten(mylist):
     """Flatten a list of lists OR arrays

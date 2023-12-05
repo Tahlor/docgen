@@ -18,6 +18,7 @@ from docgen.render_doc import fill_area_with_words, composite_images_PIL, BoxFil
 from docgen.utils.utils import display
 from docgen.render_doc import convert_to_ocr_format
 
+
 def flip(prob=.5):
     return random.random() < prob
 
@@ -66,8 +67,7 @@ class DocBox(BBox):
             uncle: E.g., a margin note is a descendant of the corresponding paragraph, but an uncle of the MARGIN
                     We recursive generate text based on parent-chlid relationships, but we track layouts by uncle/nephew relationships
         """
-        super().__init__(origin,bbox)
-        self.category = category
+        super().__init__(origin,bbox,category=category)
         self.children = children if not children is None else []
         self.nephews = nephews if not nephews is None else []
         self.parent=parent
@@ -109,7 +109,53 @@ class DocBox(BBox):
         self.expand_downward(-amount)
         self.bbox_writable.expand_downward(-amount)
 
-class SectionTemplate:
+class RandomTemplate:
+    @staticmethod
+    def sample_float(rng):
+        if rng is None:
+            return None
+        elif isinstance(rng, (tuple,list)):
+            return random.uniform(rng[0], rng[1])
+        elif isinstance(rng, (int,float)):
+            return rng
+        elif isinstance(rng, dict):
+            return RandomTemplate.sample_from_dict(rng)
+        else:
+            raise ValueError(f"Invalid type for rng: {type(rng)}")
+
+    @staticmethod
+    def sample_from_dict(rng):
+        """ Sample from a dictionary, either by weighted choice or by gaussian
+        Valid example dictionaries:
+            {"mean": 1, "sd": .1, "max": 2, "min": 0}
+            {"mean": 1, "sd": .1}
+            {1: 1, 2: 1, 3: 1}
+        """
+        if "sd" in rng.keys() and "mean" in rng.keys():
+            sample = random.gauss(rng["mean"], rng["sd"])
+            if "max" in rng.keys():
+                sample = min(sample, rng["max"])
+            if "min" in rng.keys():
+                sample = max(sample, rng["min"])
+            return sample
+        else:
+            return random.choices(list(rng.keys()), weights=list(rng.values()))[0]
+
+    @staticmethod
+    def sample_int(rng):
+        if rng is None:
+            return None
+        elif rng[0]<=rng[1]:
+            return random.randint(rng[0], rng[1])
+        elif isinstance(rng, (int,float)):
+            return rng
+        elif isinstance(rng, dict):
+            return round(RandomTemplate.sample_from_dict(rng))
+        else:
+            raise ValueError(f"Invalid type for rng: {type(rng)}")
+
+
+class SectionTemplate(RandomTemplate):
     def __init__(self,
                  top_margin:Union[Tuple[float, float], None]=(0.,0.1),
                  bottom_margin:Union[Tuple[float, float], None]=(0.,0.1),
@@ -171,9 +217,9 @@ class SectionTemplate:
         if self.words_rng is None:
             return None
         else:
-            return self._sample_int(self.words_rng)
+            return self.sample_int(self.words_rng)
     def gen_max_lines(self):
-        return self._sample_int(self.lines_rng)
+        return self.sample_int(self.lines_rng)
 
     def generate_height_in_pixels(self, page_height=None):
         """ Maybe add a method to take the max of the two methods
@@ -186,7 +232,7 @@ class SectionTemplate:
         Returns:
 
         """
-        return self._sample_value(self.height_as_percent_of_page_rng) * page_height
+        return self.sample_float(self.height_as_percent_of_page_rng) * page_height
 
     def max_lines_and_height(self, font_size, max_height=None):
         if max_height is not None and max_height < self.min_height_pixels:
@@ -201,24 +247,11 @@ class SectionTemplate:
         if self.font_scale_factor_rng is None:
             return font_size
         else:
-            factor = self._sample_value(self.font_scale_factor_rng)
+            factor = self.sample_float(self.font_scale_factor_rng)
             return round(factor * font_size)
 
     def height_as_percent_of_page(self):
-        return self._sample_value(self.height_as_percent_of_page_rng)
-
-    @staticmethod
-    def _sample_value(rng):
-        if rng is None:
-            return None
-        else:
-            return random.uniform(*rng)
-    @staticmethod
-    def _sample_int(rng):
-        if rng is None:
-            return None
-        elif rng[0]<=rng[1]:
-            return random.randint(rng[0], rng[1])
+        return self.sample_float(self.height_as_percent_of_page_rng)
 
     def naive(self, bbox, *args, **kwargs):
         return bbox 
@@ -233,10 +266,10 @@ class SectionTemplate:
         Returns:
 
         """
-        top_margin = random.uniform(*self.top_margin) * height if self.top_margin is not None else 0
-        bottom_margin = random.uniform(*self.bottom_margin) * height if self.bottom_margin is not None else 0
-        left_margin = random.uniform(*self.left_margin) * width if self.left_margin is not None else 0
-        right_margin = random.uniform(*self.right_margin) * width if self.right_margin is not None else 0
+        top_margin = self.sample_float(self.top_margin) * height if self.top_margin is not None else 0
+        bottom_margin = self.sample_float(self.bottom_margin) * height if self.bottom_margin is not None else 0
+        left_margin = self.sample_float(self.left_margin) * width if self.left_margin is not None else 0
+        right_margin = self.sample_float(self.right_margin) * width if self.right_margin is not None else 0
         return left_margin, top_margin, right_margin, bottom_margin
 
     def generate_margin_box(self, bbox, font_size=32, buffer=2, root_bbox=None):
@@ -305,8 +338,15 @@ class SectionTemplate:
         bbox = [max(b, 0) for b in box]
         return BBox("ul", bbox)
 
+class PageTemplate(SectionTemplate):
+
+    def __init__(self, *args, probability_left_margin=1, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.probability_left_margin = probability_left_margin
+
+
 def scale_font(font_size, rng):
-    return round(random.uniform(*rng)*font_size)
+    return round(RandomTemplate.sample_float(rng) * font_size)
 
 class LayoutGenerator:
     """ Generate a layout for a document
@@ -334,6 +374,7 @@ class LayoutGenerator:
                   word_img_gen=None,
                   img_text_pair_gen=None,
                   filler_options: List[Dict]=({},),
+                  box_filler_kwargs: Dict = {},
                   ):
         """ Generates a series of nested DocBoxes, which can be used to generate a document
             Each DocBox proposes a region, applies a margin, and then it is filled with text
@@ -382,7 +423,7 @@ class LayoutGenerator:
         self.pages_per_image = pages_per_image
         self.width_rng = width_rng
         self.height_width_ratio_rng = height_width_ratio_rng
-
+        self.box_filler_kwargs = box_filler_kwargs
         # These categories will be SHRUNKEN to fit the space the children actually used
         self.writable_categories = ['paragraph',
                                     'margin_note',
@@ -439,6 +480,7 @@ class LayoutGenerator:
                                 random_horizontal_offset_sd=0.2,
                                 font_size_sd=0.05,
                                 slope_sd=0.0015,
+                                **self.box_filler_kwargs,
         )
 
     def make_one_image(self,i):
@@ -474,7 +516,6 @@ class LayoutGenerator:
         ocr = self.create_ocr(layout, id=i, filename=name)
         return name, ocr, image
 
-
     def generate_layout(self) -> DocBox:
         """ Generate the layout for one section, i.e., a DocBox, which might represent a paragraph, margin note, etc.
 
@@ -484,7 +525,7 @@ class LayoutGenerator:
         """
         pages = random.randint(*self.pages_per_image)
         page_width = random.randint(*self.width_rng)
-        height = page_width * random.uniform(*self.height_width_ratio_rng)
+        height = page_width * RandomTemplate.sample_float(self.height_width_ratio_rng)
         width = pages * page_width
 
         self.font_size = random.randint(*self.font_size_pixels)
@@ -535,15 +576,31 @@ class LayoutGenerator:
 
         # build margin
         if flip(self.margin_notes_template.probability_existence):
-            margin_width = round(random.uniform(*self.margin_notes_width) * page.width)
-            all_paragraphs_box = DocBox(bbox=[page.bbox_writable[0]+margin_width,current_y,page.bbox_writable[2],page.bbox_writable[3]],
-                                        parent=page,
-                                        category="all_paragraphs_box",
-                                        font_size=self.font_size)
-            all_margins_box = DocBox(bbox=[page.bbox_writable[0], page.bbox_writable[1], page.bbox_writable[0]+margin_width, page.bbox_writable[3]],
-                                 parent=page,
-                                 category="all_margins_box",
-                                 font_size=self.font_size)
+            margin_width = round(RandomTemplate.sample_float(self.margin_notes_width) * page.width)
+
+            if flip(self.page_template.probability_left_margin):
+                all_margins_bbox = [page.bbox_writable[0], page.bbox_writable[1], page.bbox_writable[0] + margin_width,
+                                    page.bbox_writable[3]]
+                all_paragraphs_bbox = [page.bbox_writable[0] + margin_width, current_y, page.bbox_writable[2],
+                          page.bbox_writable[3]]
+
+            else: # right margin notes
+                all_margins_bbox = [page.bbox_writable[2] - margin_width, page.bbox_writable[1], page.bbox_writable[2],
+                          page.bbox_writable[3]]
+                all_paragraphs_bbox = [page.bbox_writable[0], current_y, page.bbox_writable[2] - margin_width,
+                          page.bbox_writable[3]],
+
+            all_margins_box = DocBox(all_margins_bbox,
+                                     parent=page,
+                                     category="all_margins_box",
+                                     font_size=self.font_size)
+
+            all_paragraphs_box = DocBox(
+                bbox=all_paragraphs_bbox,
+                parent=page,
+                category="all_paragraphs_box",
+                font_size=self.font_size)
+
 
         else:
             all_paragraphs_box = page
@@ -677,7 +734,7 @@ class LayoutGenerator:
                       id=id,
                       max_lines=lines,
                       vertically_centered=flip(self.paragraph_template.probability_vertically_centered),
-                      indent=flip(self.paragraph_template.probability_indent) * font_size * random.uniform(*self.paragraph_template.indent_factor_rng),
+                      indent=flip(self.paragraph_template.probability_indent) * font_size * RandomTemplate.sample_float(self.paragraph_template.indent_factor_rng),
                       )
 
     def page_title_box(self, pg_box: DocBox, current_y):
@@ -804,13 +861,11 @@ class LayoutGenerator:
                 image = box_dict["img"]
                 localization = box_dict["bbox_list"]
                 styles = box_dict["styles"]
-
             else:
                 box_dict = self.filler.fill_box(doc_box, **kwargs)
                 image = box_dict["img"]
                 localization = box_dict["bbox_list"]
                 styles = box_dict["styles"]
-
 
             composite_images_PIL(background_image, image, doc_box.bbox_writable[0:2])
             doc_box.bbox_list = localization

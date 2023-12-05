@@ -22,7 +22,8 @@ from projects.french_bmd.config.parse_config import parse_config, DEFAULT_CONFIG
 from tqdm import tqdm
 from tqdm.contrib.concurrent import process_map
 import traceback
-from docgen.layoutgen.layoutgen import LayoutGenerator, SectionTemplate
+from docgen.word_image_generators.special_character_gen import SpecialCharacterGenerator
+from docgen.layoutgen.layoutgen import LayoutGenerator, SectionTemplate, PageTemplate
 #from docgen.layoutgen.layoutgen import *
 from hwgen.data.saved_handwriting_dataset import SavedHandwriting, SavedHandwritingRandomAuthor
 from textgen.unigram_dataset import Unigrams
@@ -78,6 +79,8 @@ def parser(args=None):
     parser.add_argument("--daemon_buffer_size", type=int, default=1000,
                         help="How many batches to store in memory")
     parser.add_argument("--use_hw_and_font_generator", action="store_true", help="Use HWGenerator and RenderWordConsistentFont instead of SavedHandwritingRandomAuthor and RenderWordFont")
+    parser.add_argument("--special_char_to_begin_paragraph_generator", default=None, type=str,
+                        help="Path to folder with special characters to begin a paragraph")
 
     if args is not None:
         import shlex
@@ -126,6 +129,15 @@ def parser(args=None):
     else:
         args.workers = args.workers
 
+    if args.special_char_to_begin_paragraph_generator is not None:
+        # random transform to stretch character between 1-3x wider
+        transform = lambda image: image.resize((int(image.width * np.random.uniform(1,3)), image.height))
+        args.special_char_to_begin_paragraph_generator = SpecialCharacterGenerator(
+            img_dir=args.special_char_to_begin_paragraph_generator,
+            character="-",
+            transform_list=[transform],
+        )
+
     logger.info(args)
     return args
 
@@ -136,12 +148,12 @@ def draw_layout(layout, image):
 
 def main(opts):
     global lg
-
+    logger.info(f"OUTPUT: {opts.output}")
     # Read the YAML file and parse the parameters
     config_dict = parse_config(opts.config)
 
     # Create a MarginGenerator object for each set of margins
-    page_template = SectionTemplate(**config_dict["page_template"])
+    page_template = PageTemplate(**config_dict["page_template"])
     page_title_template = SectionTemplate(**config_dict["page_title_template"])
     page_header_template = SectionTemplate(**config_dict["page_header_template"])
     paragraph_template = SectionTemplate(**config_dict["paragraph_template"])
@@ -223,10 +235,10 @@ def main(opts):
                                                       )
 
             boxfiller_arg_overrides = [{"use_random_vertical_offset":False,
-                                        "indent_after_newline_character_probability":0.7,
+                                        "indent_after_newline_character_probability": 0.7,
                                         "random_horizontal_offset_sd":0.05,
-                                        "font_size_sd":0,
-                                        "slope_sd":0.0005,},
+                                        "font_size_sd": 0,
+                                        "slope_sd": 0.0005,},
                                        {"use_random_vertical_offset": True,
                                         "indent_after_newline_character_probability": 0.7,
                                         "random_horizontal_offset_sd": 0.2,
@@ -253,6 +265,9 @@ def main(opts):
                              paragraph_note_template=paragraph_note_template,
                              pages_per_image=config_dict["pages_per_image"],
                              img_text_pair_gen=render_text_pair,
+                             box_filler_kwargs={
+                                 "special_char_generator": opts.special_char_to_begin_paragraph_generator
+                             }
                              )
 
         layout_dataset = LayoutDataset(layout_generator=lg,
@@ -331,7 +346,7 @@ def save_dataset(ocr_dataset, i, opts, format="OCR", add_iteration_suffix=True):
     else:
         path = add_suffix_to_path(opts.coco_path, i, new_subfolder="partial_jsons") if add_iteration_suffix else opts.coco_path
         dataset = ocr_dataset_to_coco(ocr_dataset, "French BMD Layout - v0.0.0.4 pre-Alpha", exclude_cats="word")
-
+    path.parent.mkdir(parents=True, exist_ok=True)
     logger.info(f"Saving out at {i} to {path}")
     save_json(path, dataset)
     return dataset, path
@@ -386,17 +401,18 @@ if __name__ == "__main__":
     if socket.gethostname() == "PW01AYJG":
         args = """
           --config ./config/default.yaml 
-          --count 10000
+          --count 1000
           --renderer novel
-          --output  G:/s3/synthetic_data/FRENCH_BMD/v0
+          --output  G:/s3/synthetic_data/FRENCH_BMD/v0{char}
           --wikipedia 20220301.fr
           --saved_hw_model IAM
           --hw_batch_size 8
           --workers 0
           --daemon_buffer_size 500
-          --use_hw_and_font_generator
           --render_gt_layout
+          --special_char_to_begin_paragraph_generator {dataset_path}
         """
+        #           --use_hw_and_font_generator
 
     elif socket.gethostname() == "Galois":
         args = """
@@ -414,5 +430,13 @@ if __name__ == "__main__":
     else:
         args = None
 
-    opts = parser(args)
-    main(opts)
+    for dataset_path in ["C:/Users/tarchibald/github/docgen/projects/demos/archive/output/Le",
+        "C:/Users/tarchibald/github/docgen/projects/demos/archive/output/X",
+        "C:/Users/tarchibald/github/docgen/projects/demos/archive/output/-",
+        "C:/Users/tarchibald/github/docgen/projects/demos/archive/output/l",
+        "C:/Users/tarchibald/github/docgen/projects/demos/archive/output/Lan",
+        "C:/Users/tarchibald/github/docgen/projects/demos/archive/output"][1:]:
+
+        opts = parser(args.format(dataset_path=dataset_path, char=Path(dataset_path).name))
+        logger.info(f"OUTPUT: {opts.output}")
+        main(opts)

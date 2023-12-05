@@ -8,10 +8,18 @@ def rename_files_numerically(directory: Path):
             counter = 0
             print(f"Renaming files in folder: {folder}")
             for file in tqdm(sorted(folder.glob('**/*'))):
+                if file.suffix.lower() not in [".jpg", ".jpeg", ".jfif", ".png", ".tiff", ".tif", ".jfif"]:
+                    continue
                 if file.is_file() and not file.stem.isdigit():
-                    new_name = f"{folder}/{counter:06d}{file.suffix}"
-                    file.rename(new_name)
-                    counter += 1
+                    failed=True
+                    while failed:
+                        try:
+                            new_name = f"{folder}/{counter:06d}{file.suffix}"
+                            file.rename(new_name)
+                            failed=False
+                        except:
+                            pass
+                        counter += 1
 
 def main(args=None):
     parser = argparse.ArgumentParser(description="Rename files numerically within each folder.")
@@ -29,5 +37,6 @@ def main(args=None):
     rename_files_numerically(root_dir)
 
 if __name__ == "__main__":
-    folder = "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/CROPPED/paper_only"
+    #folder = "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/CROPPED/paper_only"
+    folder = "B:/document_backgrounds/handwriting"
     main(folder)

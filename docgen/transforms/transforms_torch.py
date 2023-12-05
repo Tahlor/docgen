@@ -45,7 +45,7 @@ class RandomResize:
         # Calculate random scale factor
         scale_factor = random.uniform(self.min_scale, self.max_scale)
 
-        original_width, original_height = img.shape[-2:]
+        original_height, original_width = img.shape[-2:]
 
         # Compute new dimensions
         new_width = int(original_width * scale_factor)

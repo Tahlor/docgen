@@ -126,7 +126,7 @@ class Config:
          """
         print(args)
         try:
-            from projects.demos.generate_lines import LineGenerator
+            from projects.demos.generate_lines_example1 import LineGenerator
             lg = LineGenerator(args)
             lg.main()
             # create s3 folder if not exists on next line

@@ -149,7 +149,15 @@ class SemanticSegmentationCompositionDataset(Dataset):
         return len(self.img_paths)
 
     def __getitem__(self, idx):
-        img = self.get_image(idx)
+        img, metadata = self.get_image(idx)
+
+        # try:
+        #     if "seal" in self.generator.img_dirs[0].lower():
+        #         pass
+        #     else:
+        #         print("IT WORKED")
+        # except:
+        #     pass
 
         if self.transforms_before:
             img = self.transforms_before(img)
@@ -165,7 +173,8 @@ class SemanticSegmentationCompositionDataset(Dataset):
         if self.transforms_after:
             img = self.transforms_after(img)
 
-        sample = {'image': img, 'mask': mask}
+        sample = {'image': img, 'mask': mask, 'metadata': metadata
+                  }
 
         return sample
 
@@ -211,7 +220,14 @@ class SemanticSegmentationCompositionDatasetGenerative(SemanticSegmentationCompo
         self.generator = generator
 
     def get_image(self, idx):
-        return self.generator.get()
+        img = self.generator.get()
+        if isinstance(img, dict):
+            img_dict, img = img, img["image"]
+            # everything except for "image"
+            metadata = {k: v for k, v in img_dict.items() if k != "image"}
+        else:
+            metadata = {}
+        return img, metadata
 
     def __len__(self):
         return sys.maxsize
@@ -274,10 +290,11 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
                  overfit_dataset_length=0,
                  random_origin_composition=True,
                  mask_default_value=0,
-                 mask_null_value=-100,
+                 mask_null_value=0,
                  img_default_value=1,
                  dataset_length=5000,
-                 transforms_after_compositing=None,
+                 transforms_after_compositing_img_only=None,
+                 transforms_after_compositing_img_and_mask=None,
                  output_channel_content_names=None,
                  layout_sampler=None,
                  size=448,
@@ -293,10 +310,17 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
             mask_default_value (int): what value should the mask be by default
                  (e.g., 0 when there's no element, 1 when there is, 0 is the default)
             mask_null_value (int): what value should the mask be if it's not used
+                 # NOTE: you can either exclude a mask by looking at the active channels OR if you set the mask_null_value
                  (e.g., -100 when we don't want this mask evaluated, perhaps it doesn't exist on the image)
+                 OR it might be a composite layer not being used OR components of a composite layer when the composite is
+                 active
+                 it's dangerous, just set to 0 and use the active channels unless critical
             img_default_value (int): if pasting on to a blank image, what value should it be by default
             dataset_length (int): how many images to generate in one epoch
-            transforms_after_compositing:
+            transforms_after_compositing_img_only: transforms to apply after compositing, will be applied to image only,
+                good for noise/degradation
+            transforms_after_compositing_img_and_mask: transforms to apply after compositing, will be applied to both
+                image and mask, good for geometric transforms
             output_channel_content_names (list): list of names for each layer
             layout_sampler (LayerSampler): a LayerSampler object that will be used to sample the layers
 
@@ -407,7 +431,7 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
         chosen_datasets = sorted(chosen_datasets, key=lambda x: x.layer_position)
 
         images_and_masks = [d[idx] for d in chosen_datasets]
-        images, masks = [x["image"] for x in images_and_masks], [x["mask"] for x in images_and_masks]
+        images, masks, metadata = [x["image"] for x in images_and_masks], [x["mask"] for x in images_and_masks], [x["metadata"] for x in images_and_masks]
 
         # Calculate background size
         if self.size is not None:
@@ -417,8 +441,10 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
 
         composite_image = torch.ones(bckg_size) * self.img_default_value
         composite_masks = torch.zeros((len(self.output_channel_content_names), *bckg_size[-2:]))
+
+        # IF NO MASK IS PRESENT, SET TO -100
         if self.mask_null_value:
-            composite_masks += -100
+            composite_masks += self.mask_null_value
 
         # Set the mask for composite layers to -100
         # composite_masks[len(self.unique_layers):] = -100
@@ -457,10 +483,12 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
             #composite_masks[combined_channel] = torch.max(torch.index_select(composite_masks, 0, torch.tensor(channels)),dim=0)[0]
 
         active_channel_indices = set([self.get_channel_idx(layer) for layer in layers])
+
         # Set the mask for constituent layers of a combined layer to -100 and remove from active channels
+        # NOTE: you can either exclude a mask by looking at the active channels OR if you set the mask_null_value
         for combined_layer_element in combined_layer_elements_in_current_iteration:
             channel = self.get_channel_idx(combined_layer_element)
-            composite_masks[channel] = -100
+            composite_masks[channel] = self.mask_null_value
             active_channel_indices.remove(channel)
 
         if self.transforms_after_compositing:
@@ -471,7 +499,8 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
                 'mask': composite_masks,
                 'name': [x["name"] if "name" in x else None for x in images_and_masks],
                 'datasets': {x.name : self.get_channel_idx(x.layer_contents) for x in chosen_datasets},
-                'active_channel_indices': active_channel_indices
+                'active_channel_indices': active_channel_indices,
+                'metadata': metadata,
                 }
 
     def _calculate_background_size(self, images: List[torch.Tensor]) -> Tuple:
