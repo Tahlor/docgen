@@ -21,6 +21,7 @@ projects/*/*_output_*
 *.log
 *.out
 output/
+fonts/
 
 # C extensions
 *.so

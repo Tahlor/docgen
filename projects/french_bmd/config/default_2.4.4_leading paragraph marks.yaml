@@ -51,7 +51,7 @@ margin_notes_template:
   lines_rng: [ 1, 5 ]
   font_scale_factor_rng: null
   min_height_pixels: 40
-  probability_existence: 0.2
+  probability_existence: 0.5
   probability_blank: 0.1
 paragraph_note_template:
   top_margin: [-0.03, 0.2]

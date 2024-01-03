@@ -22,10 +22,22 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
     def __init__(self, img_dir,
                  label_dir=None,
                  transform_list=None,
+                 paired_mask_transform_obj=None,
                  max_uniques=None,
                  max_length_override=None,
                  label_name_pattern="label_{}.png",
                  ):
+        """
+
+        Args:
+            img_dir:
+            label_dir:
+            transform_list:
+            paired_mask_transform_obj: takes in img, label, returns degraded img, label
+            max_uniques:
+            max_length_override:
+            label_name_pattern:
+        """
         super().__init__(
             max_uniques=max_uniques,
             max_length_override=max_length_override,
@@ -41,10 +53,10 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
         self.max_length_override = int(max_length_override) if max_length_override else None
         self.path_database = self.process_img_file_list(img_dir, label_dir)
 
-
         if len(self.path_database) == 0:
             raise ValueError(f"No images found in {img_dir}")
 
+        self.paired_mask_transform_obj = paired_mask_transform_obj
         self.transform_list = transform_list
         if self.transform_list is None:
             # just convert it to tensor, compose it
@@ -98,6 +110,8 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                 if self.transform_list is not None:
                     img = self.transform_list(img)
                     label = self.transform_list(label)
+                if self.paired_mask_transform_obj is not None:
+                    img, label = self.paired_mask_transform_obj(img, label)
 
                 return_dict = {'image': img,
                         'mask': label,

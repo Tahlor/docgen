@@ -81,6 +81,9 @@ def parser(args=None):
     parser.add_argument("--use_hw_and_font_generator", action="store_true", help="Use HWGenerator and RenderWordConsistentFont instead of SavedHandwritingRandomAuthor and RenderWordFont")
     parser.add_argument("--special_char_to_begin_paragraph_generator", default=None, type=str,
                         help="Path to folder with special characters to begin a paragraph")
+    parser.add_argument("--special_char_to_begin_paragraph_generator_width_multiplier", default=None, type=int,
+                        help="Make paragraph marker wider randomly between 1 and this multiplier")
+
 
     if args is not None:
         import shlex
@@ -131,11 +134,15 @@ def parser(args=None):
 
     if args.special_char_to_begin_paragraph_generator is not None:
         # random transform to stretch character between 1-3x wider
-        transform = lambda image: image.resize((int(image.width * np.random.uniform(1,3)), image.height))
+        transform_list = []
+        if args.special_char_to_begin_paragraph_generator_width_multiplier > 1:
+            multiplier = args.special_char_to_begin_paragraph_generator_width_multiplier
+            transform_list = [lambda image: image.resize((int(image.width * np.random.uniform(1,multiplier)), image.height))]
+
         args.special_char_to_begin_paragraph_generator = SpecialCharacterGenerator(
             img_dir=args.special_char_to_begin_paragraph_generator,
             character="-",
-            transform_list=[transform],
+            transform_list=transform_list,
         )
 
     logger.info(args)
@@ -317,17 +324,17 @@ def main(opts):
             traceback.print_exc()
             raise e
 
-    _,ocr_path = save_dataset(ocr_dataset, iteration, opts)
-    coco_dataset,coco_path = save_dataset(ocr_dataset, iteration, opts, format="COCO", add_iteration_suffix=False)
+    _, ocr_path = save_dataset(ocr_dataset, iteration, opts, add_iteration_suffix=False)
+    coco_dataset, coco_path = save_dataset(ocr_dataset, iteration, opts, format="COCO", add_iteration_suffix=False)
 
     stop = time.time()
     print("TIME: ", stop-start)
 
     if opts.render_gt_layout:
-        output_folder = opts.output / "segmentations"
-        output_folder.mkdir(parents=True, exist_ok=True)
-        render_all_gt_layout(coco_dataset, format="COCO", output_folder=output_folder)
-        render_all_gt_layout(ocr_dataset, format="OCR", output_folder=output_folder)
+        segmentation_output_folder = opts.output / "segmentations"
+        segmentation_output_folder.mkdir(parents=True, exist_ok=True)
+        render_all_gt_layout(coco_dataset, image_folder=opts.output, format="COCO", output_folder=segmentation_output_folder)
+        render_all_gt_layout(ocr_dataset, image_folder=opts.output, format="OCR", output_folder=segmentation_output_folder)
 
     print("Done Saving")
 
@@ -359,9 +366,8 @@ def add_suffix_to_path(path, index, new_subfolder=None):
     else:
         return path.parent / (path.stem + f"_{index}" + path.suffix)
 
-def render_gt_layout(name, d, format="COCO", show=False, output_folder=None):
+def render_gt_layout(image_path, d, format="COCO", show=False, output_folder=None):
     ## TEST LAST IMAGE - OCR AND COCO DATASET + BBOXS
-    image_path = opts.output / f"{name}.jpg"
     if output_folder is None:
         output_folder = image_path.parent
 
@@ -373,7 +379,7 @@ def render_gt_layout(name, d, format="COCO", show=False, output_folder=None):
     draw_gt_layout(image_path, d, format=format, draw_boxes=False, draw_segmentations=True, save_path=coco_seg, show=show)
 
 
-def display_output(ocr_dataset):
+def display_output(opts, ocr_dataset):
     ## TEST LAST IMAGE - OCR AND COCO DATASET + BBOXS
     name, d = next(iter(ocr_dataset.items()))
     image_path = opts.output / f"{name}.jpg"
@@ -387,56 +393,19 @@ def display_output(ocr_dataset):
     draw_gt_layout(image_path, opts.coco_path, format="COCO", draw_boxes=False, draw_segmentations=True,
                    save_path=coco_seg)
 
-def render_all_gt_layout(dataset_dict, format="COCO", output_folder=None):
+def render_all_gt_layout(dataset_dict, image_folder, format="COCO", output_folder=None):
     if format == "COCO":
         for d in dataset_dict["images"]:
-            image_path = d["id"]
+            image_name = d["file_name"]
+            image_path = Path(image_folder) / image_name
             render_gt_layout(image_path, dataset_dict, format, output_folder=output_folder)
     else:
-        for name,d in dataset_dict.items():
-            render_gt_layout(name, dataset_dict, format, output_folder=output_folder)
+        for image_name,d in dataset_dict.items():
+            image_path = Path(image_folder) / d["filename"]
+            if not image_path.exists():
+                image_path = Path(image_path).with_suffix(".jpg")
+            render_gt_layout(image_path, dataset_dict, format, output_folder=output_folder)
 
 if __name__ == "__main__":
-    # --output  /mnt/g/s3/synthetic_data/FRENCH_BMD
-    if socket.gethostname() == "PW01AYJG":
-        args = """
-          --config ./config/default.yaml 
-          --count 1000
-          --renderer novel
-          --output  G:/s3/synthetic_data/FRENCH_BMD/v0{char}
-          --wikipedia 20220301.fr
-          --saved_hw_model IAM
-          --hw_batch_size 8
-          --workers 0
-          --daemon_buffer_size 500
-          --render_gt_layout
-          --special_char_to_begin_paragraph_generator {dataset_path}
-        """
-        #           --use_hw_and_font_generator
-
-    elif socket.gethostname() == "Galois":
-        args = """
-          --config ./config/default.yaml 
-          --start 53000
-          --count 100000
-          --renderer novel
-          --output /media/EVO970/data/synthetic/french_bmd/ 
-          --saved_hw_model_folder /media/data/1TB/datasets/s3/HWR/synthetic-data/python-package-resources/handwriting-models 
-          --wikipedia 20220301.fr
-          --saved_hw_model IAM
-          --hw_batch_size 80    
-          --workers 0
-        """
-    else:
-        args = None
-
-    for dataset_path in ["C:/Users/tarchibald/github/docgen/projects/demos/archive/output/Le",
-        "C:/Users/tarchibald/github/docgen/projects/demos/archive/output/X",
-        "C:/Users/tarchibald/github/docgen/projects/demos/archive/output/-",
-        "C:/Users/tarchibald/github/docgen/projects/demos/archive/output/l",
-        "C:/Users/tarchibald/github/docgen/projects/demos/archive/output/Lan",
-        "C:/Users/tarchibald/github/docgen/projects/demos/archive/output"][1:]:
-
-        opts = parser(args.format(dataset_path=dataset_path, char=Path(dataset_path).name))
-        logger.info(f"OUTPUT: {opts.output}")
-        main(opts)
+    opts = parser()
+    main(opts)

@@ -420,6 +420,7 @@ class LayoutGenerator:
             img_text_pair_gen: ImageTextPairGenerator to use for generating image-text pairs
 
         """
+        self.ext = ".jpg"
         self.pages_per_image = pages_per_image
         self.width_rng = width_rng
         self.height_width_ratio_rng = height_width_ratio_rng
@@ -451,8 +452,12 @@ class LayoutGenerator:
             # if not locals()[template] is None:
             #     assert isinstance(locals()[template], SectionTemplate)
             if locals()[template] is None:
-                warnings.warn(f"Template {template} is None, using default SectionTemplate")
-                setattr(self, template, SectionTemplate(ignore_margins=True))
+                if template == "page_template":
+                    warnings.warn(f"Template {template} is None, using default PageTemplate")
+                    setattr(self, template, PageTemplate(ignore_margins=True))
+                else:
+                    warnings.warn(f"Template {template} is None, using default SectionTemplate")
+                    setattr(self, template, SectionTemplate(ignore_margins=True))
             else:
                 setattr(self, template, locals()[template])
 
@@ -496,6 +501,7 @@ class LayoutGenerator:
         """
         name = f"{i:07.0f}"
         image = None
+        filename=f"{name}{self.ext}"
 
         # Make sure the document is not completely blank
         while image is None:
@@ -504,16 +510,16 @@ class LayoutGenerator:
             image = self.render_text(layout)
 
         if self.output_path:
-            save_path = self.output_path / f"{name}.jpg"
+            save_path = self.output_path / filename
             if self.degradation_function:
                 image = self.degradation_function(image)
             image.save(save_path)
 
             if self.save_layout_images:
                 layout_img = self.draw_doc_boxes(layout)
-                layout_img.save(self.output_path / f"{name}_layout.jpg")
+                layout_img.save(self.output_path / f"{name}_layout{self.ext}")
 
-        ocr = self.create_ocr(layout, id=i, filename=name)
+        ocr = self.create_ocr(layout, id=i, filename=filename)
         return name, ocr, image
 
     def generate_layout(self) -> DocBox:
@@ -588,7 +594,7 @@ class LayoutGenerator:
                 all_margins_bbox = [page.bbox_writable[2] - margin_width, page.bbox_writable[1], page.bbox_writable[2],
                           page.bbox_writable[3]]
                 all_paragraphs_bbox = [page.bbox_writable[0], current_y, page.bbox_writable[2] - margin_width,
-                          page.bbox_writable[3]],
+                          page.bbox_writable[3]]
 
             all_margins_box = DocBox(all_margins_bbox,
                                      parent=page,

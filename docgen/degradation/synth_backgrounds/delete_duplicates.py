@@ -76,4 +76,5 @@ def find_and_delete_duplicates(directory_path):
 # Example usage
 CONFIRM_EACH = False
 directory = "B:/document_backgrounds/with_backgrounds"
+directory = "G:/s3/synthetic_data/resources"
 find_and_delete_duplicates(directory)
