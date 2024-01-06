@@ -18,6 +18,8 @@ logger.addHandler(logging.StreamHandler())
 import random
 from docgen.datasets.generic_dataset import GenericDataset
 
+# TODO: Fix / standardize max_length and max_length_override
+
 class NaiveImageFolder(GenericDataset):
     def __init__(self, img_dir,
                  transform_list=None,

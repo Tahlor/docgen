@@ -305,8 +305,10 @@ def encode_channels_to_colors_torch(image: torch.Tensor, colors: list=None, excl
 
     for i in range(image.size(0)):
         channel = image[i,:,:]
-        channel_normalized = channel / 255.0
+        channel_normalized = channel / 255.0 if channel.max() > 1 else channel
+
         color = torch.tensor(colors[i], device=image.device).view(3, 1, 1)
+
         colored_channel = channel_normalized * color
         output_img = torch.maximum(output_img, colored_channel)
 
@@ -320,6 +322,7 @@ def encode_channels_to_colors(image, colors: list=None, exclude_channels=None):
         return encode_channels_to_colors_torch(image, colors, exclude_channels)
     else:
         raise ValueError("Unsupported tensor type. Expected np.array or torch.Tensor.")
+
 def composite_the_images_numpy(base_image, overlay_image, origin_x, origin_y, composite_function=np.minimum):
     width1, height1, width2, height2 = base_image.shape[1], base_image.shape[0], overlay_image.shape[1], overlay_image.shape[0]
 

@@ -26,6 +26,7 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                  max_uniques=None,
                  max_length_override=None,
                  label_name_pattern="label_{}.png",
+                 **kwargs,
                  ):
         """
 
