@@ -1,3 +1,4 @@
+import torchvision.transforms as T
 import warnings
 
 import torch
@@ -265,3 +266,11 @@ class RandomScaleResize(transforms.Resize):
         scale = random.uniform(self.min_scale, self.max_scale)
         new_size = [int(dim * scale) for dim in img.size]
         return super(RandomScaleResize, self).resize(img, new_size)
+
+class OneOfTransform(T.Compose):
+    def __init__(self, transforms):
+        super().__init__(transforms)
+
+    def __call__(self, img):
+        transform = random.choice(self.transforms)
+        return transform(img)
