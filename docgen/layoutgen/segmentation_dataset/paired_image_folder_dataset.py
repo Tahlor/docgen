@@ -111,7 +111,7 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                 if self.transform_list is not None:
                     img = self.transform_list(img)
                     label = self.transform_list(label)
-                if self.paired_mask_transform_obj is not None:
+                if self.paired_mask_transform_obj is not None and self.paired_mask_transform_obj:
                     img, label = self.paired_mask_transform_obj(img, label)
 
                 return_dict = {'image': img,
