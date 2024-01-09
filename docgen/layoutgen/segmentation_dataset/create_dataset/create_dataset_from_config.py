@@ -1,3 +1,4 @@
+import traceback
 import numpy as np
 import json
 from docgen.layoutgen.segmentation_dataset.create_dataset.parse_config import parse_config
@@ -47,8 +48,18 @@ class DatasetSaver:
     def __init__(self, config_path=None):
         self.config = parse_config(get_config(config_path))
         self.to_pil = ToPILImage()
-        self.metadata_dict = {}
         self.lossless = False
+        self.metadata_path = self.config.output_path / "metadata.pkl"
+        self.metadata_dict = self.load_metadata()
+
+    def load_metadata(self):
+        if self.metadata_path.exists():
+            with open(self.metadata_path, 'rb') as file:
+                print(f"Loading metadata from {self.metadata_path}")
+                metadata_dict = pickle.load(file)
+        else:
+            metadata_dict = {}
+        return metadata_dict
 
     def save_dataset(self):
         logger.info(f"Saving dataset to {self.config.get('output_folder')}")
@@ -70,8 +81,10 @@ class DatasetSaver:
         try:
             self.save_all(dataloader, step)
         except Exception as e:
+            traceback.print_exc()
             logger.info("Saving dataset interrupted by user")
             logger.info(e)
+            raise e
 
         self.save_metadata()
 
@@ -116,7 +129,7 @@ class DatasetSaver:
                 self.save_metadata()
 
     def save_metadata(self):
-        with open(self.config.output_path / 'metadata.pkl', 'wb') as file:
+        with open(self.metadata_path, 'wb') as file:
             pickle.dump(self.metadata_dict, file)
 
 

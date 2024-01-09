@@ -4,6 +4,8 @@ import socket
 import os
 import sys
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
+from docgen.img_tools import crop_image, replace_region
+
 import numpy as np
 from pathlib import Path
 import torch
@@ -298,7 +300,9 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
                  output_channel_content_names=None,
                  layout_sampler=None,
                  size=448,
-                 composite_function: Union[seamless_composite, composite_the_images_torch]=composite_the_images_torch, ):
+                 composite_function: Union[seamless_composite, composite_the_images_torch]=composite_the_images_torch,
+                 background_bounding_boxes_pkl_path=None,
+                 ):
 
         """
 
@@ -323,7 +327,8 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
                 image and mask, good for geometric transforms
             output_channel_content_names (list): list of names for each layer
             layout_sampler (LayerSampler): a LayerSampler object that will be used to sample the layers
-
+            background_bounding_boxes_pkl_path (str): path to a pickle file containing bounding boxes for the background
+                The dict should be of the form {img_stem : bounding_box}
         """
         self.size = size
         self.subdatasets = sorted(subdatasets, key=lambda x: (x.layer_position, x.name))
@@ -333,7 +338,8 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
         self.mask_default_value = mask_default_value
         self.img_default_value = img_default_value
         self.dataset_length = dataset_length
-        self.transforms_after_compositing = transforms_after_compositing
+        self.transforms_after_compositing_img_only = transforms_after_compositing_img_only
+        self.transforms_after_compositing_img_and_mask = transforms_after_compositing_img_and_mask
         self.random_origin_function = CalculateImageOriginForCompositing(image_format="CHW") # vs. more_random_offset
         self.composite_function = composite_function
         #self.layer_contents_names = layer_contents_names if layer_contents_names else self.get_layer_contents_to_output_channel_map()
@@ -343,6 +349,8 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
         self.config = self.get_combination_config(
             [subdataset.layer_contents for subdataset in self.subdatasets])
         self.mask_null_value = mask_null_value
+        self.background_bounding_boxes_pkl_path = background_bounding_boxes_pkl_path
+        self.background_bounding_boxes = self.load_background_bounding_boxes()
 
         # Exclude naive masks from the channels to be visualized
         naive_mask_datasets = [x for x in self.subdatasets if type(x.mask_maker) is NaiveMask]
@@ -427,6 +435,11 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
         else:
             chosen_datasets = self.layout_sampler.sample(replacement=False)
 
+        # if handwriting_images_dalle and pdf_text, choose only 1
+        dataset_indices = {x.name:i for i,x in enumerate(chosen_datasets)}
+        if "handwriting_images_dalle" in dataset_indices and "pdf_text" in dataset_indices:
+            chosen_datasets.pop(dataset_indices["pdf_text"] if random.random() < 0.5 else dataset_indices["handwriting_images_dalle"])
+
         # sort chosen datasets by layer position to ensure background is layered first
         chosen_datasets = sorted(chosen_datasets, key=lambda x: x.layer_position)
 
@@ -442,10 +455,6 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
         composite_image = torch.ones(bckg_size) * self.img_default_value
         composite_masks = torch.zeros((len(self.output_channel_content_names), *bckg_size[-2:]))
 
-        # IF NO MASK IS PRESENT, SET TO -100
-        if self.mask_null_value:
-            composite_masks += self.mask_null_value
-
         # Set the mask for composite layers to -100
         # composite_masks[len(self.unique_layers):] = -100
 
@@ -453,7 +462,10 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
         combined_layers_in_current_iteration = [x.layer_contents for x in chosen_datasets if len(x.layer_contents) > 1]
         combined_layer_elements_in_current_iteration = set([item for sublist in combined_layers_in_current_iteration for item in sublist])
 
+        valid_region_bbox = self.get_bounding_box(chosen_datasets, images_and_masks)
+
         for i, (dataset, (img, mask)) in enumerate(zip(chosen_datasets, zip(images, masks))):
+
             #start_x, start_y = self._determine_image_start_position(composite_image, img)
             start_x, start_y, details = compute_paste_origin_from_overlap_auto(composite_image,
                                                                                img,
@@ -462,7 +474,19 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
 
             # For mask, choose channel, paste at appropriate location, then take the max with existing mask
             channel = self.get_channel_idx(dataset.layer_contents)
-            mask_for_current_dataset = torch.zeros(bckg_size[-2:]) + self.mask_default_value
+
+            # Handle Masks
+            mask_for_current_dataset = torch.zeros_like(composite_masks[0]) + self.mask_default_value
+
+            if False and i>0:
+                # Compute the region in the composite image where the current image will be pasted
+                end_x, end_y = start_x + img.shape[2], start_y + img.shape[1]
+                composite_region = composite_image[:, start_y:end_y, start_x:end_x]
+
+                # Check and update mask where the composite image is darker
+                darker_pixels = torch.mean(composite_region, dim=0) < torch.mean(img, dim=0)
+                mask[darker_pixels] = 0
+
             mask_for_current_dataset = composite_the_images_torch(mask_for_current_dataset, mask, start_x, start_y, method=torch.max)
             composite_masks[channel] = torch.max(composite_masks[channel], mask_for_current_dataset)
 
@@ -474,6 +498,42 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
                 else:
                     composite_image = self.composite_function(composite_image, img, start_x, start_y)
 
+            if valid_region_bbox:
+                if i==0: # CROP TO THE VALID PASTE REGION, KIND OF A HACK
+                    # I THINK THIS ASSUMES START_X AND START_Y ARE NEGATIVE/0
+
+                    # backup the original image and mask
+                    composite_image_backup = composite_image.clone()
+                    composite_masks_backup = composite_masks.clone()
+
+                    composite_image = composite_image_backup.clone()
+                    composite_masks = composite_masks_backup.clone()
+
+                    # create a smaller valid_region_bbox based on the paste origin
+                    # subtract the start_x and start_y from the valid_region_bbox, but don't go below 0, remember it's x1,y1,x2,y2
+                    adj_valid_region_bbox = (max(valid_region_bbox[0] + start_x, 0),
+                                             max(valid_region_bbox[1] + start_y, 0),
+                                             max(valid_region_bbox[2] + start_x, 0),
+                                             max(valid_region_bbox[3] + start_y, 0))
+
+                    # crop mask and image to valid region
+                    composite_image = crop_image(composite_image, adj_valid_region_bbox, format="CHW")
+                    composite_masks = crop_image(composite_masks, adj_valid_region_bbox, format="CHW")
+
+        if valid_region_bbox:
+            # you just want to paste the CROPPED image onto the original at the adj_valid_region_bbox ORIGIN
+            # whatever the cropped size is
+            composite_image = composite_the_images_torch(composite_image_backup,
+                                                         composite_image,
+                                                         bckg_x=adj_valid_region_bbox[0],
+                                                         bckg_y=adj_valid_region_bbox[1],)
+
+            composite_masks = composite_the_images_torch(composite_masks_backup,
+                                                            composite_masks,
+                                                            bckg_x=adj_valid_region_bbox[0],
+                                                            bckg_y=adj_valid_region_bbox[1],
+                                                            method=torch.max)
+
         # Process the combined layers.
         for combined_layer in combined_layers_in_current_iteration:
             # loop through constituent channels, taking the max
@@ -484,15 +544,13 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
 
         active_channel_indices = set([self.get_channel_idx(layer) for layer in layers])
 
-        # Set the mask for constituent layers of a combined layer to -100 and remove from active channels
-        # NOTE: you can either exclude a mask by looking at the active channels OR if you set the mask_null_value
-        for combined_layer_element in combined_layer_elements_in_current_iteration:
-            channel = self.get_channel_idx(combined_layer_element)
-            composite_masks[channel] = self.mask_null_value
-            active_channel_indices.remove(channel)
+        self.set_null_values(composite_masks, active_channel_indices, combined_layer_elements_in_current_iteration)
 
-        if self.transforms_after_compositing:
-            composite_image = self.transforms_after_compositing(composite_image)
+        if self.transforms_after_compositing_img_only:
+            composite_image = self.transforms_after_compositing_img_only(composite_image)
+        if self.transforms_after_compositing_img_and_mask:
+            composite_image, composite_masks = self.transforms_after_compositing_img_and_mask(composite_image, composite_masks)
+
 
         return {
                 'image': composite_image,
@@ -502,6 +560,36 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
                 'active_channel_indices': active_channel_indices,
                 'metadata': metadata,
                 }
+
+    def set_null_values(self, composite_masks, active_channel_indices, combined_layer_elements_in_current_iteration):
+        # Set the mask for constituent layers of a combined layer to -100 and remove from active channels
+        # NOTE: you can either exclude a mask by looking at the active channels OR if you set the mask_null_value
+        for combined_layer_element in combined_layer_elements_in_current_iteration:
+            channel = self.get_channel_idx(combined_layer_element)
+            composite_masks[channel] = self.mask_null_value
+            active_channel_indices.remove(channel)
+        # Set the mask for an un-used combined layer to null_value
+        for combined_layer in self.combined_layers:
+            channel = self.get_channel_idx(combined_layer)
+            if channel not in active_channel_indices:
+                composite_masks[channel] = self.mask_null_value
+
+    def get_bounding_box(self, chosen_datasets, images_and_masks):
+        if not chosen_datasets[0].name == "background":
+            return None
+        elif self.background_bounding_boxes is not None:
+            img_stem = Path(images_and_masks[0]["metadata"]["name"]).stem
+            return self.background_bounding_boxes[img_stem]
+        else:
+            return None
+
+    def load_background_bounding_boxes(self):
+        if self.background_bounding_boxes_pkl_path is None:
+            return None
+        else:
+            import pickle
+            with open(self.background_bounding_boxes_pkl_path, "rb") as f:
+                return pickle.load(f)
 
     def _calculate_background_size(self, images: List[torch.Tensor]) -> Tuple:
         """Calculate the background size for compositing."""

@@ -267,6 +267,29 @@ class RandomScaleResize(transforms.Resize):
         new_size = [int(dim * scale) for dim in img.size]
         return super(RandomScaleResize, self).resize(img, new_size)
 
+class RandomFlipOrMirror:
+    def __init__(self):
+        # No parameters needed for this augmentation
+        pass
+
+    def __call__(self, image):
+        action = random.choice(['flip', 'mirror', 'none', 'both'])
+
+        if action == 'flip':
+            # Flip 180 degrees
+            image = np.rot90(image, 2)
+        elif action == 'mirror':
+            # Mirror (horizontal flip)
+            image = np.fliplr(image)
+        elif action == 'both':
+            # Both flip and mirror
+            image = np.rot90(image, 2)
+            image = np.fliplr(image)
+        # 'none' does nothing
+
+        return image
+
+
 class OneOfTransform(T.Compose):
     def __init__(self, transforms):
         super().__init__(transforms)

@@ -54,7 +54,7 @@ class WordGenerator(Gen):
             img_size = self.img_size
         font_size = random.randint(*self.font_size_rng)
         img = Image.new("RGB", img_size, (255,255,255))
-        if random.random() > 0.1:
+        if random.random() > 0.4:
             bbox = BBox("ul", [0, 0, *img_size])
             box_dict = self.filler.randomly_fill_box_with_words(bbox, img=img,
                                                        max_words=random.randint(*self.word_count_rng),

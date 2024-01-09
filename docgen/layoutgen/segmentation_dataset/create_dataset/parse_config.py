@@ -16,7 +16,7 @@ from torchvision.transforms import ToTensor
 from docgen.windows.utils import map_drive, unmap_drive
 from docdegrade.torch_transforms import ToNumpy, CHWToHWC, HWCToCHW, RandomChoice, Squeeze
 from docgen.transforms.transforms_torch import ResizeAndPad, IdentityTransform, RandomResize, RandomCropIfTooBig, \
-    ResizeLongestSide, RandomBottomLeftEdgeCrop, CropBorder
+    ResizeLongestSide, RandomBottomLeftEdgeCrop, CropBorder, RandomFlipOrMirror
 from docgen.transforms.transforms_torch import *
 from docgen.layoutgen.segmentation_dataset.layer_generator.preprinted_form_gen import PreprintedFormElementGenerator
 from typing import List, Union, Dict, Any
@@ -51,7 +51,6 @@ logger.addHandler(logging.StreamHandler())
 class TransformType(Enum):
     TONUMPY = ToNumpy
     RANDOMCHOICE = RandomChoice
-    IDENTITYTRANSFORM = IdentityTransform
     RANDOMRESIZE = RandomResize
     RANDOMCROPIFTOOBIG = RandomCropIfTooBig
     RANDOMDISTORTIONS = RandomDistortions
@@ -73,7 +72,8 @@ class TransformType(Enum):
     COLORJITTER = ColorJitter
     CROPBORDER = CropBorder
     RANDOMROTATE = RandomRotate
-
+    RANDOMFLIPORMIRROR = RandomFlipOrMirror
+    IDENTITYTRANSFORM = IdentityTransform
 
 class DatasetType(Enum):
     HWGENERATOR = HWGenerator
@@ -242,11 +242,13 @@ def create_aggregate_dataset(config):
     aggregate_dataset = AggregateSemanticSegmentationCompositionDataset(generators,
                                                              background_img_properties='max',
                                                              dataset_length=config.get("dataset_length", 100000),
-                                                             transforms_after_compositing=after_transforms,
+                                                             transforms_after_compositing_img_only=after_transforms,
+                                                             transforms_after_compositing_img_and_mask=None,
                                                              layout_sampler=layout_sampler,
                                                              size=config.get("output_img_size", 448),
                                                              composite_function=composite_function,
-                                                             mask_null_value=config.mask_null_value
+                                                             mask_null_value=config.mask_null_value,
+                                                             background_bounding_boxes_pkl_path=config.get("background_bounding_boxes_pkl_path", None),
                                                              )
     # save out 1) the config used to create this dataset and 2) aggregate_dataset.config
     config.combined_channel_mapping = aggregate_dataset.config

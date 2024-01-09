@@ -1,4 +1,4 @@
-# pdfgen
+# docgen
 
 If using Linux, install libreoffice:
 
