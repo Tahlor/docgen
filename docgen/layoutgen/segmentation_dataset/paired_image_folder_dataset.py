@@ -12,6 +12,7 @@ import logging
 from tifffile import imread, imsave, TiffFile
 import json
 from docgen.datasets.generic_dataset import GenericDataset
+from hwgen.data.utils import show, display
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -117,6 +118,7 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                 return_dict = {'image': img,
                         'mask': label,
                         "name": img_path.stem,
+                        "ignore_channel_idx": label.shape[0]-1 if label_dict["metadata"]["HasIgnoreChannel"] else None
                         }
                 if "label_active_channels" in label_dict:
                     return_dict["label_active_channels"] = label_dict["label_active_channels"]
@@ -152,7 +154,16 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
 
         collated_batch["active_channel_mask"] = PairedImgLabelImageFolderDataset.generate_active_channel_mask(collated_batch["mask"],
                                                                                                               collated_batch["label_active_channels"])
-        collated_batch["mask"] *= collated_batch["active_channel_mask"]
+        if collated_batch["ignore_channel_idx"] is not None:
+            # if False:
+            #     mask = np.ones_like(collated_batch["mask"], dtype=bool)
+            #     mask[:, collated_batch["ignore_channel_idx"]] = 1
+            # else:
+            collated_batch["mask"][:,:-1] *= collated_batch["active_channel_mask"][:,:-1]
+
+
+        else:
+            collated_batch["mask"] *= collated_batch["active_channel_mask"]
         return collated_batch
 
     @staticmethod

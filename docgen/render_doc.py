@@ -902,7 +902,8 @@ class BoxFiller:
         return {
                 "img":self.img,
                 "bbox_list": self.bbox_list,
-                "styles":self.styles
+                "styles":self.styles,
+                "method": "orderly_lines"
                 }
 
     def randomly_fill_box_with_words(self, bbox,
@@ -974,7 +975,8 @@ class BoxFiller:
         return {
                 "img":self.img,
                 "bbox_list": self.bbox_list,
-                "styles":self.styles
+                "styles": self.styles,
+                "method": "random"
                 }
 
     def paste_images(self):

@@ -249,6 +249,7 @@ def create_aggregate_dataset(config):
                                                              composite_function=composite_function,
                                                              mask_null_value=config.mask_null_value,
                                                              background_bounding_boxes_pkl_path=config.get("background_bounding_boxes_pkl_path", None),
+                                                             use_ignore_index=config.get("use_ignore_index", True),
                                                              )
     # save out 1) the config used to create this dataset and 2) aggregate_dataset.config
     config.combined_channel_mapping = aggregate_dataset.config

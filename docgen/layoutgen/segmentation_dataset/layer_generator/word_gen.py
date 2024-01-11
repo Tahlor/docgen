@@ -38,23 +38,32 @@ def split_strs_into_tuple(strs):
         return tuple([int(x) for x in strs.split(",")])
     return strs
 
-class WordGenerator(Gen):
+class BoxFillerGen(Gen):
+    """ Generates words in a box, with a font size, and a number of words
+
+    """
     def __init__(self, img_size=(512,512),
                  font_size_rng=(8,50),
                   word_count_rng=(10,20),
+                  return_format="dict",
                   **kwargs
         ):
 
         self.width, self.height = self.img_size = split_strs_into_tuple(img_size)
         self.font_size_rng = split_strs_into_tuple(font_size_rng)
         self.word_count_rng = split_strs_into_tuple(word_count_rng)
+        self.return_format = return_format
+        self.force = False
 
     def _get(self, img_size=None):
         if img_size is None:
             img_size = self.img_size
         font_size = random.randint(*self.font_size_rng)
         img = Image.new("RGB", img_size, (255,255,255))
-        if random.random() > 0.4:
+        use_random_box = self.force=="random" or (self.force is None and random.random() > 0.4)
+        self.force = None
+
+        if use_random_box:
             bbox = BBox("ul", [0, 0, *img_size])
             box_dict = self.filler.randomly_fill_box_with_words(bbox, img=img,
                                                        max_words=random.randint(*self.word_count_rng),
@@ -69,10 +78,19 @@ class WordGenerator(Gen):
         return box_dict
 
     def get(self, img_size=None):
-        return self._get(img_size=img_size)["img"]
+        img_dict = self._get(img_size=img_size)
+        img_dict["image"] = img_dict.pop("img")
+        if self.return_format == "dict":
+            return img_dict
+        else:
+            img = img_dict.pop(["img"])
+            img.metadata = img_dict
+            return img
 
+    def next_one_random_placement(self):
+        self.force = "random"
 
-class PrintedTextGenerator(WordGenerator):
+class PrintedTextGenerator(BoxFillerGen):
     """
             saved_fonts_folder = Path(r"G:/s3/synthetic_data/resources/fonts")
     """
@@ -94,7 +112,7 @@ class PrintedTextGenerator(WordGenerator):
         self.filler = BoxFiller(img_text_word_dict=self.render_text_pair,
                                 random_word_idx=True)
 
-class HWGenerator(WordGenerator):
+class HWGenerator(BoxFillerGen):
     def __init__(self, img_size=(512,512),
                  font_size_rng=(8, 50),
                  word_count_rng=(10, 20),
@@ -131,8 +149,8 @@ if __name__=="__main__":
 
     for i in range(3):
         box_dict = hwgen.get()
-        box_dict["img"].show()
+        box_dict["image"].show()
 
         box_dict = printed_gen.get()
-        box_dict["img"].show()
+        box_dict["image"].show()
 

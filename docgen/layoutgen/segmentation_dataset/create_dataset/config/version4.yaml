@@ -1,9 +1,29 @@
-workers: 6
+# My Dataset Configuration v4.2
+
+v4.3:
+  - improve the ignore index
+  - even less block overlap (don't let IAM/text blocks overlap)
+
+v4.2:
+  - change where ignore index is saved
+
+v4.1:
+  - more standardized sizes
+  - fewer paper clip backgrounds, more books
+  - IGNORE INDEX
+  - more cleaned handwriting (not just 0)
+
+v4.0:
+  - cleaned handwriting
+  - less block overlap between text and writing
+
+
+workers: 4
 final_size: 448
 dataset_length: 100000
 drive_mappings:
   "B:": "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle"
-output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v4.0_100k"
+output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v4.3_100k"
 overwrite: false
 output_img_size: 448
 composite_function: composite_the_images_torch
@@ -48,7 +68,7 @@ datasets:
         #- ConditionalContrast
       - ToTensor
       - RandomResize:
-          min_scale: .1
+          min_scale: .7
           max_scale: 2
 
   - name: handwriting
@@ -76,7 +96,7 @@ datasets:
         #- ConditionalContrast
       - ToTensor
       - RandomResize:
-          min_scale: .5
+          min_scale: .8
           max_scale: 1.5
     composite_function:
         type: CompositerTorch
@@ -102,8 +122,17 @@ datasets:
 #        - "B:/document_backgrounds/paper_only/old blank paper with water or coffee stains, full frame"
 #        - "B:/document_backgrounds/paper_only/old blank paper, some wrinkles and imperfections, variable lighting"
 #        - "B:/document_backgrounds/paper_only/old paper with ink marks, crinkles, wrinkles, and imperfections and variable lighting"
-         - "B:/document_backgrounds/with_backgrounds/"
-         - "B:/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frameG:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frameG:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frame/light"
+#        - "B:/document_backgrounds/with_backgrounds/"
+        - "B:/document_backgrounds/with_backgrounds/full frame aerial view of 2 blank pages of old open book with wrinkles; book is on top of a noisey background"
+        - "B:/document_backgrounds/with_backgrounds/microfilm blank old page with ink marks"
+        - "B:/document_backgrounds/with_backgrounds/old blank weathered document"
+        - "B:/document_backgrounds/with_backgrounds/old microfilm blank document"
+        - "B:/document_backgrounds/with_backgrounds/2 blank pages of old book, full frame"
+        - "B:/document_backgrounds/with_backgrounds/aerial view of 2 blank pages of old open book with ink marks and wrinkles, full frame"
+        - "B:/document_backgrounds/with_backgrounds/aerial view of 2 blank pages of old open book, full frame"
+        #- "B:/document_backgrounds/with_backgrounds/blank discolored paper with creases; it is stapled along the top, bottom, and sides, also has paperclips"
+        - "B:/document_backgrounds/with_backgrounds/blank old document"
+        - "B:/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frameG:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frameG:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frame/light"
     layer_contents: noise
     layer_position: 0 # background layer
     sample_weight: 4
@@ -151,7 +180,7 @@ datasets:
         - IdentityTransform
       - ToTensor
       - RandomResize:
-          min_scale: .2
+          min_scale: .5
           max_scale: 2
           max_upscale: 3
 
@@ -185,7 +214,7 @@ datasets:
 
       - ToTensor
       - RandomResize:
-          min_scale: .2
+          min_scale: .5
           max_scale: 1.8
           max_upscale: 3
     mask:
@@ -206,6 +235,8 @@ datasets:
         #- "G:/s3/synthetic_data/FRENCH_BMD/FRENCH_BMD_LAYOUTv2.1.0/1000"
         #- "B:/document_backgrounds/handwriting"
         - B:/document_backgrounds/handwriting/enhanced/0
+        - B:/document_backgrounds/handwriting/enhanced/4
+        - B:/document_backgrounds/handwriting/enhanced/5
       recursive: true
       file_name_filter: "[2-9][0-9]_"
 
@@ -276,7 +307,7 @@ datasets:
         #- ConditionalContrast
       - ToTensor
       - RandomResize:
-          min_scale: .1
+          min_scale: .3
           max_scale: 1.1
     composite_function:
         type: CompositerTorch

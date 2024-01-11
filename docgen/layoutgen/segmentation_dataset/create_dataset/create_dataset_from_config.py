@@ -15,6 +15,7 @@ import tifffile
 from torchvision.transforms import ToPILImage
 import re
 import pickle
+from hwgen.data.utils import show, display
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -98,29 +99,29 @@ class DatasetSaver:
             labels = labels.numpy().transpose(0, 2, 3, 1) if len(labels.shape) == 4 else labels.numpy().transpose(1, 2,
                                                                                                                   0)
             for j in range(inputs.shape[0]):
-                for j in range(inputs.shape[0]):
-                    input_img = inputs[j]
-                    label = labels[j]
+                input_img = inputs[j]
+                label = labels[j]
 
-                    # save as images
-                    input_img = self.to_pil(input_img)
-                    input_img.save(img_path)
+                # save as images
+                input_img = self.to_pil(input_img)
+                input_img.save(img_path)
 
-                    # exclude non-naive channels (like NOISE) from the label
-                    visualized_img = encode_channels_to_colors(label[:, :, self.channels_to_be_visualized])
-                    self.to_pil(visualized_img).save(label_path_visual)
+                # exclude non-naive channels (like NOISE) from the label
+                visualized_img = encode_channels_to_colors(label[:, :, self.channels_to_be_visualized])
+                self.to_pil(visualized_img).save(label_path_visual)
 
-                    if "active_channel_indices" in batch:
-                        active_channels = batch["active_channel_indices"][j]
-                    else:
-                        active_channels = [i for i in range(label.shape[2]) if
-                                           not label[0, 0, i] == self.config.mask_null_value]
+                if "active_channel_indices" in batch:
+                    active_channels = batch["active_channel_indices"][j]
+                else:
+                    active_channels = [i for i in range(label.shape[2]) if
+                                       not label[0, 0, i] == self.config.mask_null_value]
 
-                    label_formatted = label.copy().transpose([2, 0, 1])
-                    if self.lossless:
-                        lossless_tiff_save(label_formatted, label_path, active_channels=active_channels)
-                    else:
-                        jpg_tiff_save(label_formatted, label_path, active_channels=active_channels)
+                label_formatted = label.copy().transpose([2, 0, 1])
+                ignore_channel_index = batch["ignore_index"][j] if "ignore_index" in batch else None
+                if self.lossless:
+                    lossless_tiff_save(label_formatted, label_path, active_channels=active_channels, ignore_channel_index=ignore_channel_index)
+                else:
+                    jpg_tiff_save(label_formatted, label_path, active_channels=active_channels, ignore_channel_index=ignore_channel_index)
 
             # Collect metadata for each batch (excluding image and mask)
             batch_metadata = {k: v for k, v in batch.items() if k not in ['image', 'mask']}
@@ -133,15 +134,15 @@ class DatasetSaver:
             pickle.dump(self.metadata_dict, file)
 
 
-def prep_metadata(active_channels):
+def prep_metadata(active_channels, has_ignore_channel=True):
     # channels
     # any channel where MASK_NULL_VALUE appears
-    metadata = {'ActiveChannels': tuple(active_channels)}
+    metadata = {'ActiveChannels': tuple(active_channels), 'HasIgnoreChannel': has_ignore_channel}
     metadata_json = json.dumps(metadata)
     return {'image_description': metadata_json}
 
 
-def jpg_tiff_save(label_formatted, label_path, active_channels):
+def jpg_tiff_save(label_formatted, label_path, active_channels, ignore_channel_index=None):
     """ MUST BE UINT8, NO SAVING -100 VALUES
 
     When you read this in with PIL.Image and combine with ToTensor, it will scale to 0-1
@@ -151,9 +152,12 @@ def jpg_tiff_save(label_formatted, label_path, active_channels):
     """
     # multiply by 255 if active, otherwise 0
     channel_dim = label_formatted.shape[0]
+    metadata = prep_metadata(active_channels)
+
+    if ignore_channel_index:
+        active_channels.add(ignore_channel_index)
     bit_scale = np.asarray([255 if i in active_channels else 0 for i in range(channel_dim)])[:,None,None]
     label_formatted *= bit_scale
-    metadata = prep_metadata(active_channels)
     label_formatted = label_formatted.astype("uint8")
     tifffile.imwrite(label_path, label_formatted,
                      compression="jpeg",
@@ -161,7 +165,7 @@ def jpg_tiff_save(label_formatted, label_path, active_channels):
                      metadata=metadata)
 
 
-def lossless_tiff_save(label_formatted, label_path, active_channels):
+def lossless_tiff_save(label_formatted, label_path, active_channels, ignore_channel_index=None):
     """ IMPORTANT: When you read this in with PIL.Image and combine with ToTensor, an uint8 0-255 image will scale to 0-1
         However, an int16 will NOT be rescaled (so -100,255 will still be -100,255)
 
@@ -174,6 +178,10 @@ def lossless_tiff_save(label_formatted, label_path, active_channels):
 
     """
     metadata = prep_metadata(active_channels)
+
+    if ignore_channel_index:
+        active_channels.add(ignore_channel_index)
+
     label_formatted = label_formatted.astype("int16")
     tifffile.imwrite(label_path, label_formatted,
                      compression='zstd',

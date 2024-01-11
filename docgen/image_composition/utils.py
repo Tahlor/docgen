@@ -426,56 +426,75 @@ def seamless_composite(base_image: np.ndarray, overlay_image: np.ndarray, origin
 
     return np255_to_01(result)
 
-def composite_the_images_torch(background_img, img, bckg_x, bckg_y, method: Callable = torch.min):
-    """
+def prep_composite_images(background_img, img, bckg_x, bckg_y):
+        """
 
-    Args:
-        background_img: CHW
-        img: CHW
-        bckg_x:
-        bckg_y:
-        method:
+        Args:
+            background_img: CHW
+            img: CHW
+            bckg_x:
+            bckg_y:
+            method:
 
-    Returns:
+        Returns:
 
-    To work with numpy, you would:
-            Unsqueeze Operation: In PyTorch, you use .unsqueeze(0) to add a new dimension at the front. In NumPy, you would use np.newaxis.
-            Clone Operation: In PyTorch, you use .clone() to create a copy of a tensor. In NumPy, you would use .copy().
-            Minimum Operation: In PyTorch, you use torch.min() to find the minimum of two tensors. In NumPy, you would use np.minimum().
-    """
+        To work with numpy, you would:
+                Unsqueeze Operation: In PyTorch, you use .unsqueeze(0) to add a new dimension at the front. In NumPy, you would use np.newaxis.
+                Clone Operation: In PyTorch, you use .clone() to create a copy of a tensor. In NumPy, you would use .copy().
+                Minimum Operation: In PyTorch, you use torch.min() to find the minimum of two tensors. In NumPy, you would use np.minimum().
+        """
 
-    # if background_img has 2 dimensions and img has 3, expand the background
-    if len(background_img.shape) == 2 and len(img.shape) == 3:
-        background_img = background_img.unsqueeze(0)
+        # if background_img has 2 dimensions and img has 3, expand the background
+        if len(background_img.shape) == 2 and len(img.shape) == 3:
+            background_img = background_img.unsqueeze(0)
 
-    # if img has more channels than background, expand the background
-    if img.shape[0] > background_img.shape[0] and len(background_img.shape) == 3 == len(img.shape):
-        background_img = background_img.expand(img.shape[0], -1, -1)
+        # if img has more channels than background, expand the background
+        if img.shape[0] > background_img.shape[0] and len(background_img.shape) == 3 == len(img.shape):
+            background_img = background_img.expand(img.shape[0], -1, -1)
 
-    bckg_h, bckg_w = background_img.shape[-2:]
-    img_h, img_w = img.shape[-2:]
+        bckg_h, bckg_w = background_img.shape[-2:]
+        img_h, img_w = img.shape[-2:]
 
-    x_start, x_end = max(bckg_x, 0), min(bckg_x + img_w, bckg_w)
-    y_start, y_end = max(bckg_y, 0), min(bckg_y + img_h, bckg_h)
+        x_start, x_end = max(bckg_x, 0), min(bckg_x + img_w, bckg_w)
+        y_start, y_end = max(bckg_y, 0), min(bckg_y + img_h, bckg_h)
 
-    img_x_start, img_x_end = max(-bckg_x, 0), min(-bckg_x + bckg_w, img_w)
-    img_y_start, img_y_end = max(-bckg_y, 0), min(-bckg_y + bckg_h, img_h)
+        img_x_start, img_x_end = max(-bckg_x, 0), min(-bckg_x + bckg_w, img_w)
+        img_y_start, img_y_end = max(-bckg_y, 0), min(-bckg_y + bckg_h, img_h)
 
-    if x_end <= x_start or y_end <= y_start:
-        print("No overlap between the images.")
-        print(f"background_img.shape: {background_img.shape}")
-        print(f"img.shape: {img.shape}")
+        if x_end <= x_start or y_end <= y_start:
+            print("No overlap between the images.")
+            print(f"background_img.shape: {background_img.shape}")
+            print(f"img.shape: {img.shape}")
+
+        return {
+            "cropped_background_img":  background_img[..., y_start:y_end, x_start:x_end],
+            "cropped_img": img[..., img_y_start:img_y_end, img_x_start:img_x_end],
+            "background_img_x_start": x_start,
+            "background_img_x_end": x_end,
+            "background_img_y_start": y_start,
+            "background_img_y_end": y_end,
+            "img_x_start": img_x_start,
+            "img_x_end": img_x_end,
+            "img_y_start": img_y_start,
+            "img_y_end": img_y_end,
+        }
 
 
-    # Clone the background image to avoid modifying the original
+def composite_cropped_imgs(background_img, cropped_background, cropped_foreground, method, x_start, x_end, y_start, y_end):
     background_img = background_img.clone()
-
-    # Take the minimum pixel value between the images in the overlapping area
-    background_img[..., y_start:y_end, x_start:x_end] = method(background_img[..., y_start:y_end, x_start:x_end],
-                                                               img[..., img_y_start:img_y_end,
-                                                               img_x_start:img_x_end])
-
+    background_img[..., y_start:y_end, x_start:x_end] = method(cropped_background, cropped_foreground)
     return background_img
+
+def composite_the_images_torch(background_img, img, bckg_x, bckg_y, method: Callable = torch.min):
+    composite_dict = prep_composite_images(background_img, img, bckg_x, bckg_y)
+    return composite_cropped_imgs(background_img,
+                                  composite_dict["cropped_background_img"],
+                                  composite_dict["cropped_img"],
+                                  method,
+                                  composite_dict["background_img_x_start"],
+                                  composite_dict["background_img_x_end"],
+                                  composite_dict["background_img_y_start"],
+                                  composite_dict["background_img_y_end"])
 
 class CompositerTorch:
     def __init__(self, method: Callable = torch.min):
