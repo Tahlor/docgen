@@ -1,3 +1,4 @@
+from itertools import chain
 import warnings
 import torch
 import numpy as np
@@ -39,6 +40,10 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
             max_uniques:
             max_length_override:
             label_name_pattern:
+
+            : if ignore index noted in meta data,
+                use the ignore index to mask out the other channels, using value of -1
+                assumed last channel is the ignore channel
         """
         super().__init__(
             max_uniques=max_uniques,
@@ -67,12 +72,19 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
         elif isinstance(self.transform_list, list):
             self.transform_list = Compose(self.transform_list)
 
-    def process_img_file_list(self, img_dir, label_folder):
+    def get_all_files_from_folder_list(self, folders, extension="png"):
+        folders = [folders] if isinstance(folders, (str, Path)) else folders
+        imgs = list(chain.from_iterable(Path(dir).glob(f"*input*{extension}") for dir in folders))
+        return imgs
+
+    def process_img_file_list_old(self, img_dir, label_folder):
         """
         Safer to parse the image file to get the index, create a dictionary
         """
-        label_folder = Path(label_folder)
-        imgs = Path(img_dir).glob("*input*.png")
+        labels = imgs = self.get_all_files_from_folder_list(img_dir)
+
+        if img_dir != label_folder:
+            labels = self.get_all_files_from_folder_list(label_folder)
 
         path_database = []
         self.file_id_to_idx = {}
@@ -82,7 +94,6 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
             match = re.search(r"(\d+)", img_path.stem)
             if match:
                 id = match.group(1)
-
                 label_name_pattern = self.label_name_pattern.format(id)
                 label_path = label_folder / label_name_pattern
                 path_database.append({"img_path": img_path,
@@ -92,6 +103,57 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                     break
             else:
                 logger.warning(f"No id found in filename {img_path}")
+
+        self.length = len(path_database)
+        return path_database
+
+    def process_img_file_list(self, img_dirs, label_dirs, strategies="regex", regexes=None):
+        """
+        img_dirs: List of image directories.
+        label_dirs: List of label directories.
+        strategies: List of strategies ('regex' or 'direct') for each directory.
+        regexes: Optional list of regex patterns for each directory if using 'regex' strategy.
+        """
+        if regexes is None:
+            regexes = [r"(\d+)"] * len(img_dirs)  # Default regex pattern
+        elif isinstance(regexes, str):
+            regexes = [regexes] * len(img_dirs)
+        if isinstance(strategies, str):
+            strategies = [strategies] * len(img_dirs)
+
+        assert len(img_dirs) == len(label_dirs) == len(strategies) == len(
+            regexes), "All lists must have the same length"
+
+        path_database = []
+        self.file_id_to_idx = {}
+
+        for img_dir, label_dir, strategy, regex in zip(img_dirs, label_dirs, strategies, regexes):
+            imgs = self.get_all_files_from_folder_list(img_dir)
+
+            for img_path in imgs:
+                match = None
+                if strategy == 'regex':
+                    # Extract the id from the filename using regex.
+                    match = re.search(regex, img_path.stem)
+
+                elif strategy == 'direct':
+                    # Direct matching of filename in label directory.
+                    label_path = Path(label_dir) / img_path.name
+                    if label_path.exists():
+                        match = True  # Setting match to True to indicate a direct match.
+
+                if match:
+                    id = match.group(1) if strategy == 'regex' else None
+                    label_name_pattern = self.label_name_pattern.format(id) if id else img_path.name
+                    label_path = Path(label_dir) / label_name_pattern
+
+                    path_database.append({"img_path": img_path, "label_path": label_path})
+                    self.file_id_to_idx[id or img_path.stem] = len(path_database) - 1
+
+                    if self.max_length_override and len(path_database) >= self.max_length_override:
+                        break
+                else:
+                    logger.warning(f"No match found for file {img_path}")
 
         self.length = len(path_database)
         return path_database
@@ -115,11 +177,21 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                 if self.paired_mask_transform_obj is not None and self.paired_mask_transform_obj:
                     img, label = self.paired_mask_transform_obj(img, label)
 
+                mask_with_ignore = None
+                if label_dict["metadata"]["HasIgnoreChannel"]:
+                    mask_with_ignore = label[:-1].clone()
+                    ignore_mask = (label[-1] == 1)  # Create the boolean mask from the last channel
+                    mask_expanded = ignore_mask.unsqueeze(0).expand_as(
+                        mask_with_ignore[:-1])  # Expand the mask to match dimensions
+                    mask_with_ignore[:-1][mask_expanded] = -1  # Replace with -1 where the mask is True
+
                 return_dict = {'image': img,
                         'mask': label,
+                        'mask_with_ignore': mask_with_ignore,
                         "name": img_path.stem,
                         "ignore_channel_idx": label.shape[0]-1 if label_dict["metadata"]["HasIgnoreChannel"] else None
                         }
+                
                 if "label_active_channels" in label_dict:
                     return_dict["label_active_channels"] = label_dict["label_active_channels"]
 
@@ -142,26 +214,21 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
         return self._get(idx)
 
     @staticmethod
-    def collate_fn(batch, tensor_keys=["image", "mask"]):
+    def collate_fn(batch, tensor_keys=["image", "mask", "mask_with_ignore"]):
         keys = batch[0].keys()
         collated_batch = {}
 
         for key in keys:
             if tensor_keys and key in tensor_keys:
-                collated_batch[key] = torch.stack([item[key] for item in batch], dim=0)
+                if batch[0].get(key) is not None:
+                    collated_batch[key] = torch.stack([item[key] for item in batch], dim=0)
             else:
                 collated_batch[key] = [item[key] for item in batch]
 
         collated_batch["active_channel_mask"] = PairedImgLabelImageFolderDataset.generate_active_channel_mask(collated_batch["mask"],
-                                                                                                              collated_batch["label_active_channels"])
+                                                                                                 collated_batch["label_active_channels"])
         if collated_batch["ignore_channel_idx"] is not None:
-            # if False:
-            #     mask = np.ones_like(collated_batch["mask"], dtype=bool)
-            #     mask[:, collated_batch["ignore_channel_idx"]] = 1
-            # else:
             collated_batch["mask"][:,:-1] *= collated_batch["active_channel_mask"][:,:-1]
-
-
         else:
             collated_batch["mask"] *= collated_batch["active_channel_mask"]
         return collated_batch
