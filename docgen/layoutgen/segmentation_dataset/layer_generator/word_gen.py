@@ -10,6 +10,9 @@ from hwgen.data.saved_handwriting_dataset import SavedHandwritingRandomAuthor
 from textgen.rendertext.render_word import RenderWordFont, RenderImageTextPair, RenderWordConsistentFont
 from docgen.bbox import BBox
 from docgen.layoutgen.segmentation_dataset.layer_generator.gen import Gen
+from textgen.number_generator import RandomNumberGenerator
+from textgen.combined_generator import CombinedGenerator
+from textgen.fonts.font_sampler import FontSampler
 
 # given a image size:
     # for i in random:
@@ -97,18 +100,46 @@ class PrintedTextGenerator(BoxFillerGen):
     def __init__(self, img_size=(512,512),
                  font_size_rng=(8, 50),
                  word_count_rng=(10, 20),
-                 saved_fonts_folder=None, **kwargs):
+                 saved_fonts_folder=None,
+                 range_before_font_change=(1,10),
+                 probability_of_number=.1,
+                 **kwargs):
         super().__init__(img_size, font_size_rng=font_size_rng, word_count_rng=word_count_rng, **kwargs)
         unigrams = get_resource(package_name="textgen", resource_relative_path="/datasets/unigram_freq.csv")
-        clear_fonts_path = Path(saved_fonts_folder) / "clear_fonts.csv"
-
         words_dataset = Unigrams(csv_file=unigrams)
+        number_generator = RandomNumberGenerator()
 
-        self.renderer = RenderWordFont(format="numpy",
+        if saved_fonts_folder is not None:
+            saved_fonts_folder = Path(saved_fonts_folder)
+            clear_fonts_path = Path(saved_fonts_folder) / "clear_fonts.csv"
+            font_characteristics_csv_file = saved_fonts_folder / "ALL_fonts.csv"
+
+            font_class_files = [
+                saved_fonts_folder / "FONT_SAMPLES/typewriter_fonts.pkl",
+                saved_fonts_folder / "FONT_SAMPLES/APPROVED_fonts.pkl",
+            ]
+            font_sampler = FontSampler(saved_fonts_folder / "fonts",
+                                       font_class_files,
+                                       weights=[10, 90],
+                                       csv_file=font_characteristics_csv_file)
+            font_sampler.sample()
+        else:
+            font_sampler = clear_fonts_path = None
+
+        combined_gen = CombinedGenerator(
+            generators=[words_dataset, number_generator],
+            probabilities=[1-probability_of_number, probability_of_number]
+        )
+
+        self.renderer = RenderWordConsistentFont(format="numpy",
                                        font_folder=saved_fonts_folder,
-                                       clear_font_csv_path=clear_fonts_path)
+                                       clear_font_csv_path=clear_fonts_path,
+                                       range_before_font_change=range_before_font_change,
+                                       probability_of_all_caps_override=0.2,
+                                        font_sampler=font_sampler,
+                        )
 
-        self.render_text_pair = RenderImageTextPair(self.renderer, words_dataset, renderer_text_key="raw_text")
+        self.render_text_pair = RenderImageTextPair(self.renderer, combined_gen, renderer_text_key="raw_text")
         self.filler = BoxFiller(img_text_word_dict=self.render_text_pair,
                                 random_word_idx=True)
 

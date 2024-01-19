@@ -1,41 +1,23 @@
-# My Dataset Configuration v4.2
-v4.4:
-  - same font multiple times in a row
-  - grayscale font colors
+# My Dataset Configuration v5 - just text / handwriting / backgrounds
 
-v4.3:
-  - improve the ignore index
-  - even less block overlap (don't let IAM/text blocks overlap)
-
-v4.2:
-  - change where ignore index is saved
-
-v4.1:
-  - more standardized sizes
-  - fewer paper clip backgrounds, more books
-  - IGNORE INDEX
-  - more cleaned handwriting (not just 0)
-
-v4.0:
-  - cleaned handwriting
-  - less block overlap between text and writing
-
+v5.0:
+  - just backgrounds, handwriting, printed text, form elements, limited PDF text and DALLE handwriting
+  - MANY more fonts
 
 workers: 4
 final_size: 448
-dataset_length: 100000
+dataset_length: 20000
 drive_mappings:
   "B:": "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle"
-output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v4.4_100k"
+output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v5.1_100k"
 overwrite: false
 output_img_size: 448
 composite_function: composite_the_images_torch
 layout_sampler_kwargs:
-  default_min_layers: 1
+  default_min_layers: 2
   default_max_layers: 5
   number_of_layer_weights:
-    - .01 # 1 layer
-    - .3
+    - .1
     - .3
     - .3
     - .2
@@ -133,7 +115,7 @@ datasets:
         - "B:/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frameG:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frameG:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frame/light"
     layer_contents: noise
     layer_position: 0 # background layer
-    sample_weight: 4
+    sample_weight: 5
     percent_overlap: 1
     mask:
       type: GrayscaleMask
@@ -164,7 +146,7 @@ datasets:
         - "G:/s3/forms/PDF/OPM/text/images"
         - "G:/s3/forms/PDF/SSA/text/images"
     layer_contents: text
-    sample_weight: 1
+    sample_weight: 0
     transforms:
       - ToNumpy
       - RandomChoice:
@@ -204,7 +186,7 @@ datasets:
         - ConditionalContrast
         #- Lighten
         - Blur
-        - ColorJitter
+        #- ColorJitter
         - RandomRotate
         - IdentityTransform
         - IdentityTransform
@@ -239,10 +221,10 @@ datasets:
         - B:/document_backgrounds/handwriting/enhanced/4
         - B:/document_backgrounds/handwriting/enhanced/5
       recursive: true
-      file_name_filter: "[2-9][0-9]_"
+      #file_name_filter: "[2-9][0-9]_"
 
     layer_contents: handwriting
-    sample_weight: .5
+    sample_weight: 0
     filters:
       - RejectIfTooManyPixelsAreBelowThreshold:
           threshold: 0.8
@@ -285,7 +267,7 @@ datasets:
         - "G:/data/standard_hwr/IAM_OFFLINE/lines"
       recursive: true
     layer_contents: handwriting
-    sample_weight: 2
+    sample_weight: 0
     filters:
       - RejectIfTooManyPixelsAreBelowThreshold:
           threshold: 0.8
@@ -347,7 +329,7 @@ datasets:
     base_dataset_kwargs:
       img_dir: "G:/s3/synthetic_data/resources/images"
     layer_contents: seals_and_images
-    sample_weight: .2
+    sample_weight: 0
     mask:
       type: mask
       kwargs:
@@ -377,7 +359,7 @@ datasets:
     base_dataset_kwargs:
       img_dir: "G:/s3/synthetic_data/resources/seals"
     layer_contents: seals_and_images # seals, text
-    sample_weight: .5
+    sample_weight: 0
     transforms:
       - ToNumpy
       - RandomChoice:

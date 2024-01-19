@@ -520,7 +520,7 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
                 mask = mask_for_current_dataset[slice_y, slice_x].bool()
                 ignore_index[slice_y, slice_x] = torch.max(ignore_index[slice_y, slice_x],
                                                        mask & (torch.mean(composite_image[:, slice_y, slice_x], dim=0)
-                                                               > .97 * torch.mean(composite_image_before_new_layer[:, slice_y, slice_x], dim=0))
+                                                               > .93 * torch.mean(composite_image_before_new_layer[:, slice_y, slice_x], dim=0))
                                                        )
                 """
                     ignore_index[slice_y, slice_x] = torch.max(ignore_index[slice_y, slice_x],

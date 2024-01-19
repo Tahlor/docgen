@@ -21,11 +21,14 @@ from docgen.transforms.transforms_torch import *
 from docgen.layoutgen.segmentation_dataset.layer_generator.preprinted_form_gen import PreprintedFormElementGenerator
 from typing import List, Union, Dict, Any
 from docdegrade.degradation_objects import RandomDistortions, RuledSurfaceDistortions, Blur, Lighten, Blobs, \
-    BackgroundMultiscaleNoise, BackgroundFibrous, Contrast, ConditionalContrast, ColorJitter, RandomRotate
+    BackgroundMultiscaleNoise, BackgroundFibrous, Contrast, ConditionalContrast, ColorJitter, RandomRotate, \
+    BlurThreshold
 from easydict import EasyDict as edict
 from docgen.image_composition.utils import seamless_composite, composite_the_images_torch, CompositerTorch
 from docgen.datasets.utils.dataset_filters import RejectIfEmpty, RejectIfTooManyPixelsAreBelowThreshold
 from docgen.layoutgen.segmentation_dataset.masks import Mask, NaiveMask, SoftMask, GrayscaleMask
+from hwgen.data.utils import show,display
+
 def easydict_representer(dumper, data):
     return dumper.represent_dict(data.items())
 
@@ -74,6 +77,7 @@ class TransformType(Enum):
     RANDOMROTATE = RandomRotate
     RANDOMFLIPORMIRROR = RandomFlipOrMirror
     IDENTITYTRANSFORM = IdentityTransform
+    BLURTHRESHOLD = BlurThreshold
 
 class DatasetType(Enum):
     HWGENERATOR = HWGenerator
@@ -231,7 +235,7 @@ def create_aggregate_dataset(config):
         generators.append(dataset)
 
     layout_sampler = LayerSampler(generators,
-                                  [d.sample_weight if hasattr(d, "sample_weight") and d.sample_weight else 1 for d in generators],
+                                  [d.sample_weight if hasattr(d, "sample_weight") and not d.sample_weight is None else 1 for d in generators],
                                     **(config.get("layout_sampler_kwargs") or {}),
                                   )
     after_transforms = config.get("transforms_after_compositing") or []
