@@ -17,7 +17,7 @@ datasets:
     type: HWGenerator
     layer_contents: handwriting
     base_dataset_kwargs:
-        img_dir: "C:/Users/tarchibald/Anaconda3/envs/docgen_windows/hwgen/resources/generated"
+        img_dirs: "C:/Users/tarchibald/Anaconda3/envs/docgen_windows/hwgen/resources/generated"
     sample_weight: 1
     transforms:
       - ToNumpy
@@ -35,7 +35,7 @@ datasets:
   - name: background
     type: NaiveImageFolder
     base_dataset_kwargs:
-      img_dir: "B:/document_backgrounds/paper_only"
+      img_dirs: "B:/document_backgrounds/paper_only"
     layer_contents: noise
     layer_position: 0 # background layer
     sample_weight: 1

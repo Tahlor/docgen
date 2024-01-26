@@ -44,7 +44,7 @@ datasets:
     type: HWGenerator
     layer_contents: handwriting
     base_dataset_kwargs:
-        img_dir:
+        img_dirs:
           - "C:/Users/tarchibald/Anaconda3/envs/docgen_windows/hwgen/resources/generated"
     sample_weight: 1
     transforms:
@@ -71,7 +71,7 @@ datasets:
     type: NaiveImageFolder
     base_dataset_kwargs:
       # "B:/document_backgrounds/paper_only"
-      img_dir:
+      img_dirs:
         - "B:/document_backgrounds/paper_only/old paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting"
         - "B:/document_backgrounds/paper_only/paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting"
         - "B:/document_backgrounds/paper_only/white paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting"
@@ -104,7 +104,7 @@ datasets:
   - name: pdf_text
     type: NaiveImageFolder
     base_dataset_kwargs:
-      img_dir:
+      img_dirs:
         - "G:/s3/forms/PDF/OPM/text/images"
         - "G:/s3/forms/PDF/SSA/text/images"
     layer_contents: text
@@ -127,7 +127,7 @@ datasets:
   - name: pdf_form_elements
     type: NaiveImageFolder
     base_dataset_kwargs:
-      img_dir:
+      img_dirs:
         - "G:/s3/forms/PDF/IRS/other_elements/images"
         - "G:/s3/forms/PDF/GDC/other_elements/images"
         - "G:/s3/forms/PDF/OPM/other_elements/images"
@@ -161,7 +161,7 @@ datasets:
   - name: handwriting_images_dalle
     type: NaiveImageFolder
     base_dataset_kwargs:
-      img_dir:
+      img_dirs:
         #- "G:/s3/synthetic_data/FRENCH_BMD/v2.4.3_10k_french_with_fonts"
         #- "G:/s3/synthetic_data/FRENCH_BMD/FRENCH_BMD_LAYOUTv2.1.0/1000"
         - "B:/document_backgrounds/handwriting"
@@ -200,7 +200,7 @@ datasets:
   - name: handwriting_images_iam
     type: NaiveImageFolder
     base_dataset_kwargs:
-      img_dir:
+      img_dirs:
         - "G:/data/standard_hwr/IAM_OFFLINE/lines"
       recursive: true
     layer_contents: handwriting

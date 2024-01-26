@@ -22,7 +22,7 @@ from docgen.layoutgen.segmentation_dataset.layer_generator.preprinted_form_gen i
 from typing import List, Union, Dict, Any
 from docdegrade.degradation_objects import RandomDistortions, RuledSurfaceDistortions, Blur, Lighten, Blobs, \
     BackgroundMultiscaleNoise, BackgroundFibrous, Contrast, ConditionalContrast, ColorJitter, RandomRotate, \
-    BlurThreshold
+    BlurThreshold, MoreContrast, CropToDarkness
 from easydict import EasyDict as edict
 from docgen.image_composition.utils import seamless_composite, composite_the_images_torch, CompositerTorch
 from docgen.datasets.utils.dataset_filters import RejectIfEmpty, RejectIfTooManyPixelsAreBelowThreshold
@@ -78,6 +78,8 @@ class TransformType(Enum):
     RANDOMFLIPORMIRROR = RandomFlipOrMirror
     IDENTITYTRANSFORM = IdentityTransform
     BLURTHRESHOLD = BlurThreshold
+    MORECONTRAST = MoreContrast
+    CROPTODARKNESS = CropToDarkness
 
 class DatasetType(Enum):
     HWGENERATOR = HWGenerator
@@ -255,6 +257,7 @@ def create_aggregate_dataset(config):
                                                              background_bounding_boxes_pkl_path=config.get("background_bounding_boxes_pkl_path", None),
                                                              use_ignore_index=config.get("use_ignore_index", True),
                                                              )
+
     # save out 1) the config used to create this dataset and 2) aggregate_dataset.config
     config.combined_channel_mapping = aggregate_dataset.config
     config.output_channel_content_names = aggregate_dataset.output_channel_content_names

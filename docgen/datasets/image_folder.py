@@ -21,7 +21,7 @@ from docgen.datasets.generic_dataset import GenericDataset
 # TODO: Fix / standardize max_length and max_length_override
 
 class NaiveImageFolder(GenericDataset):
-    def __init__(self, img_dir,
+    def __init__(self, img_dirs,
                  transform_list=None,
                  max_length=None,
                  color_scheme="RGB",
@@ -42,7 +42,7 @@ class NaiveImageFolder(GenericDataset):
         - ToTensorIfNeeded() # converts to tensor if not already a tensor
 
         Args:
-            img_dir:
+            img_dirs:
             transform_list:
             max_length:
             color_scheme:
@@ -73,9 +73,9 @@ class NaiveImageFolder(GenericDataset):
 
         self.shuffle = shuffle
         self.require_non_empty_result = require_non_empty_result
-        self.img_dirs = img_dir
-        if not isinstance(img_dir, (tuple, list)):
-            self.img_dirs = [img_dir]
+        self.img_dirs = img_dirs
+        if not isinstance(img_dirs, (tuple, list)):
+            self.img_dirs = [img_dirs]
 
         self.imgs = []
         extensions = set([ext.lower() for ext in extensions])
@@ -103,7 +103,7 @@ class NaiveImageFolder(GenericDataset):
         self.color_scheme = color_scheme
 
         if len(self.imgs) == 0:
-            raise ValueError(f"No images found in {img_dir}")
+            raise ValueError(f"No images found in {img_dirs}")
 
         self.max_length = max_length if max_length is not None else len(self.imgs)
         self.current_img_idx = 0
@@ -176,7 +176,7 @@ class NaiveImageFolder(GenericDataset):
 
 
 class NaiveImageFolderPatch(NaiveImageFolder):
-    def __init__(self, img_dir,
+    def __init__(self, img_dirs,
                  patch_size: Tuple[int, int],
                  transform_list=None,
                  max_length=None,
@@ -189,7 +189,7 @@ class NaiveImageFolderPatch(NaiveImageFolder):
         """ Safer as an iterator, might work as a indexable dataset, but length changes dynamically
 
         Args:
-            img_dir:
+            img_dirs:
             patch_size:
             transform_list:
             max_length:
@@ -199,7 +199,7 @@ class NaiveImageFolderPatch(NaiveImageFolder):
             **kwargs:
         """
         super().__init__(
-            img_dir=img_dir,
+            img_dirs=img_dirs,
             transform_list=[ResizeAndPad( longest_side=longest_side, pad_to_be_divisible_by=pad_to_be_divisible_by)],
             color_scheme=color_scheme,
             max_uniques=max_uniques,

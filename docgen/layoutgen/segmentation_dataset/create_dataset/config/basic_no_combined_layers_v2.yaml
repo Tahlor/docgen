@@ -52,7 +52,7 @@ datasets:
     type: HWGenerator
     layer_contents: handwriting
     base_dataset_kwargs:
-        img_dir: "C:/Users/tarchibald/Anaconda3/envs/docgen_windows/hwgen/resources/generated"
+        img_dirs: "C:/Users/tarchibald/Anaconda3/envs/docgen_windows/hwgen/resources/generated"
     sample_weight: 1
     transforms:
       - ToNumpy
@@ -70,7 +70,7 @@ datasets:
   - name: images
     type: NaiveImageFolder
     base_dataset_kwargs:
-      img_dir: "G:/s3/synthetic_data/resources/images"
+      img_dirs: "G:/s3/synthetic_data/resources/images"
     layer_contents:
       - image
       - text
@@ -91,7 +91,7 @@ datasets:
   - name: background
     type: NaiveImageFolder
     base_dataset_kwargs:
-      img_dir: "B:/document_backgrounds/paper_only"
+      img_dirs: "B:/document_backgrounds/paper_only"
     layer_contents: noise
     layer_position: 0 # background layer
     sample_weight: 1
@@ -114,7 +114,7 @@ datasets:
   - name: seals
     type: NaiveImageFolder
     base_dataset_kwargs:
-      img_dir: "G:/s3/synthetic_data/resources/seals"
+      img_dirs: "G:/s3/synthetic_data/resources/seals"
     layer_contents: seals
     sample_weight: 1
     transforms:
@@ -129,7 +129,7 @@ datasets:
   - name: pdf_text
     type: NaiveImageFolder
     base_dataset_kwargs:
-      img_dir:
+      img_dirs:
         - "G:/s3/forms/PDF/OPM/text/images"
         - "G:/s3/forms/PDF/SSA/text/images"
     layer_contents: text
@@ -149,7 +149,7 @@ datasets:
   - name: pdf_form_elements
     type: NaiveImageFolder
     base_dataset_kwargs:
-      img_dir:
+      img_dirs:
         - "G:/s3/forms/PDF/IRS/other_elements/images"
         - "G:/s3/forms/PDF/GDC/other_elements/images"
         - "G:/s3/forms/PDF/OPM/other_elements/images"
@@ -171,7 +171,7 @@ datasets:
 #  - name: preprinted_text_and_forms
 #    type: NaiveImageFolder
 #    base_dataset_kwargs:
-#      img_dir: "G:/s3/forms/HTSNet_scanned_documents"
+#      img_dirs: "G:/s3/forms/HTSNet_scanned_documents"
 #    layer_contents:
 #      - text
 #      - form_elements

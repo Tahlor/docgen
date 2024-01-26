@@ -1,41 +1,26 @@
-# My Dataset Configuration v4.2
-v4.4:
-  - same font multiple times in a row
-  - grayscale font colors
+# My Dataset Configuration v5 - just text / handwriting / backgrounds
 
-v4.3:
-  - improve the ignore index
-  - even less block overlap (don't let IAM/text blocks overlap)
+v6.1:
+  - more handwriting datasets
+  - more colors
 
-v4.2:
-  - change where ignore index is saved
-
-v4.1:
-  - more standardized sizes
-  - fewer paper clip backgrounds, more books
-  - IGNORE INDEX
-  - more cleaned handwriting (not just 0)
-
-v4.0:
-  - cleaned handwriting
-  - less block overlap between text and writing
-
+v6.0:
+  - add typewriter class
 
 workers: 4
 final_size: 448
-dataset_length: 100000
+dataset_length: 20000
 drive_mappings:
   "B:": "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle"
-output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v4.4_100k"
+output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v6.0_20k"
 overwrite: false
 output_img_size: 448
 composite_function: composite_the_images_torch
 layout_sampler_kwargs:
-  default_min_layers: 1
+  default_min_layers: 2
   default_max_layers: 5
   number_of_layer_weights:
-    - .01 # 1 layer
-    - .3
+    - .1
     - .3
     - .3
     - .2
@@ -46,18 +31,21 @@ datasets:
     layer_contents: "text"
     base_dataset_kwargs:
       saved_fonts_folder: "G:/s3/synthetic_data/resources/fonts"
-      font_size_rng: [ 8, 40 ]
+      font_size_rng: [ 8, 50 ]
       word_count_rng: [ 10, 20 ]
+      font_class_weights: [ 20, 40 ]
+      font_class_files:
+        - "G:/s3/synthetic_data/resources/fonts/FONT_SAMPLES/italic_fonts.pkl"
+        - "G:/s3/synthetic_data/resources/fonts/FONT_SAMPLES/APPROVED_fonts.pkl"
     sample_weight: 5
     transforms:
       - ToNumpy
       - RandomChoice:
-        #- ColorJitter
-        - RandomDistortions
-        - RuledSurfaceDistortions
+        - ColorJitter
+        #- RandomDistortions
+        #- RuledSurfaceDistortions
         - Blur
-        - BlurThreshold
-        - IdentityTransform
+        #- BlurThreshold
         - IdentityTransform
         - IdentityTransform
         - IdentityTransform
@@ -66,8 +54,33 @@ datasets:
         #- ConditionalContrast
       - ToTensor
       - RandomResize:
-          min_scale: .7
-          max_scale: 2
+          min_scale: .8
+          max_scale: 1.5
+
+  - name: RenderedFonts
+    type: PrintedTextGenerator
+    layer_contents: "typewriter"
+    base_dataset_kwargs:
+      saved_fonts_folder: "G:/s3/synthetic_data/resources/fonts"
+      font_size_rng: [ 8, 30 ]
+      word_count_rng: [ 10, 20 ]
+      font_class_weights: [ 100 ]
+      font_class_files:
+        - "G:/s3/synthetic_data/resources/fonts/FONT_SAMPLES/typewriter_fonts.pkl"
+    sample_weight: 5
+    transforms:
+      - ToNumpy
+      - RandomChoice:
+        - Blur
+        - ColorJitter
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+      - ToTensor
+      - RandomResize:
+          min_scale: .8
+          max_scale: 1.5
 
   - name: handwriting
     type: HWGenerator
@@ -80,21 +93,21 @@ datasets:
       - ToNumpy
       - RandomChoice:
         #- ColorJitter
-        - RandomDistortions
-        - RuledSurfaceDistortions
+        #- RandomDistortions
+        #- RuledSurfaceDistortions
         - IdentityTransform
         - IdentityTransform
         - IdentityTransform
         - IdentityTransform
         - IdentityTransform
         - IdentityTransform
-
-
-        #- Blur
+        - ColorJitter
+        - Blur
         #- ConditionalContrast
+      - MoreContrast
       - ToTensor
       - RandomResize:
-          min_scale: .8
+          min_scale: 1
           max_scale: 1.5
     composite_function:
         type: CompositerTorch
@@ -133,7 +146,7 @@ datasets:
         - "B:/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frameG:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frameG:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frame/light"
     layer_contents: noise
     layer_position: 0 # background layer
-    sample_weight: 4
+    sample_weight: 8
     percent_overlap: 1
     mask:
       type: GrayscaleMask
@@ -168,10 +181,10 @@ datasets:
     transforms:
       - ToNumpy
       - RandomChoice:
-        - RandomDistortions
-        - RuledSurfaceDistortions
+        #- RandomDistortions
+        #- RuledSurfaceDistortions
         - ConditionalContrast
-        - Blur
+        #- Blur
         - BlurThreshold
         - IdentityTransform
         - IdentityTransform
@@ -179,6 +192,7 @@ datasets:
         - IdentityTransform
         - IdentityTransform
         - IdentityTransform
+        - ColorJitter
       - ToTensor
       - RandomResize:
           min_scale: .5
@@ -204,7 +218,7 @@ datasets:
         - ConditionalContrast
         #- Lighten
         - Blur
-        - ColorJitter
+        #- ColorJitter
         - RandomRotate
         - IdentityTransform
         - IdentityTransform
@@ -212,6 +226,7 @@ datasets:
         - IdentityTransform
         - IdentityTransform
         - IdentityTransform
+        - ColorJitter
 
       - ToTensor
       - RandomResize:
@@ -226,7 +241,7 @@ datasets:
     filters:
       - RejectIfTooManyPixelsAreBelowThreshold:
           threshold: 0.9
-          max_percent_of_pixels_allowed_below_threshold: 0.1
+          max_percent_of_pixels_allowed_below_threshold: 0.15
 
   - name: handwriting_images_dalle
     type: NaiveImageFolder
@@ -239,51 +254,8 @@ datasets:
         - B:/document_backgrounds/handwriting/enhanced/4
         - B:/document_backgrounds/handwriting/enhanced/5
       recursive: true
-      file_name_filter: "[2-9][0-9]_"
+      #file_name_filter: "[2-9][0-9]_"
 
-    layer_contents: handwriting
-    sample_weight: .5
-    filters:
-      - RejectIfTooManyPixelsAreBelowThreshold:
-          threshold: 0.8
-          max_percent_of_pixels_allowed_below_threshold: 0.4
-    mask:
-      type: SoftMask
-      kwargs:
-        threshold: .6
-
-    transforms:
-      - ToNumpy
-      - RandomChoice:
-        #- ColorJitter
-        - RandomRotate
-        #- RandomDistortions
-        - RuledSurfaceDistortions
-        #- Blur
-        #- ConditionalContrast
-        - IdentityTransform
-        - IdentityTransform
-        - IdentityTransform
-        - IdentityTransform
-        - IdentityTransform
-        - IdentityTransform
-
-      - ToTensor
-      - RandomResize:
-          min_scale: .5
-          max_scale: 1.3
-#      - CropBorder:
-#            border_size_rng: 200
-    composite_function:
-        type: CompositerTorch
-        method: torchmul
-
-  - name: handwriting_images_iam
-    type: NaiveImageFolder
-    base_dataset_kwargs:
-      img_dirs:
-        - "G:/data/standard_hwr/IAM_OFFLINE/lines"
-      recursive: true
     layer_contents: handwriting
     sample_weight: 2
     filters:
@@ -298,17 +270,64 @@ datasets:
     transforms:
       - ToNumpy
       - RandomChoice:
-        #- ColorJitter
+        - ColorJitter
+        - RandomRotate
         #- RandomDistortions
-        - RuledSurfaceDistortions
-        - IdentityTransform
-        - IdentityTransform
-        - IdentityTransform
-        #- Blur
+        #- RuledSurfaceDistortions
+        - Blur
         #- ConditionalContrast
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+
       - ToTensor
       - RandomResize:
-          min_scale: .3
+          min_scale: .8
+          max_scale: 1.3
+#      - CropBorder:
+#            border_size_rng: 200
+    composite_function:
+        type: CompositerTorch
+        method: torchmul
+
+  - name: handwriting_images_iam
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      img_dirs:
+        - "G:/data/standard_hwr/IAM_OFFLINE/lines"
+        - "G:/data/standard_hwr/AllHandwritingImages/"
+      recursive: true
+    layer_contents: handwriting
+    sample_weight: 10
+    filters:
+      - RejectIfTooManyPixelsAreBelowThreshold:
+          threshold: 0.8
+          max_percent_of_pixels_allowed_below_threshold: 0.4
+    mask:
+      type: SoftMask
+      kwargs:
+        threshold: .6
+
+    transforms:
+      - ToNumpy
+      - CropToDarkness
+
+      - RandomChoice:
+        - ColorJitter
+        #- RandomDistortions
+        #- RuledSurfaceDistortions
+        - IdentityTransform
+        - IdentityTransform
+        - IdentityTransform
+        - Blur
+        #- ConditionalContrast
+      - MoreContrast
+      - ToTensor
+      - RandomResize:
+          min_scale: .9
           max_scale: 1.1
     composite_function:
         type: CompositerTorch
@@ -331,7 +350,7 @@ datasets:
           - IdentityTransform
           - IdentityTransform
           - IdentityTransform
-      #          - Blur
+#          - Blur
       - ToTensor
       - RandomResize:
           min_scale: .8
@@ -347,7 +366,7 @@ datasets:
     base_dataset_kwargs:
       img_dirs: "G:/s3/synthetic_data/resources/images"
     layer_contents: seals_and_images
-    sample_weight: .2
+    sample_weight: 0
     mask:
       type: mask
       kwargs:
@@ -377,7 +396,7 @@ datasets:
     base_dataset_kwargs:
       img_dirs: "G:/s3/synthetic_data/resources/seals"
     layer_contents: seals_and_images # seals, text
-    sample_weight: .5
+    sample_weight: 0
     transforms:
       - ToNumpy
       - RandomChoice:

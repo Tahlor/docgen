@@ -332,6 +332,7 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
             background_bounding_boxes_pkl_path (str): path to a pickle file containing bounding boxes for the background
                 The dict should be of the form {img_stem : bounding_box}
         """
+        self.how_much_darker = .8
         self.size = size
         self.subdatasets = sorted(subdatasets, key=lambda x: (x.layer_position, x.name))
         self.background_img_properties = background_img_properties
@@ -520,7 +521,7 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
                 mask = mask_for_current_dataset[slice_y, slice_x].bool()
                 ignore_index[slice_y, slice_x] = torch.max(ignore_index[slice_y, slice_x],
                                                        mask & (torch.mean(composite_image[:, slice_y, slice_x], dim=0)
-                                                               > .93 * torch.mean(composite_image_before_new_layer[:, slice_y, slice_x], dim=0))
+                                                               > self.how_much_darker * torch.mean(composite_image_before_new_layer[:, slice_y, slice_x], dim=0))
                                                        )
                 """
                     ignore_index[slice_y, slice_x] = torch.max(ignore_index[slice_y, slice_x],
@@ -619,7 +620,7 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
             return None
         elif self.background_bounding_boxes is not None:
             img_stem = Path(images_and_masks[0]["metadata"]["name"]).stem
-            return self.background_bounding_boxes[img_stem]
+            return self.background_bounding_boxes.get(img_stem, None)
         else:
             return None
 

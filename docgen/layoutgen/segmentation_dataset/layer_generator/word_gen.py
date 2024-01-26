@@ -103,6 +103,8 @@ class PrintedTextGenerator(BoxFillerGen):
                  saved_fonts_folder=None,
                  range_before_font_change=(1,10),
                  probability_of_number=.1,
+                 font_class_files=None,
+                 font_class_weights=None,
                  **kwargs):
         super().__init__(img_size, font_size_rng=font_size_rng, word_count_rng=word_count_rng, **kwargs)
         unigrams = get_resource(package_name="textgen", resource_relative_path="/datasets/unigram_freq.csv")
@@ -113,14 +115,9 @@ class PrintedTextGenerator(BoxFillerGen):
             saved_fonts_folder = Path(saved_fonts_folder)
             clear_fonts_path = Path(saved_fonts_folder) / "clear_fonts.csv"
             font_characteristics_csv_file = saved_fonts_folder / "ALL_fonts.csv"
-
-            font_class_files = [
-                saved_fonts_folder / "FONT_SAMPLES/typewriter_fonts.pkl",
-                saved_fonts_folder / "FONT_SAMPLES/APPROVED_fonts.pkl",
-            ]
             font_sampler = FontSampler(saved_fonts_folder / "fonts",
                                        font_class_files,
-                                       weights=[10, 90],
+                                       weights=font_class_weights,
                                        csv_file=font_characteristics_csv_file)
             font_sampler.sample()
         else:

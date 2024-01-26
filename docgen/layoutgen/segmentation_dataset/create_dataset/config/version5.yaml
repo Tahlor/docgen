@@ -1,15 +1,25 @@
 # My Dataset Configuration v5 - just text / handwriting / backgrounds
 
+v5.3:
+  - more italic font sampling
+  - deleted more wingding-like fonts
+
+v5.2:
+  - high contrast hw
+
+v5.1:
+  -
+
 v5.0:
   - just backgrounds, handwriting, printed text, form elements, limited PDF text and DALLE handwriting
   - MANY more fonts
 
 workers: 4
 final_size: 448
-dataset_length: 20000
+dataset_length: 50000
 drive_mappings:
   "B:": "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle"
-output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v5.1_100k"
+output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v5.3_100k"
 overwrite: false
 output_img_size: 448
 composite_function: composite_the_images_torch
@@ -35,10 +45,10 @@ datasets:
       - ToNumpy
       - RandomChoice:
         #- ColorJitter
-        - RandomDistortions
-        - RuledSurfaceDistortions
-        - Blur
-        - BlurThreshold
+        #- RandomDistortions
+        #- RuledSurfaceDistortions
+        #- Blur
+        #- BlurThreshold
         - IdentityTransform
         - IdentityTransform
         - IdentityTransform
@@ -48,35 +58,34 @@ datasets:
         #- ConditionalContrast
       - ToTensor
       - RandomResize:
-          min_scale: .7
+          min_scale: .8
           max_scale: 2
 
   - name: handwriting
     type: HWGenerator
     layer_contents: handwriting
     base_dataset_kwargs:
-        img_dir:
+        img_dirs:
           - "C:/Users/tarchibald/Anaconda3/envs/docgen_windows/hwgen/resources/generated"
     sample_weight: 5
     transforms:
       - ToNumpy
       - RandomChoice:
         #- ColorJitter
-        - RandomDistortions
-        - RuledSurfaceDistortions
+        #- RandomDistortions
+        #- RuledSurfaceDistortions
         - IdentityTransform
         - IdentityTransform
         - IdentityTransform
         - IdentityTransform
         - IdentityTransform
         - IdentityTransform
-
-
         #- Blur
         #- ConditionalContrast
+      - MoreContrast
       - ToTensor
       - RandomResize:
-          min_scale: .8
+          min_scale: 1
           max_scale: 1.5
     composite_function:
         type: CompositerTorch
@@ -90,7 +99,7 @@ datasets:
     type: NaiveImageFolder
     base_dataset_kwargs:
       # "B:/document_backgrounds/paper_only"
-      img_dir:
+      img_dirs:
 #        - "B:/document_backgrounds/paper_only/old paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting"
 #        - "B:/document_backgrounds/paper_only/paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting"
 #        - "B:/document_backgrounds/paper_only/white paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting"
@@ -115,7 +124,7 @@ datasets:
         - "B:/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frameG:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frameG:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frame/light"
     layer_contents: noise
     layer_position: 0 # background layer
-    sample_weight: 5
+    sample_weight: 8
     percent_overlap: 1
     mask:
       type: GrayscaleMask
@@ -142,18 +151,18 @@ datasets:
   - name: pdf_text
     type: NaiveImageFolder
     base_dataset_kwargs:
-      img_dir:
+      img_dirs:
         - "G:/s3/forms/PDF/OPM/text/images"
         - "G:/s3/forms/PDF/SSA/text/images"
     layer_contents: text
-    sample_weight: 0
+    sample_weight: 1
     transforms:
       - ToNumpy
       - RandomChoice:
-        - RandomDistortions
-        - RuledSurfaceDistortions
+        #- RandomDistortions
+        #- RuledSurfaceDistortions
         - ConditionalContrast
-        - Blur
+        #- Blur
         - BlurThreshold
         - IdentityTransform
         - IdentityTransform
@@ -170,7 +179,7 @@ datasets:
   - name: pdf_form_elements
     type: NaiveImageFolder
     base_dataset_kwargs:
-      img_dir:
+      img_dirs:
         - "G:/s3/forms/PDF/IRS/other_elements/images"
         - "G:/s3/forms/PDF/GDC/other_elements/images/good"
         - "G:/s3/forms/PDF/OPM/other_elements/images"
@@ -208,12 +217,12 @@ datasets:
     filters:
       - RejectIfTooManyPixelsAreBelowThreshold:
           threshold: 0.9
-          max_percent_of_pixels_allowed_below_threshold: 0.1
+          max_percent_of_pixels_allowed_below_threshold: 0.15
 
   - name: handwriting_images_dalle
     type: NaiveImageFolder
     base_dataset_kwargs:
-      img_dir:
+      img_dirs:
         #- "G:/s3/synthetic_data/FRENCH_BMD/v2.4.3_10k_french_with_fonts"
         #- "G:/s3/synthetic_data/FRENCH_BMD/FRENCH_BMD_LAYOUTv2.1.0/1000"
         #- "B:/document_backgrounds/handwriting"
@@ -224,7 +233,7 @@ datasets:
       #file_name_filter: "[2-9][0-9]_"
 
     layer_contents: handwriting
-    sample_weight: 0
+    sample_weight: 2
     filters:
       - RejectIfTooManyPixelsAreBelowThreshold:
           threshold: 0.8
@@ -240,7 +249,7 @@ datasets:
         #- ColorJitter
         - RandomRotate
         #- RandomDistortions
-        - RuledSurfaceDistortions
+        #- RuledSurfaceDistortions
         #- Blur
         #- ConditionalContrast
         - IdentityTransform
@@ -252,7 +261,7 @@ datasets:
 
       - ToTensor
       - RandomResize:
-          min_scale: .5
+          min_scale: .8
           max_scale: 1.3
 #      - CropBorder:
 #            border_size_rng: 200
@@ -263,11 +272,11 @@ datasets:
   - name: handwriting_images_iam
     type: NaiveImageFolder
     base_dataset_kwargs:
-      img_dir:
+      img_dirs:
         - "G:/data/standard_hwr/IAM_OFFLINE/lines"
       recursive: true
     layer_contents: handwriting
-    sample_weight: 0
+    sample_weight: 2
     filters:
       - RejectIfTooManyPixelsAreBelowThreshold:
           threshold: 0.8
@@ -282,15 +291,16 @@ datasets:
       - RandomChoice:
         #- ColorJitter
         #- RandomDistortions
-        - RuledSurfaceDistortions
+        #- RuledSurfaceDistortions
         - IdentityTransform
         - IdentityTransform
         - IdentityTransform
         #- Blur
         #- ConditionalContrast
+      - MoreContrast
       - ToTensor
       - RandomResize:
-          min_scale: .3
+          min_scale: .9
           max_scale: 1.1
     composite_function:
         type: CompositerTorch
@@ -313,7 +323,7 @@ datasets:
           - IdentityTransform
           - IdentityTransform
           - IdentityTransform
-      #          - Blur
+#          - Blur
       - ToTensor
       - RandomResize:
           min_scale: .8
@@ -327,7 +337,7 @@ datasets:
   - name: images
     type: NaiveImageFolder
     base_dataset_kwargs:
-      img_dir: "G:/s3/synthetic_data/resources/images"
+      img_dirs: "G:/s3/synthetic_data/resources/images"
     layer_contents: seals_and_images
     sample_weight: 0
     mask:
@@ -357,7 +367,7 @@ datasets:
   - name: seals
     type: NaiveImageFolder
     base_dataset_kwargs:
-      img_dir: "G:/s3/synthetic_data/resources/seals"
+      img_dirs: "G:/s3/synthetic_data/resources/seals"
     layer_contents: seals_and_images # seals, text
     sample_weight: 0
     transforms:

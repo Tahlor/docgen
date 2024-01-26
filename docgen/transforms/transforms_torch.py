@@ -138,7 +138,11 @@ def pad_divisible_by(image, pad_divisible_by=32):
     if h_pad == 0 and w_pad == 0:
         return image
     else:
-        padding = transforms.Pad((w_pad // 2, h_pad // 2, w_pad - w_pad // 2, h_pad - h_pad // 2), fill=1)
+        x1_pad = round(w_pad / 2)
+        y1_pad = round(h_pad / 2)
+        x2_pad = w_pad - x1_pad
+        y2_pad = h_pad - y1_pad
+        padding = transforms.Pad((x1_pad, y1_pad, x2_pad, y2_pad), fill=1)
         image = padding(image)
 
     return image
