@@ -23,6 +23,7 @@ from docgen.image_composition.utils import compute_paste_origin_from_overlap_aut
 from docgen.transforms.transforms_torch import ToTensorIfNeeded
 from docgen.layoutgen.segmentation_dataset.masks import Mask, NaiveMask
 to_pil = ToPILImage()
+
 """
 # compose random words, tables, and handwriting into a document
 # pre-create full-page different handwriting, tables, and words
@@ -331,8 +332,11 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
             layout_sampler (LayerSampler): a LayerSampler object that will be used to sample the layers
             background_bounding_boxes_pkl_path (str): path to a pickle file containing bounding boxes for the background
                 The dict should be of the form {img_stem : bounding_box}
+            how much darker should a class segment be relative to the background to demand detection
         """
-        self.how_much_darker = .8
+        self.how_much_darker = .95
+        self.manual_pixel_offset = 5/255.0
+
         self.size = size
         self.subdatasets = sorted(subdatasets, key=lambda x: (x.layer_position, x.name))
         self.background_img_properties = background_img_properties
@@ -366,6 +370,8 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
         self.channels_to_be_visualized = list(set(range(len(self.output_channel_content_names))) - set(self.naive_mask_channels))
         self.noise_channel_idx = self.output_channel_content_names.index(("noise",)) if ("noise",) in self.output_channel_content_names else None
         self.non_noise_indices = [i for i in range(len(self.output_channel_content_names)) if i != self.noise_channel_idx]
+
+
 
     def get_channel_idx(self, layer_name_tuple):
         return self.output_channel_content_names.index((layer_name_tuple,) if isinstance(layer_name_tuple, str) else tuple(layer_name_tuple))
@@ -519,15 +525,11 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
                 slice_y = slice(start_y, min(start_y + img_height, composite_height))
                 slice_x = slice(start_x, min(start_x + img_width, composite_width))
                 mask = mask_for_current_dataset[slice_y, slice_x].bool()
-                ignore_index[slice_y, slice_x] = torch.max(ignore_index[slice_y, slice_x],
-                                                       mask & (torch.mean(composite_image[:, slice_y, slice_x], dim=0)
-                                                               > self.how_much_darker * torch.mean(composite_image_before_new_layer[:, slice_y, slice_x], dim=0))
-                                                       )
-                """
-                    ignore_index[slice_y, slice_x] = torch.max(ignore_index[slice_y, slice_x],
-                    RuntimeError: The size of tensor a (61) must match the size of tensor b (90) at non-singleton dimension 1
 
-                """
+                mean_img_after = torch.mean(composite_image[:, slice_y, slice_x], dim=0)
+                adjusted_mean_threshold = self.how_much_darker * (torch.mean(composite_image_before_new_layer[:, slice_y, slice_x], dim=0) - self.manual_pixel_offset)
+                new_mask_after_pasting = mask & (mean_img_after > adjusted_mean_threshold)
+                ignore_index[slice_y, slice_x] = torch.max(ignore_index[slice_y, slice_x], new_mask_after_pasting)
 
             if valid_region_bbox and i==0: # CROP TO THE VALID PASTE REGION, KIND OF A HACK
                 # I THINK THIS ASSUMES START_X AND START_Y ARE NEGATIVE/0
@@ -695,16 +697,26 @@ class FlattenPILGenerators(torch.utils.data.Dataset):
     def __init__(self, datasets,
                  img_size=(512,512),
                  random_offset=True,
-                 color_scheme="L"):
+                 color_scheme="L",
+                 dataset_probabilities=None,):
         self.datasets = datasets
         self.random_offset = random_offset
         self.img_size = img_size
         self.color_scheme = color_scheme
+        self.dataset_probabilities = dataset_probabilities
 
+        # summarize probabilities of each dataset
+        if self.dataset_probabilities:
+            for i,d in enumerate(self.datasets):
+                print(f"{d} probability: {self.dataset_probabilities[i]}")
     def get(self):
         # composite all images
         img = Image.new(self.color_scheme, self.img_size, color='white')
-        for d in self.datasets:
+        for i, d in enumerate(self.datasets):
+            if self.dataset_probabilities and random.random() > self.dataset_probabilities[i]:
+                #print(f"Skipping {d}")
+                continue
+
             overlay_img = d.get()
             if self.random_offset:
                 #offset = more_random_offset(img.size[0],img.size[1], overlay_img.size[0],overlay_img.size[1])

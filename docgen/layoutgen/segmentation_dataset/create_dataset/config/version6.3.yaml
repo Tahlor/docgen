@@ -1,11 +1,10 @@
 # My Dataset Configuration v5 - just text / handwriting / backgrounds
 
 v6.3:
- - typerwriter degradation?
-
-v6.2b:
   - 50k-60k+
   - bigger fonts
+  - more color jitter
+  - noisier backgrounds
 
 v6.2:
  - fixed gaussian dash dot sampling
@@ -25,10 +24,10 @@ v6.0:
 
 workers: 4
 final_size: 448
-dataset_length: 10000
+dataset_length: 20000
 drive_mappings:
   "B:": "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle"
-output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v6.2_50k"
+output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v6.3_10k"
 overwrite: false
 output_img_size: 448
 composite_function: composite_the_images_torch
@@ -47,7 +46,7 @@ datasets:
     layer_contents: "text"
     base_dataset_kwargs:
       saved_fonts_folder: "G:/s3/synthetic_data/resources/fonts"
-      font_size_rng: [ 10, 70 ]
+      font_size_rng: [ 40, 120 ]
       word_count_rng: [ 10, 20 ]
       font_class_weights: [ 40, 40, 120 ]
       font_size_scalers: [ 1, 2, 1 ]
@@ -69,16 +68,8 @@ datasets:
         - InkColorJitter
         - InkColorJitter
         - InkColorJitter
-        #- RandomDistortions
-        #- RuledSurfaceDistortions
         - Blur
-        #- BlurThreshold
-        - IdentityTransform
-        - IdentityTransform
-        - IdentityTransform
-        - IdentityTransform
-        #- Lighten
-        #- ConditionalContrast
+        - Lighten
       - ToTensor
       - RandomResize:
           min_scale: .8
@@ -104,15 +95,12 @@ datasets:
     transforms:
       - ToNumpy
       - RandomChoice:
+        - InkColorJitter
+        - InkColorJitter
+        - InkColorJitter
+        - InkColorJitter
         - Blur
-        - InkColorJitter
-        - InkColorJitter
-        - InkColorJitter
-        - InkColorJitter
-        - IdentityTransform
-        - IdentityTransform
-        - IdentityTransform
-        - IdentityTransform
+        - Lighten
       #- Typewriter
       - ToTensor
       - RandomResize:
@@ -131,19 +119,11 @@ datasets:
       - ToNumpy
       - RandomChoice:
         - InkColorJitter
-        #- RandomDistortions
-        #- RuledSurfaceDistortions
-        - IdentityTransform
-        - IdentityTransform
-        - IdentityTransform
-        - IdentityTransform
         - InkColorJitter
         - InkColorJitter
         - InkColorJitter
-        - InkColorJitter
-        - InkColorJitter
-        #- Blur
-        #- ConditionalContrast
+        - Blur
+        - Lighten
       - MoreContrast
       - ToTensor
       - RandomResize:
@@ -175,16 +155,22 @@ datasets:
 #        - "B:/document_backgrounds/paper_only/old blank paper, some wrinkles and imperfections, variable lighting"
 #        - "B:/document_backgrounds/paper_only/old paper with ink marks, crinkles, wrinkles, and imperfections and variable lighting"
 #        - "B:/document_backgrounds/with_backgrounds/"
-        - "B:/document_backgrounds/with_backgrounds/full frame aerial view of 2 blank pages of old open book with wrinkles; book is on top of a noisey background"
-        - "B:/document_backgrounds/with_backgrounds/microfilm blank old page with ink marks"
-        - "B:/document_backgrounds/with_backgrounds/old blank weathered document"
-        - "B:/document_backgrounds/with_backgrounds/old microfilm blank document"
-        - "B:/document_backgrounds/with_backgrounds/2 blank pages of old book, full frame"
-        - "B:/document_backgrounds/with_backgrounds/aerial view of 2 blank pages of old open book with ink marks and wrinkles, full frame"
-        - "B:/document_backgrounds/with_backgrounds/aerial view of 2 blank pages of old open book, full frame"
+
         #- "B:/document_backgrounds/with_backgrounds/blank discolored paper with creases; it is stapled along the top, bottom, and sides, also has paperclips"
-        - "B:/document_backgrounds/with_backgrounds/blank old document"
-        - "B:/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frameG:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frameG:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frame/light"
+
+#        - "B:/document_backgrounds/with_backgrounds/full frame aerial view of 2 blank pages of old open book with wrinkles; book is on top of a noisey background"
+#        - "B:/document_backgrounds/with_backgrounds/microfilm blank old page with ink marks"
+#        - "B:/document_backgrounds/with_backgrounds/old blank weathered document"
+#        - "B:/document_backgrounds/with_backgrounds/old microfilm blank document"
+#        - "B:/document_backgrounds/with_backgrounds/2 blank pages of old book, full frame"
+#        - "B:/document_backgrounds/with_backgrounds/aerial view of 2 blank pages of old open book with ink marks and wrinkles, full frame"
+#        - "B:/document_backgrounds/with_backgrounds/aerial view of 2 blank pages of old open book, full frame"
+#
+#        - "B:/document_backgrounds/with_backgrounds/blank old document"
+#        - "B:/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frameG:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frameG:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frame/light"
+        - "B:/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frameG:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frameG:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frame/"
+        - "B:/document_backgrounds/paper_only/aged blank letter with imprints of text from the reverse side, as if some vestiges of the ink permeated through the paper, but impossible to read; full frame/"
+
     layer_contents: noise
     layer_position: 0 # background layer
     sample_weight: 15
@@ -204,7 +190,7 @@ datasets:
         - IdentityTransform
         - IdentityTransform
         - IdentityTransform
-
+      - Mirror
       - ToTensor
 
   - name: pdf_text
@@ -261,23 +247,13 @@ datasets:
 #        - RandomDistortions
 #        - RuledSurfaceDistortions
         - ConditionalContrast
-        - Lighten
-        - Lighten
-        - Lighten
-        - Lighten
-        - Blur
-        #- InkColorJitter
         - RandomRotate
-        - IdentityTransform
-        - IdentityTransform
-        - IdentityTransform
-        - IdentityTransform
-        - IdentityTransform
-        - IdentityTransform
         - InkColorJitter
         - InkColorJitter
         - InkColorJitter
-
+        - InkColorJitter
+        - Blur
+        - Lighten
       - ToTensor
       - RandomResize:
           min_scale: .5
@@ -362,9 +338,9 @@ datasets:
       #- CropToDarkness
       - RandomChoice:
         - InkColorJitter
-        - IdentityTransform
-        - IdentityTransform
-        - IdentityTransform
+        - InkColorJitter
+        - InkColorJitter
+        - InkColorJitter
         - Blur
       - MoreContrast
       - ToTensor
@@ -394,8 +370,9 @@ datasets:
       - CropToDarkness
       - RandomChoice:
         - InkColorJitter
-        - IdentityTransform
-        - IdentityTransform
+        - InkColorJitter
+        - InkColorJitter
+        - InkColorJitter
         - Blur
         - MoreContrast
       - ToTensor

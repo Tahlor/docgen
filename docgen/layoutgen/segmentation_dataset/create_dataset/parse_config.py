@@ -22,11 +22,11 @@ from docgen.layoutgen.segmentation_dataset.layer_generator.preprinted_form_gen i
 from typing import List, Union, Dict, Any
 from docdegrade.degradation_objects import RandomDistortions, RuledSurfaceDistortions, Blur, Lighten, Blobs, \
     BackgroundMultiscaleNoise, BackgroundFibrous, Contrast, ConditionalContrast, ColorJitter, RandomRotate, \
-    BlurThreshold, MoreContrast, CropToDarkness
+    BlurThreshold, MoreContrast, CropToDarkness, InkColorJitter, Typewriter
 from easydict import EasyDict as edict
 from docgen.image_composition.utils import seamless_composite, composite_the_images_torch, CompositerTorch
 from docgen.datasets.utils.dataset_filters import RejectIfEmpty, RejectIfTooManyPixelsAreBelowThreshold
-from docgen.layoutgen.segmentation_dataset.masks import Mask, NaiveMask, SoftMask, GrayscaleMask
+from docgen.layoutgen.segmentation_dataset.masks import Mask, NaiveMask, SoftMask, GrayscaleMask, MaskWithIgnoreThreshold
 from hwgen.data.utils import show,display
 
 def easydict_representer(dumper, data):
@@ -73,13 +73,16 @@ class TransformType(Enum):
     RESIZELONGESTSIDE = ResizeLongestSide
     RANDOMBOTTOMLEFTEDGECROP = RandomBottomLeftEdgeCrop
     COLORJITTER = ColorJitter
+    INKCOLORJITTER = InkColorJitter
     CROPBORDER = CropBorder
     RANDOMROTATE = RandomRotate
     RANDOMFLIPORMIRROR = RandomFlipOrMirror
+    MIRROR = Mirror
     IDENTITYTRANSFORM = IdentityTransform
     BLURTHRESHOLD = BlurThreshold
     MORECONTRAST = MoreContrast
     CROPTODARKNESS = CropToDarkness
+    TYPEWRITER = Typewriter
 
 class DatasetType(Enum):
     HWGENERATOR = HWGenerator
@@ -106,6 +109,7 @@ class Masks(Enum):
     MASK = Mask
     NAIVEMASK = NaiveMask
     GRAYSCALEMASK = GrayscaleMask
+    MASKWITHIGNORETHRESHOLD = MaskWithIgnoreThreshold
 
 class DatasetFilters(Enum):
     REJECTIFEMPTY = RejectIfEmpty
@@ -240,6 +244,7 @@ def create_aggregate_dataset(config):
                                   [d.sample_weight if hasattr(d, "sample_weight") and not d.sample_weight is None else 1 for d in generators],
                                     **(config.get("layout_sampler_kwargs") or {}),
                                   )
+
     after_transforms = config.get("transforms_after_compositing") or []
 
     composite_function_def = config.get("composite_function") or "seamless_composite"

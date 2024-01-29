@@ -10,7 +10,7 @@ class GridGenerator(Gen):
         """
         height, width = img_size
         self.img_size = img_size
-        self.grid = self.generator = Grid(width, height, row_height_range=(10, 80), col_width_range=(10, 300))
+        self.grid = self.generator = Grid(width, height, row_height_range=(40, 120), col_width_range=(40, 400))
 
     def get(self, img_size=None):
         if img_size is None:

@@ -293,6 +293,14 @@ class RandomFlipOrMirror:
 
         return image
 
+class Mirror:
+    def __init__(self):
+        # No parameters needed for this augmentation
+        pass
+
+    def __call__(self, image):
+        return np.ascontiguousarray(np.fliplr(image))
+
 
 class OneOfTransform(T.Compose):
     def __init__(self, transforms):

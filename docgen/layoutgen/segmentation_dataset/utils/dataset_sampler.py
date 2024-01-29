@@ -35,6 +35,11 @@ class LayerSampler:
 
         self.number_of_layer_weights = number_of_layer_weights
 
+        # print summary of weights / generator names
+        print("LayerSampler summary:")
+        for i in range(len(self.generators)):
+            print(f"  {self.generators[i].name}: {self.weights[i]}")
+
 
     def choose_num_layers(self) -> int:
         """

@@ -26,7 +26,7 @@ class NaiveImageFolder(GenericDataset):
                  max_length=None,
                  color_scheme="RGB",
                  recursive=True,
-                 extensions=(".jpg", ".png", ".jfif"),
+                 extensions=(".jpg", ".png", ".jfif", ".bmp", ".tiff"),
                  return_format="just_image",
                  shuffle=True,
                  require_non_empty_result=False,

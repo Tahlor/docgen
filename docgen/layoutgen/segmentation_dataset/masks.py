@@ -29,7 +29,7 @@ class Mask(NaiveMask):
     """ Darker than threshold becomes GT / 1
 
     """
-    def __init__(self, threshold=.5, *args, **kwargs):
+    def __init__(self, threshold=.9, *args, **kwargs):
         self.threshold01 = threshold if threshold < 1 else threshold / 255
 
     def __call__(self, img):
@@ -45,6 +45,17 @@ class GrayscaleMask(Mask):
             weights = torch.tensor([0.299, 0.587, 0.114]).view(3, 1, 1)
             img = torch.sum(img * weights, dim=0)
         return img
+
+
+class MaskWithIgnoreThreshold(Mask):
+    def __init__(self, threshold=0.8, ignore_threshold=0.9, *args, **kwargs):
+        super().__init__(*args, threshold=threshold, **kwargs)
+        self.ignore_threshold = ignore_threshold if ignore_threshold < 1 else ignore_threshold / 255
+
+    def __call__(self, img):
+        mask = super().__call__(img)
+        mask = torch.where((img >= self.threshold01) & (img < self.ignore_threshold), torch.tensor(-1), mask)
+        return mask
 
 
 class SoftMask(Mask):

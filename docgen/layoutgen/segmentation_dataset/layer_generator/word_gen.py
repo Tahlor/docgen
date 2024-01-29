@@ -47,26 +47,43 @@ class BoxFillerGen(Gen):
     """
     def __init__(self, img_size=(512,512),
                  font_size_rng=(8,50),
-                  word_count_rng=(10,20),
-                  return_format="dict",
-                  **kwargs
-        ):
+                 word_count_rng=(10,20),
+                 return_format="dict",
+                 probability_of_random_box_fill=0.4,
+                 **kwargs
+                 ):
+        """
+
+        Args:
+            img_size:
+            font_size_rng:
+            word_count_rng:
+            return_format:
+            probability_of_random_box_fill:
+            force_fill_method (str): "random"
+            **kwargs:
+        """
 
         self.width, self.height = self.img_size = split_strs_into_tuple(img_size)
         self.font_size_rng = split_strs_into_tuple(font_size_rng)
         self.word_count_rng = split_strs_into_tuple(word_count_rng)
         self.return_format = return_format
-        self.force = False
+        self.force_next_box_to_be_random = None
+        self.probability_of_random_box_fill = probability_of_random_box_fill
+
+    def decide_to_fill_box_randomly(self):
+        if self.force_next_box_to_be_random == "random":
+            self.force_next_box_to_be_random = None
+            return True
+        return random.random() < self.probability_of_random_box_fill
 
     def _get(self, img_size=None):
         if img_size is None:
             img_size = self.img_size
         font_size = random.randint(*self.font_size_rng)
         img = Image.new("RGB", img_size, (255,255,255))
-        use_random_box = self.force=="random" or (self.force is None and random.random() > 0.4)
-        self.force = None
 
-        if use_random_box:
+        if self.decide_to_fill_box_randomly():
             bbox = BBox("ul", [0, 0, *img_size])
             box_dict = self.filler.randomly_fill_box_with_words(bbox, img=img,
                                                        max_words=random.randint(*self.word_count_rng),
@@ -91,7 +108,7 @@ class BoxFillerGen(Gen):
             return img
 
     def next_one_random_placement(self):
-        self.force = "random"
+        self.force_next_box_to_be_random = "random"
 
 class PrintedTextGenerator(BoxFillerGen):
     """
@@ -105,6 +122,7 @@ class PrintedTextGenerator(BoxFillerGen):
                  probability_of_number=.1,
                  font_class_files=None,
                  font_class_weights=None,
+                 font_size_scalers=None,
                  **kwargs):
         super().__init__(img_size, font_size_rng=font_size_rng, word_count_rng=word_count_rng, **kwargs)
         unigrams = get_resource(package_name="textgen", resource_relative_path="/datasets/unigram_freq.csv")
@@ -116,8 +134,9 @@ class PrintedTextGenerator(BoxFillerGen):
             clear_fonts_path = Path(saved_fonts_folder) / "clear_fonts.csv"
             font_characteristics_csv_file = saved_fonts_folder / "ALL_fonts.csv"
             font_sampler = FontSampler(saved_fonts_folder / "fonts",
-                                       font_class_files,
+                                       font_class_files=font_class_files,
                                        weights=font_class_weights,
+                                       font_size_scalers=font_size_scalers,
                                        csv_file=font_characteristics_csv_file)
             font_sampler.sample()
         else:
@@ -133,7 +152,7 @@ class PrintedTextGenerator(BoxFillerGen):
                                        clear_font_csv_path=clear_fonts_path,
                                        range_before_font_change=range_before_font_change,
                                        probability_of_all_caps_override=0.2,
-                                        font_sampler=font_sampler,
+                                       font_sampler=font_sampler,
                         )
 
         self.render_text_pair = RenderImageTextPair(self.renderer, combined_gen, renderer_text_key="raw_text")
@@ -144,7 +163,8 @@ class HWGenerator(BoxFillerGen):
     def __init__(self, img_size=(512,512),
                  font_size_rng=(8, 50),
                  word_count_rng=(10, 20),
-                 saved_hw_folder=None, **kwargs):
+                 saved_hw_folder=None,
+                 **kwargs):
         """ Generates handwritten text in real time OR combine them from pre-generated .npy files
 
         Args:
