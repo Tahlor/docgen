@@ -230,7 +230,11 @@ def create_aggregate_dataset(config):
     generators = []
     overrides = config.get("dataset_override", None)
     for dataset_config in config['datasets']:
+        print(f"Creating dataset {dataset_config.get('name')}")
         if overrides and not dataset_config.get("name") in overrides:
+            continue
+        if dataset_config.get("sample_weight") == 0:
+            print(f"Skipping {dataset_config.get('name')} with weight 0")
             continue
         dataset = create_individual_dataset(dataset_config)
         if dataset is None:

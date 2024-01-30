@@ -164,6 +164,8 @@ class HWGenerator(BoxFillerGen):
                  font_size_rng=(8, 50),
                  word_count_rng=(10, 20),
                  saved_hw_folder=None,
+                 switch_frequency=3,
+                 unigrams_path="default",
                  **kwargs):
         """ Generates handwritten text in real time OR combine them from pre-generated .npy files
 
@@ -174,17 +176,22 @@ class HWGenerator(BoxFillerGen):
             saved_hw_folder:
             **kwargs:
         """
-        super().__init__(img_size, font_size_rng=font_size_rng, word_count_rng=word_count_rng,  **kwargs)
-        unigrams = get_resource(package_name="textgen", resource_relative_path="/datasets/unigram_freq.csv")
+        super().__init__(img_size, font_size_rng=font_size_rng, word_count_rng=word_count_rng, **kwargs)
+        if unigrams_path == "default":
+            unigrams_path = get_resource(package_name="textgen", resource_relative_path="/datasets/unigram_freq.csv")
+        if unigrams_path is not None:
+            words_dataset = Unigrams(csv_file=unigrams_path)
+        else:
+            words_dataset = None
+
         if saved_hw_folder is None:
             saved_hw_folder = Path(site.getsitepackages()[0]) / r"hwgen/resources/generated"
-
-        words_dataset = Unigrams(csv_file=unigrams)
 
         self.renderer_hw = SavedHandwritingRandomAuthor(format="PIL",
                                                         dataset_root=saved_hw_folder,
                                                         random_ok=True,
-                                                        conversion=None)
+                                                        conversion=None,
+                                                        switch_frequency=switch_frequency)
 
         self.render_text_pair = RenderImageTextPair(self.renderer_hw, words_dataset, renderer_text_key="raw_text")
         self.filler = BoxFiller(img_text_word_dict=self.render_text_pair,

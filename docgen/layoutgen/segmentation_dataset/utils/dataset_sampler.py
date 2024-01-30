@@ -3,7 +3,7 @@ from typing import List, Any, Callable, Tuple, Union
 from pathlib import Path
 import numpy as np
 import logging
-
+from collections import Counter
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 logger.addHandler(logging.StreamHandler())
@@ -12,9 +12,10 @@ logger.addHandler(logging.StreamHandler())
 class LayerSampler:
     def __init__(self, generators: List[Callable[[], Any]],
                  layer_weights: List[float],
-                 default_min_layers: int = None,
-                 default_max_layers: int = None,
-                 number_of_layer_weights: List[int] = None):
+                 default_min_layers: int,
+                 default_max_layers: int,
+                 number_of_layer_weights: List[int] = None,
+                 max_layers_of_one_type=2):
         """
         Initialize the LayerSampler with word_image_generators and weights.
 
@@ -24,11 +25,14 @@ class LayerSampler:
             default_min_layers (int, optional): Default minimum number of layers to be selected. Defaults to None.
             default_max_layers (int, optional): Default maximum number of layers to be selected. Defaults to None.
             number_of_layer_weights (List[int], optional): Weights associated with the number of layers. Defaults to None.
+            max_layers_of_one_type (Union[int, Dict[str, int]], optional): Maximum number of layers of one type. Defaults to None.
+                Ex: {"handwriting":2, "noise":1, "printed":1}
         """
         self.generators = generators
         self.weights = [w / sum(layer_weights) for w in layer_weights]  # Normalize the weights
         self.min_layers = default_min_layers if default_min_layers is not None else min(2, len(generators))
         self.max_layers = min(default_max_layers, len(generators)) if default_max_layers is not None else len(generators)
+        self.max_layers_of_one_type = max_layers_of_one_type
 
         if default_max_layers > len(generators):
             print(f"WARNING: default_max_layers ({default_max_layers}) is greater than the number of word_image_generators ({len(generators)}). Setting default_max_layers to {len(generators)}.")
@@ -77,33 +81,54 @@ class LayerSampler:
         if sample_with_replacement:
             return random.choices(self.generators, weights=self.weights, k=num_layers)
         else:
-            #return list(set(random.choices(self.generators, weights=self.weights, k=min(num_layers, len(self.generators)))))
             # sample using weights, but without replacement
-            choices = np.random.choice(len(self.generators), size=min(num_layers, len(self.generators)),
+            choices = np.random.choice(len(self.generators), size=len(self.generators),
                                     replace=False, p=np.array(self.weights)/sum(self.weights))
-            return [self.generators[i] for i in choices]
+            generators = [self.generators[i] for i in choices]
+            if self.max_layers_of_one_type:
+                generators = self.filter_selection(generators)
+            return generators[:num_layers]
 
+    def filter_selection(self, generators):
+        counter = Counter()
+        new_generators = []
+
+        for generator in generators:
+            counter[generator.layer_contents] += 1
+
+            if isinstance(self.max_layers_of_one_type, int):
+                max_layers = self.max_layers_of_one_type
+            else:
+                max_layers = self.max_layers_of_one_type[generator.layer_contents]
+
+            if counter[generator.layer_contents] <= max_layers:
+                new_generators.append(generator)
+
+        return new_generators
 
     def sample(self, replacement: bool=False) -> List[Callable[[], Any]]:
         layers = self.choose_num_layers()
         return self._sample(num_layers=layers, sample_with_replacement=replacement)
 
+class DummyGenerator:
+    def __init__(self, name: str, layer_contents="A"):
+        self.name = name
+        self.layer_contents = layer_contents
+    def __call__(self):
+        return f"{self.name}, {self.layer_contents}"
 
 def main(min_layers: int, max_layers: int, with_replacement: bool):
     # Example word_image_generators (they could be any functions you wish)
-    def gen1(): return "Layer1"
 
-    def gen2(): return "Layer2"
+    generators = [DummyGenerator(1, "A"),
+                  DummyGenerator(2, "B"),
+                  DummyGenerator(3, "C"),
+                  DummyGenerator(4, "A"),
+                  DummyGenerator(5, "B"),]
+    weights = [100, 2, 3, 400, 5]
 
-    def gen3(): return "Layer3"
-
-    generators = [gen1, gen2, gen3]
-    weights = [2, 3, 1]
-
-    sampler = LayerSampler(generators, weights)
-
-    num_layers = sampler.choose_num_layers(min_layers, max_layers)
-    chosen_generators = sampler.sample(num_layers, with_replacement)
+    sampler = LayerSampler(generators, weights, min_layers, max_layers, max_layers_of_one_type=1)
+    chosen_generators = sampler.sample(with_replacement)
 
     for gen in chosen_generators:
         print(gen())
@@ -111,4 +136,4 @@ def main(min_layers: int, max_layers: int, with_replacement: bool):
 
 if __name__ == "__main__":
     # Example usage
-    main(min_layers=6, max_layers=9, with_replacement=True)
+    main(min_layers=2, max_layers=9, with_replacement=False)

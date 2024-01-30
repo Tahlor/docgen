@@ -2,6 +2,8 @@
 
 v6.6:
   - smaller
+  - more italic
+  - limit to 1 handwriting per page
 
 v6.5:
   - BIG
@@ -46,13 +48,17 @@ overwrite: false
 output_img_size: 448
 composite_function: composite_the_images_torch
 layout_sampler_kwargs:
-  default_min_layers: 2
+  default_min_layers: 3
   default_max_layers: 5
   number_of_layer_weights:
-    - .1
     - .3
     - .3
     - .2
+  max_layers_of_one_type:
+    handwriting: 1
+    text: 2
+    form_elements: 1
+    typewriter: 1
 
 datasets:
   - name: RenderedFonts
@@ -60,9 +66,9 @@ datasets:
     layer_contents: "text"
     base_dataset_kwargs:
       saved_fonts_folder: "G:/s3/synthetic_data/resources/fonts"
-      font_size_rng: [ 10, 60 ]
+      font_size_rng: [ 10, 40 ]
       word_count_rng: [ 10, 20 ]
-      font_class_weights: [ 30, 10, 20, 120 ]
+      font_class_weights: [ 100, 10, 20, 120 ]
       font_size_scalers: [ 1, 2, 1 ]
       probability_of_random_box_fill: .8
       font_class_files:
@@ -131,10 +137,12 @@ datasets:
   - name: handwriting
     type: HWGenerator
     layer_contents: handwriting
-    switch_frequency: 4 # switch to new npy file
+    switch_frequency: 10 # switch to new npy file
     base_dataset_kwargs:
         probability_of_random_box_fill: .95
         saved_hw_folder: "C:/Users/tarchibald/Anaconda3/envs/docgen_windows/hwgen/resources/generated"
+        word_count_rng: [ 10, 20 ]
+        font_size_rng: [ 20, 40 ]
     sample_weight: 5
     transforms:
       - ToNumpy
@@ -151,8 +159,8 @@ datasets:
       - MoreContrast
       - ToTensor
       - RandomResize:
-          min_scale: .7
-          max_scale: 2
+          min_scale: .5
+          max_scale: 1.5
     composite_function:
         type: CompositerTorch
         method: torchmul
@@ -168,8 +176,10 @@ datasets:
     unigrams_path: null # just use the letters that exist in unigrams
     switch_frequency: null # don't switch "authors" (there's only 1 in EMNIST)
     base_dataset_kwargs:
-        probability_of_random_box_fill: .99
+        probability_of_random_box_fill: .98
         saved_hw_folder: "G:/data/standard_hwr/emnist/tiny"
+        word_count_rng: [ 10, 20 ]
+        font_size_rng: [ 15, 40 ]
     sample_weight: 3
     transforms:
       - ToNumpy
@@ -187,7 +197,7 @@ datasets:
       - ToTensor
       - RandomResize:
           min_scale: .7
-          max_scale: 2
+          max_scale: 1.5
     composite_function:
         type: CompositerTorch
         method: torchmul
@@ -269,7 +279,7 @@ datasets:
         - "G:/s3/forms/PDF/OPM/text/images"
         - "G:/s3/forms/PDF/SSA/text/images"
     layer_contents: text
-    sample_weight: .5
+    sample_weight: 1
     transforms:
       - ToNumpy
       - RandomChoice:
@@ -290,7 +300,7 @@ datasets:
       - ToTensor
       - RandomResize:
           min_scale: .8
-          max_scale: 1.6
+          max_scale: 1.4
           max_upscale: 3
     mask:
       type: MaskWithIgnoreThreshold
@@ -450,7 +460,7 @@ datasets:
       - ToTensor
       - RandomResize:
           min_scale: .2
-          max_scale: 1
+          max_scale: .8
     composite_function:
         type: CompositerTorch
         method: torchmul

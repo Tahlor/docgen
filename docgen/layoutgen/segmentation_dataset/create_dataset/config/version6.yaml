@@ -204,7 +204,6 @@ datasets:
         - IdentityTransform
         - IdentityTransform
         - IdentityTransform
-
       - ToTensor
 
   - name: pdf_text

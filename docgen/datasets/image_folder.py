@@ -1,4 +1,5 @@
 import re
+from tqdm import tqdm
 import numpy as np
 import sys
 from typing import Dict, Tuple
@@ -20,8 +21,87 @@ from docgen.datasets.generic_dataset import GenericDataset
 
 # TODO: Fix / standardize max_length and max_length_override
 
+from torch.utils.data import Sampler
+import itertools
+
+
+class DirectoryWeightedSampler(Sampler):
+    def __init__(self, img_dirs,
+                 img_dir_weights=None,
+                 extensions=(".jpg", ".png", ".jfif", ".bmp", ".tiff"),
+                 recursive=True,
+                 file_name_filter=None,
+                 shuffle=True):
+        self.img_dirs = img_dirs
+        self.img_dir_weights = img_dir_weights
+        self.extensions = set([ext.lower() for ext in extensions])
+        self.recursive = recursive
+        self.file_name_filter = re.compile(file_name_filter) if file_name_filter else None
+        self.imgs = self._get_all_files()
+        self.weights = self._calculate_weights()
+        self.current_img_path = None
+        self.shuffle = shuffle
+
+    def _get_all_files(self):
+        all_files = []
+        for img_dir in self.img_dirs:
+            img_dir_path = Path(img_dir)
+            if self.recursive:
+                files = img_dir_path.rglob("*.*")
+            else:
+                files = img_dir_path.glob("*.*")
+
+            if self.file_name_filter:
+                files = [f for f in files if self.file_name_filter.search(f.name)]
+
+            files = [f for f in files if f.suffix.lower() in self.extensions]
+            all_files.extend(files)
+        return all_files
+
+    def _reject_image(self, img_path, img):
+        try:
+
+            img = Image.open(str(img_path)).convert(self.naive_image_folder.color_scheme)
+            if self.naive_image_folder.reject_because_of_filter(img, path=img_path):
+                self.rejected_files.add(img_path)
+                return True
+            return False
+        except Exception as e:
+            logger.exception(f"Error processing image {img_path}")
+            self.rejected_files.add(img_path)
+            return True
+
+    def _calculate_weights(self):
+        if self.img_dir_weights:
+            # Normalize weights and calculate weights for each file
+            total_weight = sum(self.img_dir_weights)
+            normalized_weights = [w / total_weight for w in self.img_dir_weights]
+            file_weights = []
+            for dir_idx, weight in enumerate(normalized_weights):
+                file_weights.extend([weight] * len([f for f in self.imgs if Path(f).parent == Path(self.img_dirs[dir_idx])]))
+            return file_weights
+        else:
+            # Equal weight for all files
+            return [1] * len(self.imgs)
+
+    def sample(self, idx=None):
+        if idx is not None and idx < len(self.imgs):
+            img_path = self.imgs[idx]
+        else:
+            img_path = random.choices(self.imgs, weights=self.weights, k=1)[0]
+        self.current_img_path = img_path
+        return img_path
+    def __iter__(self):
+        for img_path in random.choices(self.imgs, weights=self.weights, k=len(self.imgs)):
+            yield img_path
+
+    def __len__(self):
+        return len(self.imgs)
+
+
 class NaiveImageFolder(GenericDataset):
     def __init__(self, img_dirs,
+                 img_dir_weights=None,
                  transform_list=None,
                  max_length=None,
                  color_scheme="RGB",
@@ -70,77 +150,59 @@ class NaiveImageFolder(GenericDataset):
             transform_list=transform_list,
             collate_fn=collate_fn,
         )
-
+        self.sampler = DirectoryWeightedSampler(img_dirs, img_dir_weights,
+                                                shuffle=shuffle,
+                                                recursive=recursive,
+                                                extensions=extensions,
+                                                file_name_filter=file_name_filter)
         self.shuffle = shuffle
         self.require_non_empty_result = require_non_empty_result
         self.img_dirs = img_dirs
-        if not isinstance(img_dirs, (tuple, list)):
-            self.img_dirs = [img_dirs]
-
-        self.imgs = []
-        extensions = set([ext.lower() for ext in extensions])
-        for img_dir in self.img_dirs:
-            img_dir = Path(img_dir)
-            if recursive:
-                self.imgs += list(img_dir.rglob("*.*"))
-            else:
-                self.imgs += list(img_dir.glob("*.*"))
-        if file_name_filter:
-            # compile regex
-            name_filter = re.compile(file_name_filter)
-            self.imgs = [img for img in self.imgs if name_filter.search(img.name)]
-
-        self.imgs = [img for img in self.imgs if img.suffix.lower() in extensions]
         self.filters = list(filters) if filters is not None else []
-        self.file_name_filter = file_name_filter
-        self.failed_filters_count = 0
-
-        if self.shuffle:
-            random.shuffle(self.imgs)
-        else:
-            self.imgs = sorted(self.imgs)
 
         self.color_scheme = color_scheme
 
-        if len(self.imgs) == 0:
+        if len(self.sampler) == 0:
             raise ValueError(f"No images found in {img_dirs}")
 
-        self.max_length = max_length if max_length is not None else len(self.imgs)
+        self.max_length = max_length if max_length is not None else len(self.sampler)
         self.current_img_idx = 0
         self.return_format = return_format
+        self.rejected_paths = set()
 
     def __len__(self):
-        return min(len(self.imgs), self.max_length)
+        return min(len(self.sampler), self.max_length)
 
     def _get(self, idx):
-        empty_results = 0
         while True:
             try:
-                idx = self._validate_idx(idx)
-                img_path = self.imgs[idx]
-                # if "iam" in str(img_path).lower():
-                #     print("WTF")
-                # load from png and convert to tensor
+                img_path = self.sampler.sample(idx)
+                if img_path in self.rejected_paths:
+                    continue  # Skip if already rejected
+
                 img = Image.open(str(img_path)).convert(self.color_scheme)
                 if self.transform_composition.transforms is not None:
                     img = self.transform_composition(img)
 
-                if self.filters and self.reject_because_of_filter(img, path=img_path):
-                    idx += 1
-                    continue
+                if self.reject_because_of_filter(img, path=img_path):
+                    self.rejected_paths.add(img_path)  # Track rejected image
+                    idx = None
+                    continue  # Skip this image
 
+                # Return formats
                 if self.return_format == "just_image":
                     return img
                 elif self.return_format == "dict":
-                    return {'image': img,  "name": img_path.stem}
+                    return {'image': img, "name": img_path.stem}
                 else:
                     raise NotImplementedError(f"return_format {self.return_format} not implemented")
 
             except Exception as e:
                 logger.exception(f"Error loading image {img_path}")
-                idx += 1
-                if not self.continue_on_error:
-                    raise e
+                raise e
+
+    def __getitem__(self, idx):
+        return self._get(idx)
 
     def reject_because_of_filter(self, img, path=None):
         for filter in self.filters:
@@ -153,9 +215,6 @@ class NaiveImageFolder(GenericDataset):
         return False
 
     def get(self, idx=None):
-        if idx is None:
-            idx = self.current_img_idx
-            self.current_img_idx = (1 + self.current_img_idx ) % len(self.imgs)
         return self._get(idx)
 
     def __getitem__(self, idx):
@@ -349,3 +408,20 @@ class NaiveImageFolderPatch(NaiveImageFolder):
         return value
 
 
+
+if __name__=='__main__':
+    nimg = NaiveImageFolder(img_dirs=[
+        "B:/document_backgrounds/with_backgrounds/full frame aerial view of 2 blank pages of old open book with wrinkles; book is on top of a noisey background",
+        "B:/document_backgrounds/with_backgrounds/microfilm blank old page with ink marks",
+        ],
+        img_dir_weights=[.9,.11]
+    )
+    from collections import Counter
+    counter = Counter()
+    for i in tqdm(range(100)):
+        img = nimg.get()
+        x = Path(nimg.sampler.current_img_path).parent.name
+        stem = Path(nimg.sampler.current_img_path).stem
+        counter[x] += 1
+        print(stem)
+    print(counter)
