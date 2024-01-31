@@ -403,7 +403,7 @@ datasets:
         - "G:/data/standard_hwr/IAM_OFFLINE/lines"
       recursive: true
     layer_contents: handwriting
-    sample_weight: 1
+    sample_weight: 0
     filters:
       - RejectIfTooManyPixelsAreBelowThreshold:
           threshold: 0.8

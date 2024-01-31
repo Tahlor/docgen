@@ -181,14 +181,14 @@ class ResizeLongestSide:
 
 class ResizeLongestSideIfTooBig:
 
-    def __init__(self, size=448):
+    def __init__(self, longest_side=448):
         """ Must have 3 channels
 
         Args:
             size:
         """
-        self.size = size
-        self.resize = ResizeLongestSide(size)
+        self.size = longest_side
+        self.resize = ResizeLongestSide(self.size)
 
     def __call__(self, image):
         if not isinstance(image, torch.Tensor):

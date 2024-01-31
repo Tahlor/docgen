@@ -46,6 +46,7 @@ class DirectoryWeightedSampler(Sampler):
         all_files = []
         for img_dir in self.img_dirs:
             img_dir_path = Path(img_dir)
+            print(f"Looking for files in {img_dir}...")
             if self.recursive:
                 files = img_dir_path.rglob("*.*")
             else:
@@ -55,7 +56,11 @@ class DirectoryWeightedSampler(Sampler):
                 files = [f for f in files if self.file_name_filter.search(f.name)]
 
             files = [f for f in files if f.suffix.lower() in self.extensions]
+            print(f"Found {len(files)} files in {img_dir} after filtering.")
+
             all_files.extend(files)
+
+        print(f"Dataset has {len(all_files)} files after filtering.")
         return all_files
 
     def _reject_image(self, img_path, img):
@@ -181,6 +186,7 @@ class NaiveImageFolder(GenericDataset):
                     continue  # Skip if already rejected
 
                 img = Image.open(str(img_path)).convert(self.color_scheme)
+                h,w = img.height, img.width
                 if self.transform_composition.transforms is not None:
                     img = self.transform_composition(img)
 
@@ -193,7 +199,10 @@ class NaiveImageFolder(GenericDataset):
                 if self.return_format == "just_image":
                     return img
                 elif self.return_format == "dict":
-                    return {'image': img, "name": img_path.stem}
+                    return {'image': img,
+                            "name": img_path.stem,
+                            "original_size": (h,w),
+                            "path": img_path}
                 else:
                     raise NotImplementedError(f"return_format {self.return_format} not implemented")
 
