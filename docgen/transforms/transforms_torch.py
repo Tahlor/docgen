@@ -9,6 +9,7 @@ from torchvision.transforms import Compose
 from torchvision import transforms
 import torch
 from torchvision.transforms import ToTensor
+import albumentations as A
 
 # target size = 448
 # for most things:
@@ -23,6 +24,8 @@ import random
 from albumentations import ImageOnlyTransform
 import cv2
 import random
+import numpy as np
+from PIL import Image, ImageOps, PpmImagePlugin
 
 class RandomResize:
     def __init__(self, min_scale: float, max_scale: float,
@@ -142,8 +145,12 @@ def pad_divisible_by(image, pad_divisible_by=32):
         y1_pad = round(h_pad / 2)
         x2_pad = w_pad - x1_pad
         y2_pad = h_pad - y1_pad
-        padding = transforms.Pad((x1_pad, y1_pad, x2_pad, y2_pad), fill=1)
-        image = padding(image)
+        if isinstance(image, np.ndarray):
+            t = A.PadIfNeeded(min_height=y1_pad+y2_pad+h, min_width=x1_pad+x2_pad+w, border_mode=0, value=1)
+            image = t(image=image)
+        else:
+            padding = transforms.Pad((x1_pad, y1_pad, x2_pad, y2_pad), fill=1)
+            image = padding(image)
 
     return image
 
@@ -303,9 +310,29 @@ class Mirror:
 
 
 class OneOfTransform(T.Compose):
-    def __init__(self, transforms):
+    def __init__(self, transforms, **kwargs):
         super().__init__(transforms)
 
     def __call__(self, img):
         transform = random.choice(self.transforms)
         return transform(img)
+
+
+class Invert:
+    def __init__(self):
+        pass
+
+    def __call__(self, img):
+        #if dtype
+        if isinstance(img, torch.Tensor):
+            if img.dtype == torch.uint8:
+                return 255 - img
+            else:
+                return 1 - img
+        elif isinstance(img, np.ndarray):
+            if img.dtype == np.uint8:
+                return 255 - img
+            else:
+                return 1 - img
+        elif isinstance(img, Image.Image):
+            return ImageOps.invert(img)

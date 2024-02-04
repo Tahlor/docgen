@@ -1,4 +1,5 @@
 import random
+import sys
 from typing import List, Any, Callable, Tuple, Union
 from pathlib import Path
 import numpy as np
@@ -8,6 +9,10 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 logger.addHandler(logging.StreamHandler())
 
+def to_tuple(x):
+    if isinstance(x, str):
+        x = x.split(",")
+    return tuple(x)
 
 class LayerSampler:
     def __init__(self, generators: List[Callable[[], Any]],
@@ -33,6 +38,8 @@ class LayerSampler:
         self.min_layers = default_min_layers if default_min_layers is not None else min(2, len(generators))
         self.max_layers = min(default_max_layers, len(generators)) if default_max_layers is not None else len(generators)
         self.max_layers_of_one_type = max_layers_of_one_type
+        if isinstance(self.max_layers_of_one_type, dict):
+            self.max_layers_of_one_type = {to_tuple(k): v for k, v in self.max_layers_of_one_type.items()}
 
         if default_max_layers > len(generators):
             print(f"WARNING: default_max_layers ({default_max_layers}) is greater than the number of word_image_generators ({len(generators)}). Setting default_max_layers to {len(generators)}.")
@@ -99,7 +106,7 @@ class LayerSampler:
             if isinstance(self.max_layers_of_one_type, int):
                 max_layers = self.max_layers_of_one_type
             else:
-                max_layers = self.max_layers_of_one_type[generator.layer_contents]
+                max_layers = self.max_layers_of_one_type.get(generator.layer_contents, sys.maxsize)
 
             if counter[generator.layer_contents] <= max_layers:
                 new_generators.append(generator)

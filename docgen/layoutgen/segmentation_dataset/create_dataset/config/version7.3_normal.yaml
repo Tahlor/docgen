@@ -1,5 +1,17 @@
 # My Dataset Configuration v5 - just text / handwriting / backgrounds
 
+v7.3:
+  - more normal fonts
+
+v7.2:
+  - backgrounds, but no document edges
+
+v7.1:
+  - backgrounds, but no subtle background noise
+
+v7.0:
+  - no backgrounds
+
 v6.8:
   - images are closer to same font size
   - Need to pair with RESIZING
@@ -46,10 +58,10 @@ v6.0:
 
 workers: 4
 final_size: 448
-dataset_length: 50000
+dataset_length: 20000
 drive_mappings:
   "B:": "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle"
-output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v6.8_50k"
+output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v7.3_20k"
 overwrite: false
 output_img_size: 448
 composite_function: composite_the_images_torch
@@ -63,7 +75,7 @@ layout_sampler_kwargs:
   max_layers_of_one_type:
     handwriting: 1
     text: 1
-    form_elements: 1
+    form_elements: 2
     typewriter: 1
 
 datasets:
@@ -74,21 +86,23 @@ datasets:
       saved_fonts_folder: "G:/s3/synthetic_data/resources/fonts"
       font_size_rng: [ 20, 40 ]
       word_count_rng: [ 10, 20 ]
-      font_class_weights: [ 5, 5, 30, 10, 100 ]
+      font_class_weights: [ 5, 5, 30, 10, 100, 150 ]
       font_size_scalers: [ 1, 2, 1 ]
-      probability_of_random_box_fill: .8
+      range_before_font_change: [4, 9]
+      probability_of_random_box_fill: .5
       font_class_files:
         - "G:/s3/synthetic_data/resources/fonts/FONT_SAMPLES/italic_fonts.pkl"
         - "G:/s3/synthetic_data/resources/fonts/FONT_SAMPLES/italic2_fonts.pkl"
         - "G:/s3/synthetic_data/resources/fonts/FONT_SAMPLES/italic3_fonts.pkl"
         - "G:/s3/synthetic_data/resources/fonts/FONT_SAMPLES/english_fonts.pkl"
         - "G:/s3/synthetic_data/resources/fonts/FONT_SAMPLES/CLEAR_no_typewriter_fonts.pkl"
+        - "G:/s3/synthetic_data/resources/fonts/FONT_SAMPLES/primary_fonts.pkl"
     mask:
       type: MaskWithIgnoreThreshold
       kwargs:
         threshold: .9
         ignore_threshold: .95
-    sample_weight: 5
+    sample_weight: 7
     transforms:
       - ToNumpy
       - RandomChoice:
@@ -121,7 +135,7 @@ datasets:
       kwargs:
         threshold: .9
         ignore_threshold: .95
-    sample_weight: 5
+    sample_weight: 2
     transforms:
       - ToNumpy
       - RandomChoice:
@@ -153,7 +167,6 @@ datasets:
     transforms:
       - ToNumpy
       - RandomChoice:
-        - InkColorJitter
         - InkColorJitter
         - InkColorJitter
         - InkColorJitter
@@ -192,6 +205,8 @@ datasets:
       - RandomChoice:
         - InkColorJitter
         - IdentityTransform
+        - IdentityTransform
+        - MoreContrast
       - ToTensor
       - RandomResize:
           min_scale: .8
@@ -234,9 +249,11 @@ datasets:
         - "B:/document_backgrounds/with_backgrounds/microfilm blank old page with ink marks"
         - "B:/document_backgrounds/with_backgrounds/old blank weathered document"
         - "B:/document_backgrounds/with_backgrounds/old microfilm blank document"
+        - "B:/document_backgrounds/paper_only/old blank paper with water or coffee stains, full frame"
 
         - "B:/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frameG:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frameG:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frame/"
         - "B:/document_backgrounds/paper_only/aged blank letter with imprints of text from the reverse side, as if some vestiges of the ink permeated through the paper, but impossible to read; full frame/"
+
       img_weights:
         - 2
         - 2
@@ -245,12 +262,13 @@ datasets:
         - 1
         - 1
         - 1
+        - 1
         - 3
         - 3
 
     layer_contents: noise
     layer_position: 0 # background layer
-    sample_weight: 15
+    sample_weight: 20
     percent_overlap: 1
     mask:
       type: GrayscaleMask
@@ -341,8 +359,8 @@ datasets:
     mask:
       type: MaskWithIgnoreThreshold
       kwargs:
-        threshold: .8
-        ignore_threshold: .92
+        threshold: .9
+        ignore_threshold: .97
 
     filters:
       - RejectIfTooManyPixelsAreBelowThreshold:
@@ -451,10 +469,9 @@ datasets:
       - RandomChoice:
         - InkColorJitter
         - InkColorJitter
-        - InkColorJitter
-        - InkColorJitter
         - Lighten
         - Blur
+        - MoreContrast
       - ToTensor
       - RandomResize:
           min_scale: .25
@@ -491,7 +508,7 @@ datasets:
       type: MaskWithIgnoreThreshold
       kwargs:
         threshold: .93
-        ignore_threshold: .99
+        ignore_threshold: .98
 
   - name: images
     type: NaiveImageFolder

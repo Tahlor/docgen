@@ -24,6 +24,11 @@ from docgen.datasets.generic_dataset import GenericDataset
 from torch.utils.data import Sampler
 import itertools
 
+def to_list(img_dirs):
+    if isinstance(img_dirs, (str, Path)):
+        img_dirs = [img_dirs]
+    return img_dirs
+
 
 class DirectoryWeightedSampler(Sampler):
     def __init__(self, img_dirs,
@@ -32,7 +37,7 @@ class DirectoryWeightedSampler(Sampler):
                  recursive=True,
                  file_name_filter=None,
                  shuffle=True):
-        self.img_dirs = img_dirs
+        self.img_dirs = to_list(img_dirs)
         self.img_dir_weights = img_dir_weights
         self.extensions = set([ext.lower() for ext in extensions])
         self.recursive = recursive

@@ -1,3 +1,5 @@
+import inspect
+import albumentations as A
 from itertools import chain
 import warnings
 import torch
@@ -133,8 +135,6 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
             # just convert it to tensor, compose it
             self.transform_list = Compose([transforms.ToTensor()]
                                           )
-        elif isinstance(self.transform_list, list):
-            self.transform_list = Compose(self.transform_list)
 
     def create_channel_mappers(self, output_channel_names, input_channel_names_for_each_folder):
         if output_channel_names is not None and input_channel_names_for_each_folder is not None:
@@ -299,10 +299,11 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                 orig_width, orig_height = img.size
                 label_dict = read_label_img(label_path)
                 label = label_dict["label"]
+                img = np.array(img)
+                label = np.array(label)
 
                 if self.transform_list is not None:
-                    img = self.transform_list(img)
-                    label = self.transform_list(label)
+                    img, label = run_transforms(self.transform_list, img, label)
                 if self.paired_mask_transform_obj is not None and self.paired_mask_transform_obj:
                     img, label = self.paired_mask_transform_obj(img, label)
 
@@ -410,6 +411,32 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
         else:
             mask[:, :, ...] = 1
         return mask
+
+def run_transforms(transform_list, img, label):
+    if isinstance(transform_list, A.Compose):
+        if transform_list.additional_targets:
+            img_dict = transform_list(image=img, mask=label)
+            img, label = img_dict["image"], img_dict["mask"]
+        else:
+            img = transform_list(image=img)["image"]
+    elif isinstance(transform_list, Compose): # not compatible with albumentations additional targets, so loop through it ourselves and use run_transforms on it
+        for transform in transform_list.transforms:
+            img, label = run_transforms(transform, img, label)
+    elif isinstance(transform_list, list):
+        for transform in transform_list:
+            img, label = run_transforms(transform, img, label)
+    elif isinstance(transform_list, A.OneOf):
+        img, label = transform_list(image=img, mask=label)
+    # else if callable
+    elif callable(transform_list):
+        # TODO: if label in signature
+        if "label" in inspect.signature(transform_list).parameters:
+            img, label = transform_list(image=img, label=label)
+        else:
+            img = transform_list(img)
+    else:
+        raise ValueError(f"Unknown transform type {transform_list}")
+    return img, label
 
 def read_label_img(path):
     path = Path(path)
