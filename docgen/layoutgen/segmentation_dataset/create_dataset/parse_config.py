@@ -270,14 +270,21 @@ def create_aggregate_dataset(config):
     # save out 1) the config used to create this dataset and 2) aggregate_dataset.config
     config.combined_channel_mapping = aggregate_dataset.config
     config.output_channel_content_names = aggregate_dataset.output_channel_content_names
+
+
+
     save_config(config.output_path / "config.yaml", config)
     return aggregate_dataset
 
 def save_config(config_path, config):
+    safe_config = {"img_dir": ".",
+                   "label_dir": ".",
+                   "label_name_pattern": "{}_label.tiff",
+                   "img_glob_pattern": "*_input.png",
+                   "img_id_regex": "(.+)_input(\\\\.png)?",
+                   "input_channel_class_names": config.output_channel_content_names
+                      }
     with open(config_path, 'w') as file:
-        safe_config = {
-            "output_channel_content_names":config.output_channel_content_names
-        }
         yaml.dump(safe_config, file)
 
 def convert_config(config):

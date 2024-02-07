@@ -18,10 +18,30 @@ from docgen.datasets.generic_dataset import GenericDataset
 from hwgen.data.utils import show, display
 import yaml
 from docgen.utils.channel_mapper import SimpleChannelMapper
-
+import random
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
+
+class MetaPairedImgLabelImageFolderDataset(Dataset):
+    def __init__(self, img_dataset_config_paths, weights, *args, **kwargs):
+        self.datasets = [PairedImgLabelImageFolderDataset(img_dataset_config_paths=config, *args, **kwargs) for config in img_dataset_config_paths]
+        self.weights = self.normalize_weights(weights)
+        self.length = sum(len(d) for d in self.datasets)
+        self.counter = 0
+
+    def normalize_weights(self, weights):
+        if weights is None:
+            weights = [1] * len(self.datasets)
+        weights = [p / sum(weights) for p in weights]
+        return weights
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self, idx):
+        chosen_dataset = random.choices(self.datasets, self.weights)[0]
+        return chosen_dataset[idx % len(chosen_dataset)]
 
 class PairedImgLabelImageFolderDataset(GenericDataset):
 
@@ -33,7 +53,7 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                  max_length_override=None,
                  use_ignore_channel_if_available=True,
                  active_channels=None,
-                 img_dataset_configs=None,
+                 img_dataset_config_paths=None,
                  img_glob_patterns="*input.png",
                  label_name_patterns="{}_label.tiff",
                  img_id_regexes="(\d+)",
@@ -45,9 +65,9 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
         Constructor for the class.
 
         Args:
-            img_dirs: [preferably put in img_dataset_configs]
+            img_dirs: [preferably put in img_dataset_config_paths]
                 list of dirs with imgs
-            label_dirs: [preferably put in img_dataset_configs]
+            label_dirs: [preferably put in img_dataset_config_paths]
                 list of dirs with label imgs
             transform_list:
             paired_mask_transform_obj: takes in img, label, returns degraded img, label.
@@ -64,25 +84,25 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                 so you would set active_channels = [0, 1]
                 datasets made with docgen will usually specify which channels are active in the metadata.
 
-            img_dataset_configs (str / Path): a path to a yaml file with the img dataset configs (see below);
+            img_dataset_config_paths (str / Path): a path to a yaml file with the img dataset configs (see below);
                 it will prioritize using this over the options below.
 
-            img_glob_patterns (list or str): [preferably put in img_dataset_configs]
+            img_glob_patterns (list or str): [preferably put in img_dataset_config_paths]
                 a list of patterns to use to find the image file, like "*input.png".
 
-            label_name_patterns (list or str or None): [preferably put in img_dataset_configs]
+            label_name_patterns (list or str or None): [preferably put in img_dataset_config_paths]
                 a list of patterns to use to find the label file, like "label_{}.png"
                 None: if they have the same name but are in different folders
                 However, if the extension is different, you should still use this.
 
-            img_id_regexes (list or str or None): [preferably put in img_dataset_configs]
+            img_id_regexes (list or str or None): [preferably put in img_dataset_config_paths]
                 a list of regexes to use to extract the image id from the filename, like "\d+"
                 The corresponding label will be found by replacing the {} in label_name_patterns with the image id
                 Used in conjunction with label_name_patterns.
 
             output_channel_names (list): [text, handwriting, form_elements, noise ...]
 
-            input_channel_class_names (list of lists): [preferably put in img_dataset_configs]
+            input_channel_class_names (list of lists): [preferably put in img_dataset_config_paths]
                 for each folder, what the corresponding channel_names are
                 these will be remapped to match the output_channel_names
         """
@@ -98,9 +118,9 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
         if self.max_uniques or self.max_length_override:
             self.max_uniques = min(self.max_uniques, self.max_length_override)
 
-        self.number_of_datasets = len(img_dataset_configs) if img_dataset_configs is not None else len(img_dirs)
-
-        parallel_configs = self.process_dataset_configs(img_dataset_configs=img_dataset_configs,
+        self.img_dataset_config_paths = [img_dataset_config_paths] if isinstance(img_dataset_config_paths, (str, Path)) else img_dataset_config_paths
+        self.number_of_datasets = len(self.img_dataset_config_paths) if self.img_dataset_config_paths is not None else len(img_dirs)
+        parallel_configs = self.process_dataset_configs(img_dataset_config_paths=self.img_dataset_config_paths,
                                                         img_dirs=img_dirs,
                                                         label_dirs=label_dirs,
                                                         img_glob_patterns=img_glob_patterns,
@@ -108,7 +128,7 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                                                         img_id_regexes=img_id_regexes,
                                                         input_channel_class_names=input_channel_class_names, )
 
-        self.img_dirs, self.label_dirs, self.img_id_regexes, self.img_glob_patterns, self.label_name_patterns, self.input_channel_class_names = parallel_configs
+        self.img_dirs, self.label_dirs, self.img_id_regexes, self.img_glob_patterns, self.label_name_patterns, self.input_channel_class_names, self.img_dataset_configs = parallel_configs
 
         self.path_database = self.process_img_file_list(img_dirs=self.img_dirs,
                                                         label_dirs=self.label_dirs,
@@ -157,15 +177,15 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
         return imgs
 
     def process_dataset_configs(self,
-                                img_dataset_configs,
+                                img_dataset_config_paths,
                                 img_dirs,
                                 label_dirs,
                                 img_glob_patterns,
                                 label_name_patterns,
                                 img_id_regexes,
                                 input_channel_class_names):
-        """ Loop through the img_dataset_configs if not None
-            If not None, load the img_dataset_configs from the yaml file
+        """ Loop through the img_dataset_config_paths if not None
+            If not None, load the img_dataset_config_paths from the yaml file
 
             These are all either
                                 img_dir,
@@ -174,7 +194,7 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                                 label_name_patterns,
                                 img_id_regexes
         """
-        assert img_dirs is not None or img_dataset_configs is not None, "Must provide img_dirs or img_dataset_configs"
+        assert img_dirs is not None or img_dataset_config_paths is not None, "Must provide img_dirs or img_dataset_config_paths"
 
         def get_path(reference_path, path):
             if str(path).startswith("."):
@@ -194,15 +214,17 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
         is_list_of_lists = isinstance(input_channel_class_names, list) and \
                            isinstance(input_channel_class_names[0], list)
 
+        img_dataset_configs = [None] * self.number_of_datasets
+
         if input_channel_class_names is None or is_list_of_lists:
             input_channel_class_names = [input_channel_class_names] * self.number_of_datasets
 
         if label_dirs is None:
             label_dirs = img_dirs[:]
 
-        if img_dataset_configs:
+        if img_dataset_config_paths:
             for idx in range(self.number_of_datasets):
-                img_dataset_config_path = Path(img_dataset_configs[idx])
+                img_dataset_config_path = Path(img_dataset_config_paths[idx])
                 if img_dataset_config_path is not None:
                     if img_dataset_config_path.exists():
                         img_dataset_config = yaml.safe_load(img_dataset_config_path.read_text())
@@ -212,6 +234,7 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                         label_name_patterns[idx] = img_dataset_config.get("label_name_pattern", label_name_patterns[idx])
                         img_id_regexes[idx] = img_dataset_config.get("img_id_regex", img_id_regexes[idx])
                         input_channel_class_names[idx] = img_dataset_config.get("input_channel_class_names", input_channel_class_names[idx])
+                        img_dataset_configs[idx] = img_dataset_config
                     else:
                         raise Exception(f"Couldn't find {img_dataset_config_path}")
 
@@ -219,7 +242,7 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
 
         assert len(img_dirs) == len(label_dirs) == len(img_id_regexes) == len(img_glob_patterns) == len(label_name_patterns) == len(input_channel_class_names), \
             "All lists must have the same length"
-        return img_dirs, label_dirs, img_id_regexes, img_glob_patterns, label_name_patterns, input_channel_class_names
+        return img_dirs, label_dirs, img_id_regexes, img_glob_patterns, label_name_patterns, input_channel_class_names, img_dataset_configs
 
 
     def process_img_file_list(self,
@@ -263,7 +286,7 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                     continue
                 if regex is not None:
                     # Extract the id from the filename using regex.
-                    match = regex.search(img_path.stem)
+                    match = regex.search(img_path.name)
                     try:
                         img_id = match.group(1)
                     except:
@@ -272,11 +295,13 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                 else:
                     img_id = img_path.stem
 
-                label_name_pattern = label_name_pattern.format(img_id)
-                label_path = Path(label_dir) / label_name_pattern
+                label_name = label_name_pattern.format(img_id)
+                label_path = Path(label_dir) / label_name
 
                 if label_path.exists():
-                    path_database.append({"img_path": img_path, "label_path": label_path, "folder_idx": folder_idx})
+                    path_database.append({"img_path": img_path,
+                                          "label_path": label_path,
+                                          "folder_idx": folder_idx})
                     self.file_id_to_idx[img_id] = len(path_database) - 1
 
                     if self.max_uniques and len(path_database) >= self.max_uniques:
@@ -302,6 +327,10 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                 img = np.array(img)
                 label = np.array(label)
 
+                config = self.img_dataset_configs[folder_idx]
+                gt_options = config.get("gt_options", {}) if config is not None else {}
+                label = process_label(label, gt_options=gt_options)
+
                 if self.transform_list is not None:
                     img, label = run_transforms(self.transform_list, img, label)
                 if self.paired_mask_transform_obj is not None and self.paired_mask_transform_obj:
@@ -324,6 +353,9 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                 if self.channel_mappers[folder_idx] is not None:
                     channel_mapper = self.channel_mappers[folder_idx]
                     label = channel_mapper(label)
+                    if active_channels is None:
+                        active_channels = list(range(label.shape[0]))
+
                     active_channels = channel_mapper.convert_idx_config(active_channels)
 
                 return_dict = {
@@ -412,6 +444,22 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
             mask[:, :, ...] = 1
         return mask
 
+def process_label(label, gt_options={}):
+    if label.dtype == bool:
+        label = label.astype(np.float32)  # to 0's and 1's
+
+    if gt_options.get("rescale_to_01"):
+        label = label.astype(np.float32) / label.max()
+
+    if gt_options.get("invert"):
+        label = 1 - label
+
+    # add a channel dim if needed in numpy
+    if len(label.shape) == 2:
+        label = label[..., np.newaxis]
+
+    return label
+
 def run_transforms(transform_list, img, label):
     if isinstance(transform_list, A.Compose):
         if transform_list.additional_targets:
@@ -441,21 +489,22 @@ def run_transforms(transform_list, img, label):
 def read_label_img(path):
     path = Path(path)
     # if TIFF, open as TIFF
-    label = None
+    loaded_img = None
     if path.suffix.startswith(".tif"):
         try:
             with TiffFile(path) as tif:
                 label_chw = tif.asarray()
                 metadata = parse_metadata(tif, keys_to_find="ActiveChannels")
             label_active_channels = metadata.get("ActiveChannels")
-            label = np.transpose(label_chw, (1, 2, 0))
+            loaded_img = np.transpose(label_chw, (1, 2, 0))
         except Exception as e:
             warnings.warn(f"Couldn't open {path}\n{e}")
-    if label is None:
-        label = Image.open(path)
+    if loaded_img is None:
+        loaded_img = Image.open(path)
         label_active_channels = metadata = None
+
     return {
-        "label": label,
+        "label": loaded_img,
         "metadata": metadata,
         "label_active_channels": label_active_channels
     }

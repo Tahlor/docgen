@@ -115,7 +115,7 @@ class ResizeAndPad:
         img = pad_divisible_by(img, self.div)
         return img
 
-class PadToBeDvisibleBy:
+class PadToBeDivisibleBy:
     def __init__(self, div):
         """
 
