@@ -66,8 +66,8 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                  output_channel_names=None,
                  input_channel_class_names=None,
                  use_cache=True,
-                 cache_size=200,
-                 max_cache_reuse=5,
+                 cache_size=300,
+                 max_cache_reuse=10,
                  **kwargs,
                  ):
         """
@@ -336,7 +336,12 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
         label = label_dict["label"]
         img = np.array(img)
         label = np.array(label)
-        return img, label, label_dict, img_path, label_path, folder_idx
+
+        config = self.img_dataset_configs[folder_idx]
+        gt_options = config.get("gt_options", {}) if config is not None else {}
+        label = process_label(label, gt_options=gt_options)
+
+        return img, label, label_dict, img_path, label_path, folder_idx, config, gt_options
 
     def load_idx(self, idx):
         if self.cache_object is not None:
@@ -351,11 +356,8 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
     def _get(self, idx):
         while True:
             try:
-                img, label, label_dict, img_path, label_path, folder_idx = self.load_idx(idx)
+                img, label, label_dict, img_path, label_path, folder_idx, config, gt_options = self.load_idx(idx)
                 orig_height, orig_width = img.shape[:2]
-                config = self.img_dataset_configs[folder_idx]
-                gt_options = config.get("gt_options", {}) if config is not None else {}
-                label = process_label(label, gt_options=gt_options)
 
                 if self.transform_list is not None:
                     img, label = run_transforms(self.transform_list, img, label)
@@ -366,6 +368,7 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                 if metadata and metadata.get("HasIgnoreChannel") and self.use_ignore_channel_if_available:
                     mask_with_ignore = label[:-1]
                     ignore_mask = (label[-1] == 1)  # Create the boolean mask from the last channel
+                    #print(f"IGNORE MASK ACTIVE {ignore_mask.sum()} pixels in {img_path}")
                     mask_expanded = ignore_mask.unsqueeze(0).expand_as(
                         mask_with_ignore)  # Expand the mask to match dimensions
 
@@ -390,6 +393,12 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                         active_channels = list(range(label.shape[0]))
 
                     active_channels = channel_mapper.convert_idx_config(active_channels)
+
+                # show(img, title=f"Image {img_path.parent.name}/{img_path.stem}")
+                # for i in range(label.shape[0]):
+                #     show(label[i], title=f"Layer: {channel_mapper.output_channel_names[i]}"
+                #                          f"Range: {label[i].min()} - {label[i].max()}")
+
 
                 return_dict = {
                         'image': img,
@@ -447,10 +456,10 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
             else:
                 collated_batch[key] = [item.get(key) for item in batch]
 
-        if "label_active_channels" in collated_batch:
-            collated_batch["active_channel_mask"] = PairedImgLabelImageFolderDataset.generate_active_channel_mask(collated_batch["mask"],
-                                                                                                     collated_batch["label_active_channels"])
-            collated_batch["mask"] *= collated_batch["active_channel_mask"]
+        # if "label_active_channels" in collated_batch:
+        #     collated_batch["active_channel_mask"] = PairedImgLabelImageFolderDataset.generate_active_channel_mask(collated_batch["mask"],
+        #                                                                                              collated_batch["label_active_channels"])
+        #     collated_batch["mask"] *= collated_batch["active_channel_mask"]
         return collated_batch
 
     @staticmethod
