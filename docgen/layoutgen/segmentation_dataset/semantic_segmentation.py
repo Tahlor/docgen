@@ -511,6 +511,7 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
             ### COMPOSITE IMAGES
             if i == 0: # no composition needed
                 composite_image = composite_the_images_torch(composite_image, img, start_x, start_y)
+                composite_after_1_layer = composite_image.clone()
             else:
                 composite_image_before_new_layer = composite_image.clone()
                 if hasattr(dataset, "composite_function") and dataset.composite_function:
@@ -527,7 +528,13 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
                 mask = mask_for_current_dataset[slice_y, slice_x].bool()
 
                 mean_img_after = torch.mean(composite_image[:, slice_y, slice_x], dim=0)
-                adjusted_mean_threshold = self.how_much_darker * (torch.mean(composite_image_before_new_layer[:, slice_y, slice_x], dim=0) - self.manual_pixel_offset)
+
+                # COMPARE TO THE IMAGE BEFORE THE NEW LAYER WAS PASTED - THIS IS WRONG, SINCE IT COULD BE WE LAYER SUCCESSIVELY DARKER LAYERS
+                #adjusted_mean_threshold = self.how_much_darker * (torch.mean(composite_image_before_new_layer[:, slice_y, slice_x], dim=0) - self.manual_pixel_offset)
+
+                # We only compare to *PROBABLY* the background layer, so it still needs to guess when layers interact
+                adjusted_mean_threshold = self.how_much_darker * ( torch.mean(composite_after_1_layer[:, slice_y, slice_x], dim=0) - self.manual_pixel_offset)
+
                 new_mask_after_pasting = mask & (mean_img_after > adjusted_mean_threshold)
                 ignore_index[slice_y, slice_x] = torch.max(ignore_index[slice_y, slice_x], new_mask_after_pasting)
 

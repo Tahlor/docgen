@@ -342,7 +342,14 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                     ignore_mask = (label[-1] == 1)  # Create the boolean mask from the last channel
                     mask_expanded = ignore_mask.unsqueeze(0).expand_as(
                         mask_with_ignore)  # Expand the mask to match dimensions
+
+                    # Exclude form_elements from ignore
+                    exclude_form_elements_index = config.get("input_channel_class_names",[]).index(["form_elements"])
+                    if exclude_form_elements_index is not None:
+                        mask_expanded[exclude_form_elements_index] = False  # Exclude specific class from ignore
+
                     mask_with_ignore[mask_expanded] = -1  # Replace with -1 where the mask is True
+
                     label = mask_with_ignore
 
                 if label_dict.get("label_active_channels") is not None:
