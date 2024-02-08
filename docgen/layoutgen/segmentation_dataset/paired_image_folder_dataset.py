@@ -1,3 +1,4 @@
+from docgen.layoutgen.segmentation_dataset.cache import Cache
 import inspect
 import albumentations as A
 from itertools import chain
@@ -64,6 +65,9 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                  img_id_regexes="(\d+)",
                  output_channel_names=None,
                  input_channel_class_names=None,
+                 use_cache=True,
+                 cache_size=200,
+                 max_cache_reuse=5,
                  **kwargs,
                  ):
         """
@@ -160,6 +164,9 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
             # just convert it to tensor, compose it
             self.transform_list = Compose([transforms.ToTensor()]
                                           )
+        self.cache_object = self.build_cache(cache_size, max_cache_reuse) if use_cache else None
+    def build_cache(self, cache_size=100, max_cache_reuse=5):
+        return Cache(cache_size, max_cache_reuse)
 
     def create_channel_mappers(self, output_channel_names, input_channel_names_for_each_folder):
         if output_channel_names is not None and input_channel_names_for_each_folder is not None:
@@ -318,21 +325,34 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
         self.length = len(path_database)
         return path_database
 
+    def _load_idx(self, idx):
+        idx = self._validate_idx(idx)
+        paths = self.path_database[idx]
+        img_path, label_path, folder_idx = paths["img_path"], paths["label_path"], paths["folder_idx"]
+
+        # load from png and convert to tensor
+        img = Image.open(img_path).convert("RGB")
+        label_dict = read_label_img(label_path)
+        label = label_dict["label"]
+        img = np.array(img)
+        label = np.array(label)
+        return img, label, label_dict, img_path, label_path, folder_idx
+
+    def load_idx(self, idx):
+        if self.cache_object is not None:
+            return_tuple = self.cache_object.get(idx, random_ok=True)
+            if return_tuple is None:
+                return_tuple = self._load_idx(idx)
+                self.cache_object.put(idx, return_tuple)
+            return return_tuple
+        else:
+            return self._load_idx(idx)
+
     def _get(self, idx):
         while True:
             try:
-                idx = self._validate_idx(idx)
-                paths = self.path_database[idx]
-                img_path, label_path, folder_idx = paths["img_path"], paths["label_path"], paths["folder_idx"]
-
-                # load from png and convert to tensor
-                img = Image.open(img_path).convert("RGB")
-                orig_width, orig_height = img.size
-                label_dict = read_label_img(label_path)
-                label = label_dict["label"]
-                img = np.array(img)
-                label = np.array(label)
-
+                img, label, label_dict, img_path, label_path, folder_idx = self.load_idx(idx)
+                orig_height, orig_width = img.shape[:2]
                 config = self.img_dataset_configs[folder_idx]
                 gt_options = config.get("gt_options", {}) if config is not None else {}
                 label = process_label(label, gt_options=gt_options)
