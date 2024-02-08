@@ -511,7 +511,6 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
             ### COMPOSITE IMAGES
             if i == 0: # no composition needed
                 composite_image = composite_the_images_torch(composite_image, img, start_x, start_y)
-                composite_after_1_layer = composite_image.clone()
             else:
                 composite_image_before_new_layer = composite_image.clone()
                 if hasattr(dataset, "composite_function") and dataset.composite_function:
@@ -538,24 +537,26 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
                 new_mask_after_pasting = mask & (mean_img_after > adjusted_mean_threshold)
                 ignore_index[slice_y, slice_x] = torch.max(ignore_index[slice_y, slice_x], new_mask_after_pasting)
 
-            if valid_region_bbox and i==0: # CROP TO THE VALID PASTE REGION, KIND OF A HACK
-                # I THINK THIS ASSUMES START_X AND START_Y ARE NEGATIVE/0
+            if i == 0:
+                if valid_region_bbox: # CROP TO THE VALID PASTE REGION, KIND OF A HACK
+                    # I THINK THIS ASSUMES START_X AND START_Y ARE NEGATIVE/0
 
-                # backup the original image and mask
-                composite_image_before_cropping = composite_image.clone()
-                composite_mask_before_cropping = composite_masks.clone()
+                    # backup the original image and mask
+                    composite_image_before_cropping = composite_image.clone()
+                    composite_mask_before_cropping = composite_masks.clone()
 
-                # create a smaller valid_region_bbox based on the paste origin
-                # subtract the start_x and start_y from the valid_region_bbox, but don't go below 0, remember it's x1,y1,x2,y2
-                adj_valid_region_bbox = (max(valid_region_bbox[0] + start_x, 0),
-                                         max(valid_region_bbox[1] + start_y, 0),
-                                         max(valid_region_bbox[2] + start_x, 0),
-                                         max(valid_region_bbox[3] + start_y, 0))
+                    # create a smaller valid_region_bbox based on the paste origin
+                    # subtract the start_x and start_y from the valid_region_bbox, but don't go below 0, remember it's x1,y1,x2,y2
+                    adj_valid_region_bbox = (max(valid_region_bbox[0] + start_x, 0),
+                                             max(valid_region_bbox[1] + start_y, 0),
+                                             max(valid_region_bbox[2] + start_x, 0),
+                                             max(valid_region_bbox[3] + start_y, 0))
 
-                # crop mask and image to valid region
-                composite_image = crop_image(composite_image, adj_valid_region_bbox, format="CHW")
-                composite_masks = crop_image(composite_masks, adj_valid_region_bbox, format="CHW")
-                ignore_index = composite_masks[-1] if self.use_ignore_index else None
+                    # crop mask and image to valid region
+                    composite_image = crop_image(composite_image, adj_valid_region_bbox, format="CHW")
+                    composite_masks = crop_image(composite_masks, adj_valid_region_bbox, format="CHW")
+                    ignore_index = composite_masks[-1] if self.use_ignore_index else None
+                composite_after_1_layer = composite_image.clone()
 
         # IF WE CROPPED IT, NOW PUT IT BACK TOGETHER
         if valid_region_bbox:

@@ -25,10 +25,15 @@ logger.addHandler(logging.StreamHandler())
 
 class MetaPairedImgLabelImageFolderDataset(Dataset):
     def __init__(self, img_dataset_config_paths, weights, *args, **kwargs):
-        self.datasets = [PairedImgLabelImageFolderDataset(img_dataset_config_paths=config, *args, **kwargs) for config in img_dataset_config_paths]
-        self.weights = self.normalize_weights(weights)
+        self.img_dataset_config_paths, self.weights = self.filter_out_0_weights(img_dataset_config_paths, weights)
+        self.datasets = [PairedImgLabelImageFolderDataset(img_dataset_config_paths=config, *args, **kwargs) for config in self.img_dataset_config_paths]
         self.length = sum(len(d) for d in self.datasets)
         self.counter = 0
+
+    def filter_out_0_weights(self, img_dataset_config_paths, weights):
+        configs = [config for i,config in enumerate(img_dataset_config_paths) if weights[i] > 0]
+        weights = self.normalize_weights([w for w in weights if w > 0])
+        return configs, weights
 
     def normalize_weights(self, weights):
         if weights is None:
@@ -228,6 +233,7 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                 if img_dataset_config_path is not None:
                     if img_dataset_config_path.exists():
                         img_dataset_config = yaml.safe_load(img_dataset_config_path.read_text())
+                        print(f"Loaded img_dataset_config from {img_dataset_config_path}\n{img_dataset_config}")
                         img_dirs[idx] = get_path(img_dataset_config_path, img_dataset_config.get("img_dir", img_dirs[idx]))
                         label_dirs[idx] = get_path(img_dataset_config_path, img_dataset_config.get("label_dir", label_dirs[idx]))
                         img_glob_patterns[idx] = img_dataset_config.get("img_glob_pattern", img_glob_patterns[idx])

@@ -65,7 +65,7 @@ final_size: 448
 dataset_length: 20000
 drive_mappings:
   "B:": "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle"
-output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v7.3_20k"
+output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v7.4_20k"
 overwrite: false
 output_img_size: 448
 composite_function: composite_the_images_torch
