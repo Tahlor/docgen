@@ -173,6 +173,8 @@ class PadToBeDivisibleByWithLabel:
         return image, label
 
 def pad_divisible_by(image, pad_divisible_by=32):
+    if image is None:
+        return None
     if isinstance(image, Image.Image):
         warnings.warn("Cannot pad PIL")
 

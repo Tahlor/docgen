@@ -174,7 +174,11 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
             # just convert it to tensor, compose it
             self.transform_list = Compose([transforms.ToTensor()]
                                           )
-        self.cache_object = self.build_cache(cache_size, max_cache_reuse) if use_cache else None
+        if use_cache:
+            print(f"USING CACHE!!! Size: {cache_size} Reuse: {max_cache_reuse}")
+            self.cache_object = self.build_cache(cache_size, max_cache_reuse)
+        else:
+            self.cache_object = None
     def build_cache(self, cache_size=100, max_cache_reuse=5):
         return Cache(cache_size, max_cache_reuse)
 
