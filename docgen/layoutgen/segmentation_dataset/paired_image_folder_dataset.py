@@ -25,11 +25,14 @@ logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
 
 class MetaPairedImgLabelImageFolderDataset(Dataset):
-    def __init__(self, img_dataset_config_paths, weights, *args, **kwargs):
+    def __init__(self, img_dataset_config_paths, weights=None, shuffle=True, *args, **kwargs):
+        if weights is None:
+            weights = [1] * len(img_dataset_config_paths)
         self.img_dataset_config_paths, self.weights = self.filter_out_0_weights(img_dataset_config_paths, weights)
         self.datasets = [PairedImgLabelImageFolderDataset(img_dataset_config_paths=config, *args, **kwargs) for config in self.img_dataset_config_paths]
         self.length = sum(len(d) for d in self.datasets)
         self.counter = 0
+        self.shuffle = shuffle
 
     def filter_out_0_weights(self, img_dataset_config_paths, weights):
         configs = [config for i,config in enumerate(img_dataset_config_paths) if weights[i] > 0]
@@ -46,8 +49,15 @@ class MetaPairedImgLabelImageFolderDataset(Dataset):
         return self.length
 
     def __getitem__(self, idx):
-        chosen_dataset = random.choices(self.datasets, self.weights)[0]
-        return chosen_dataset[idx % len(chosen_dataset)]
+        if self.shuffle:
+            chosen_dataset = random.choices(self.datasets, self.weights)[0]
+            return chosen_dataset[idx % len(chosen_dataset)]
+        else:
+            for dataset in self.datasets:
+                if idx < len(dataset):
+                    return dataset[idx]
+                idx -= len(dataset)
+
 
 class PairedImgLabelImageFolderDataset(GenericDataset):
 
@@ -519,7 +529,6 @@ def run_transforms(transform_list, img, label):
         img, label = transform_list(image=img, mask=label)
     # else if callable
     elif callable(transform_list):
-        # TODO: if label in signature
         if "label" in inspect.signature(transform_list).parameters:
             img, label = transform_list(image=img, label=label)
         else:

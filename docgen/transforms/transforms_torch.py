@@ -98,6 +98,38 @@ class RandomCropIfTooBig:
             return img
 
 
+class RandomCropIfTooBigLabel:
+    def __init__(self, size: tuple):
+        raise Exception("Not implemented")
+        self.size = size
+        if isinstance(size, int):
+            self.size = (size, size)
+        self.random_crop = transforms.RandomCrop(size)
+
+    def crop(self, img, label=None, **params):
+        image_cropped = transforms.functional.crop(image, i, j, h, w)
+        if label is not None:
+            mask_cropped = transforms.functional.crop(mask, i, j, h, w)
+        return image_cropped, mask_cropped
+
+    def __call__(self, img, label=None):
+        if not isinstance(img, torch.Tensor):
+            raise Exception("Must be a tensor")
+
+        # if it's big enough, crop
+        if img.shape[-2] >= self.size[0] and img.shape[-1] >= self.size[1]:
+            params = self.random_crop.get_params(img, self.size)
+            return self.random_crop(img, label, **params)
+        # if only one side is big enough, just do one
+        elif img.shape[-2] >= self.size[0]:
+            return F.crop(img, 0, 0, self.size[0], img.shape[-1])
+        elif img.shape[-1] >= self.size[1]:
+            return F.crop(img, 0, 0, img.shape[-2], self.size[1])
+        # if neither side is big enough, just return it
+        else:
+            return img
+
+
 class ResizeAndPad:
     def __init__(self, longest_side, div):
         """
