@@ -79,55 +79,51 @@ class RandomCropIfTooBig:
         self.size = size
         if isinstance(size, int):
             self.size = (size, size)
+        self.crop_height = self.size[0]
+        self.crop_width = self.size[1]
         self.random_crop = transforms.RandomCrop(size)
+        self.params = None
 
-    def __call__(self, img):
-        if not isinstance(img, torch.Tensor):
+    def __call__(self, image):
+        if not isinstance(image, torch.Tensor):
             raise Exception("Must be a tensor")
 
+    def crop_img(self, image, reuse_params=False):
+        height = image.shape[-2]
+        width = image.shape[-1]
+
         # if it's big enough, crop
-        if img.shape[-2] >= self.size[0] and img.shape[-1] >= self.size[1]:
-            return self.random_crop(img)
+        if height >= self.crop_height and width >= self.crop_width:
+            if self.params is None or not reuse_params:
+                self.params = self.random_crop.get_params(image, (self.crop_height, self.crop_width))
+            return F.crop(image, *self.params)
         # if only one side is big enough, just do one
-        elif img.shape[-2] >= self.size[0]:
-            return F.crop(img, 0, 0, self.size[0], img.shape[-1])
-        elif img.shape[-1] >= self.size[1]:
-            return F.crop(img, 0, 0, img.shape[-2], self.size[1])
+        elif height >= self.crop_height:
+            return F.crop(image, 0, 0, self.crop_height, width)
+        elif width >= self.crop_width:
+            return F.crop(image, 0, 0, height, self.crop_width)
         # if neither side is big enough, just return it
         else:
-            return img
+            return image
+
+class ToTensorWithLabel(transforms.ToTensor):
+    def __call__(self, image, label):
+        return super().__call__(image), super().__call__(label)
 
 
-class RandomCropIfTooBigLabel:
+class RandomCropIfTooBigWithLabel(RandomCropIfTooBig):
     def __init__(self, size: tuple):
-        raise Exception("Not implemented")
-        self.size = size
-        if isinstance(size, int):
-            self.size = (size, size)
-        self.random_crop = transforms.RandomCrop(size)
+        super().__init__(size)
 
-    def crop(self, img, label=None, **params):
-        image_cropped = transforms.functional.crop(image, i, j, h, w)
-        if label is not None:
-            mask_cropped = transforms.functional.crop(mask, i, j, h, w)
-        return image_cropped, mask_cropped
-
-    def __call__(self, img, label=None):
-        if not isinstance(img, torch.Tensor):
+    def __call__(self, image, label):
+        if not isinstance(image, torch.Tensor):
             raise Exception("Must be a tensor")
+        if not isinstance(label, torch.Tensor):
+            raise Exception("Must be a tensor")
+        image = self.crop_img(image, reuse_params=False)
+        label = self.crop_img(label, reuse_params=True)
+        return image, label
 
-        # if it's big enough, crop
-        if img.shape[-2] >= self.size[0] and img.shape[-1] >= self.size[1]:
-            params = self.random_crop.get_params(img, self.size)
-            return self.random_crop(img, label, **params)
-        # if only one side is big enough, just do one
-        elif img.shape[-2] >= self.size[0]:
-            return F.crop(img, 0, 0, self.size[0], img.shape[-1])
-        elif img.shape[-1] >= self.size[1]:
-            return F.crop(img, 0, 0, img.shape[-2], self.size[1])
-        # if neither side is big enough, just return it
-        else:
-            return img
 
 
 class ResizeAndPad:
@@ -160,6 +156,21 @@ class PadToBeDivisibleBy:
     def __call__(self, img):
         img = pad_divisible_by(img, self.div)
         return img
+
+class PadToBeDivisibleByWithLabel:
+    def __init__(self, div):
+        """
+
+        Args:
+            resize: The side of the longest side will be resized to this
+            div: The other side will be padded to be divisible by this
+        """
+        self.div = div
+
+    def __call__(self, image, label):
+        image = pad_divisible_by(image, self.div)
+        label = pad_divisible_by(label, self.div)
+        return image, label
 
 def pad_divisible_by(image, pad_divisible_by=32):
     if isinstance(image, Image.Image):

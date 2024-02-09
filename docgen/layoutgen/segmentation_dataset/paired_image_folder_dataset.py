@@ -415,6 +415,7 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                         'mask': label,
                         "name": img_path.stem,
                         "label_active_channels": active_channels,
+                        "path": img_path,
                         }
 
                 h,w = img.shape[-2:]
