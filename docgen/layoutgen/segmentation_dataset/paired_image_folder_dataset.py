@@ -1,3 +1,4 @@
+from docgen.utils.utils import time_function
 from docgen.layoutgen.segmentation_dataset.cache import Cache
 import inspect
 import albumentations as A
@@ -339,6 +340,7 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
         self.length = len(path_database)
         return path_database
 
+    @time_function
     def _load_idx(self, idx):
         idx = self._validate_idx(idx)
         paths = self.path_database[idx]
@@ -367,6 +369,7 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
         else:
             return self._load_idx(idx)
 
+    @time_function
     def _get(self, idx):
         while True:
             try:
@@ -460,6 +463,7 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
         return self._get(idx)
 
     @staticmethod
+    @time_function
     def collate_fn(batch, tensor_keys=["image", "mask"]):
         if isinstance(batch[0], list):
             return batch
