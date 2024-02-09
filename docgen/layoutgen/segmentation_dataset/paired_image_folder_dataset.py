@@ -403,6 +403,8 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                         active_channels = list(range(label.shape[0]))
 
                     active_channels = channel_mapper.convert_idx_config(active_channels)
+                else:
+                    print("No mapper???")
 
                 # show(img, title=f"Image {img_path.parent.name}/{img_path.stem}")
                 # for i in range(label.shape[0]):
@@ -501,7 +503,7 @@ def process_label(label, gt_options={}):
     if label.dtype == bool:
         label = label.astype(np.float32)  # to 0's and 1's
 
-    if gt_options.get("rescale_to_01"):
+    if gt_options.get("rescale_to_01") or label.dtype==np.uint8:
         label = label.astype(np.float32) / label.max()
 
     if gt_options.get("invert"):
