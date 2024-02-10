@@ -33,7 +33,7 @@ class MetaPairedImgLabelImageFolderDataset(Dataset):
         self.datasets = [PairedImgLabelImageFolderDataset(img_dataset_config_paths=config, *args, **kwargs) for config in self.img_dataset_config_paths]
         self.length = sum(len(d) for d in self.datasets)
         self.counter = 0
-        self.shuffle = shuffle
+        self.shuffle = shuffle or kwargs.get("use_cache", True)
 
     def filter_out_0_weights(self, img_dataset_config_paths, weights):
         configs = [config for i,config in enumerate(img_dataset_config_paths) if weights[i] > 0]
@@ -52,13 +52,17 @@ class MetaPairedImgLabelImageFolderDataset(Dataset):
     def __getitem__(self, idx):
         if self.shuffle:
             chosen_dataset = random.choices(self.datasets, self.weights)[0]
-            return chosen_dataset[idx % len(chosen_dataset)]
+            random_idx = random.randint(0, len(chosen_dataset) - 1)
+            return chosen_dataset[random_idx]
         else:
             for dataset in self.datasets:
                 if idx < len(dataset):
                     return dataset[idx]
                 idx -= len(dataset)
 
+
+def min_ignore_none(*args):
+    return min(filter(None, args), default=None)
 
 class PairedImgLabelImageFolderDataset(GenericDataset):
 
@@ -136,7 +140,7 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
         self.max_length_override = int(max_length_override) if max_length_override else None
         self.max_uniques = int(max_uniques) if max_uniques else None
         if self.max_uniques or self.max_length_override:
-            self.max_uniques = min(self.max_uniques, self.max_length_override)
+            self.max_uniques = min_ignore_none(self.max_uniques, self.max_length_override)
 
         self.img_dataset_config_paths = [img_dataset_config_paths] if isinstance(img_dataset_config_paths, (str, Path)) else img_dataset_config_paths
         self.number_of_datasets = len(self.img_dataset_config_paths) if self.img_dataset_config_paths is not None else len(img_dirs)
@@ -337,7 +341,7 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                 else:
                     logger.warning(f"No match found for file {img_path}")
 
-        self.length = len(path_database)
+        self.length = min_ignore_none(len(path_database), self.max_length_override)
         return path_database
 
     #@time_function

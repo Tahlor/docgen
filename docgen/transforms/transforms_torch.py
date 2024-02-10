@@ -87,6 +87,7 @@ class RandomCropIfTooBig:
     def __call__(self, image):
         if not isinstance(image, torch.Tensor):
             raise Exception("Must be a tensor")
+        return self.crop_img(image, reuse_params=False)
 
     def crop_img(self, image, reuse_params=False):
         height = image.shape[-2]
