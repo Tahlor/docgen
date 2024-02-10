@@ -113,7 +113,6 @@ class NaiveImageFolder(GenericDataset):
     def __init__(self, img_dirs,
                  img_dir_weights=None,
                  transform_list=None,
-                 max_length=None,
                  color_scheme="RGB",
                  recursive=True,
                  extensions=(".jpg", ".png", ".jfif", ".bmp", ".tiff"),
@@ -175,7 +174,7 @@ class NaiveImageFolder(GenericDataset):
         if len(self.sampler) == 0:
             raise ValueError(f"No images found in {img_dirs}")
 
-        self.max_length = max_length if max_length is not None else len(self.sampler)
+        self.max_length = min(self.max_length_override,len(self.sampler)) if self.max_length_override else len(self.sampler)
         self.current_img_idx = 0
         self.return_format = return_format
         self.rejected_paths = set()
