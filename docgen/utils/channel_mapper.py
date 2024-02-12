@@ -54,6 +54,11 @@ class SimpleChannelMapper(NaiveChannelMapper):
     def __init__(self, output_channel_names: List[List[str]],
                  input_channel_names: List[Union[str, List[str]]],
                  data_fill_value=0):
+        self.create_background = False
+        if ["background"] in output_channel_names and ["background"] not in input_channel_names:
+            self.create_background = True
+            input_channel_names = input_channel_names + [["background"]]
+
         super().__init__(output_channel_names, input_channel_names, data_fill_value)
 
         self.mapping_from_input_to_output = self.create_mapping(
@@ -66,6 +71,10 @@ class SimpleChannelMapper(NaiveChannelMapper):
             list_of_channels_values=self.flat_input_channel_names,
             match_any=True
         )
+
+        self.all_input_indices_with_a_home = {idx for output_idx, input_idxs in
+                                              self.mapping_from_output_to_input.items() if input_idxs is not None for
+                                              idx in input_idxs}
 
     def create_mapping_naive(self, list_of_channels_keys, list_of_channels_values):
         """Create a mapping from model output channels to GT channels."""
@@ -103,6 +112,14 @@ class SimpleChannelMapper(NaiveChannelMapper):
         """Align the GT tensor with the model output dimensions."""
         output_tensor = torch.full([len(self.output_channel_names), *gt_tensor.shape[1:]], self.data_fill_value,
                                    dtype=gt_tensor.dtype, device=gt_tensor.device)
+        if self.create_background:
+            # sum all gt_tensors in self.all_input_indices_with_a_home, background is always last
+            all_indices = list(self.all_input_indices_with_a_home)
+            all_indices.remove(max(all_indices))
+
+            background = (gt_tensor[all_indices].sum(dim=0) == 0).float()
+            gt_tensor = torch.cat([gt_tensor, background[None, ...]], dim=0)
+
         for model_idx, gt_idx in self.mapping_from_output_to_input.items():
             if gt_idx is not None:
                 if len(gt_idx) > 1:

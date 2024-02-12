@@ -60,7 +60,7 @@ v6.0:
 
 
 ignore_if_overlapping_classes: false
-workers: 4
+workers: 3
 final_size: 448
 dataset_length: 20000
 drive_mappings:
