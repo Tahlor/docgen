@@ -357,6 +357,10 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
         img = np.array(img)
         label = np.array(label)
 
+        # make sure label has a channel dimension
+        if len(label.shape) == 2:
+            label = label[..., np.newaxis]
+
         config = self.img_dataset_configs[folder_idx]
         gt_options = config.get("gt_options", {}) if config is not None else {}
         label = process_label(label, gt_options=gt_options)

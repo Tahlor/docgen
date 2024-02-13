@@ -58,6 +58,7 @@ class SimpleChannelMapper(NaiveChannelMapper):
         if ["background"] in output_channel_names and ["background"] not in input_channel_names:
             self.create_background = True
             input_channel_names = input_channel_names + [["background"]]
+            print("Background channel not found, will create background channel for GT!!!")
 
         super().__init__(output_channel_names, input_channel_names, data_fill_value)
 
