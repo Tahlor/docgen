@@ -30,7 +30,7 @@ class Cache:
         if key in self.cache:
             value, count = self.cache[key]
             self.cache[key] = (value, count + 1)
-            if count >= self.replace_after:
+            if count >= self.replace_after and len(self.cache) >= self.capacity:
                 del self.cache[key]
             return value
         return None

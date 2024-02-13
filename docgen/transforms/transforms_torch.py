@@ -145,7 +145,7 @@ class ResizeAndPad:
         return img
 
 class PadToBeDivisibleBy:
-    def __init__(self, div):
+    def __init__(self, div, fill=1):
         """
 
         Args:
@@ -153,27 +153,28 @@ class PadToBeDivisibleBy:
             div: The other side will be padded to be divisible by this
         """
         self.div = div
+        self.fill = fill
 
     def __call__(self, img):
-        img = pad_divisible_by(img, self.div)
+        img = pad_divisible_by(img, self.div, fill=self.fill)
         return img
 
-class PadToBeDivisibleByWithLabel:
-    def __init__(self, div):
+class PadToBeDivisibleByWithLabel(PadToBeDivisibleBy):
+    def __init__(self, div, fill=1):
         """
 
         Args:
             resize: The side of the longest side will be resized to this
             div: The other side will be padded to be divisible by this
         """
-        self.div = div
+        super().__init__(div, fill=fill)
 
     def __call__(self, image, label):
-        image = pad_divisible_by(image, self.div)
-        label = pad_divisible_by(label, self.div)
+        image = pad_divisible_by(image, self.div, fill=self.fill)
+        label = pad_divisible_by(label, self.div, fill=self.fill)
         return image, label
 
-def pad_divisible_by(image, pad_divisible_by=32):
+def pad_divisible_by(image, pad_divisible_by=32, fill=1):
     if image is None:
         return None
     if isinstance(image, Image.Image):
@@ -192,10 +193,10 @@ def pad_divisible_by(image, pad_divisible_by=32):
         x2_pad = w_pad - x1_pad
         y2_pad = h_pad - y1_pad
         if isinstance(image, np.ndarray):
-            t = A.PadIfNeeded(min_height=y1_pad+y2_pad+h, min_width=x1_pad+x2_pad+w, border_mode=0, value=1)
+            t = A.PadIfNeeded(min_height=y1_pad+y2_pad+h, min_width=x1_pad+x2_pad+w, border_mode=0, value=fill)
             image = t(image=image)
         else:
-            padding = transforms.Pad((x1_pad, y1_pad, x2_pad, y2_pad), fill=1)
+            padding = transforms.Pad((x1_pad, y1_pad, x2_pad, y2_pad), fill=fill)
             image = padding(image)
 
     return image

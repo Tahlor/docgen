@@ -124,7 +124,7 @@ class SimpleChannelMapper(NaiveChannelMapper):
         for model_idx, gt_idx in self.mapping_from_output_to_input.items():
             if gt_idx is not None:
                 if len(gt_idx) > 1:
-                    output_tensor[model_idx] = torch.max(*[gt_tensor[_gt_idx] for _gt_idx in gt_idx])
+                    output_tensor[model_idx] = torch.max(torch.stack([gt_tensor[_gt_idx] for _gt_idx in gt_idx]), dim=0)[0]
                 else:
                     output_tensor[model_idx] = gt_tensor[gt_idx]
         return output_tensor

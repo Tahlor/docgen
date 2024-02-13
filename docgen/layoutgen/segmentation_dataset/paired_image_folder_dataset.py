@@ -364,7 +364,6 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
         config = self.img_dataset_configs[folder_idx]
         gt_options = config.get("gt_options", {}) if config is not None else {}
         label = process_label(label, gt_options=gt_options)
-
         return img, label, label_dict, img_path, label_path, folder_idx, config, gt_options
 
     def load_idx(self, idx):
