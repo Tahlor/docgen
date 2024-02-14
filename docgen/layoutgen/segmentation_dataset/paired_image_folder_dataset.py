@@ -63,6 +63,9 @@ class MetaPairedImgLabelImageFolderDataset(Dataset):
 
 def min_ignore_none(*args):
     return min(filter(None, args), default=None)
+def max_ignore_none(*args):
+    return max(filter(None, args), default=None)
+
 
 class PairedImgLabelImageFolderDataset(GenericDataset):
 
@@ -72,6 +75,7 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                  paired_mask_transform_obj=None,
                  max_uniques=None,
                  max_length_override=None,
+                 min_length_override=None,
                  use_ignore_channel_if_available=True,
                  active_channels=None,
                  img_dataset_config_paths=None,
@@ -138,6 +142,7 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
             collate_fn=PairedImgLabelImageFolderDataset.collate_fn,
         )
         self.max_length_override = int(max_length_override) if max_length_override else None
+        self.min_length_override = int(min_length_override) if min_length_override else None
         self.max_uniques = int(max_uniques) if max_uniques else None
         if self.max_uniques or self.max_length_override:
             self.max_uniques = min_ignore_none(self.max_uniques, self.max_length_override)
@@ -341,7 +346,9 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                 else:
                     logger.warning(f"No match found for file {img_path}")
 
-        self.length = min_ignore_none(len(path_database), self.max_length_override)
+        self.actual_length = len(path_database)
+        self.length = min_ignore_none(self.actual_length, self.max_length_override)
+        self.length = max_ignore_none(self.length, self.min_length_override)
         return path_database
 
     #@time_function
@@ -364,9 +371,11 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
         config = self.img_dataset_configs[folder_idx]
         gt_options = config.get("gt_options", {}) if config is not None else {}
         label = process_label(label, gt_options=gt_options)
+
         return img, label, label_dict, img_path, label_path, folder_idx, config, gt_options
 
     def load_idx(self, idx):
+        idx = idx % self.actual_length if self.min_length_override else idx
         if self.cache_object is not None:
             return_tuple = self.cache_object.get(idx, random_ok=True)
             if return_tuple is None:
@@ -440,6 +449,7 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
 
                 return return_dict
             except Exception as e:
+                print(e)
                 logger.exception(f"Error loading image {idx} {img_path}")
                 idx += 1
                 if not self.continue_on_error:
