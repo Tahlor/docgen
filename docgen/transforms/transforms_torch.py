@@ -181,7 +181,16 @@ def pad_divisible_by(image, pad_divisible_by=32, fill=1):
         warnings.warn("Cannot pad PIL")
 
     # Calculate padding
-    h, w = image.shape[-2:]
+    if isinstance(image, torch.Tensor):
+        h, w = image.shape[-2:]
+        if len(image.shape) == 3 and image.shape[-1] in (1, 3):
+            warnings.warn("Channel dimension seems to be LAST, should be first with tensor")
+    elif isinstance(image, np.ndarray):
+        h, w = image.shape[:2]
+        if len(image.shape) == 3 and image.shape[0] in (1, 3):
+            warnings.warn("Channel dimension seems to be FIRST, should be last with numpy")
+
+
     h_pad = (pad_divisible_by - h % pad_divisible_by) % pad_divisible_by
     w_pad = (pad_divisible_by - w % pad_divisible_by) % pad_divisible_by
 
@@ -194,7 +203,7 @@ def pad_divisible_by(image, pad_divisible_by=32, fill=1):
         y2_pad = h_pad - y1_pad
         if isinstance(image, np.ndarray):
             t = A.PadIfNeeded(min_height=y1_pad+y2_pad+h, min_width=x1_pad+x2_pad+w, border_mode=0, value=fill)
-            image = t(image=image)
+            image = t(image=image)["image"]
         else:
             padding = transforms.Pad((x1_pad, y1_pad, x2_pad, y2_pad), fill=fill)
             image = padding(image)

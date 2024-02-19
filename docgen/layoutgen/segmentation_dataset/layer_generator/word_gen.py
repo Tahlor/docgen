@@ -11,6 +11,7 @@ from textgen.rendertext.render_word import RenderWordFont, RenderImageTextPair, 
 from docgen.bbox import BBox
 from docgen.layoutgen.segmentation_dataset.layer_generator.gen import Gen
 from textgen.number_generator import RandomNumberGenerator
+from textgen.symbol_generator import RandomSymbolGenerator
 from textgen.combined_generator import CombinedGenerator
 from textgen.fonts.font_sampler import FontSampler
 
@@ -128,6 +129,8 @@ class PrintedTextGenerator(BoxFillerGen):
         unigrams = get_resource(package_name="textgen", resource_relative_path="/datasets/unigram_freq.csv")
         words_dataset = Unigrams(csv_file=unigrams)
         number_generator = RandomNumberGenerator()
+        symbol_generator = RandomSymbolGenerator()
+
 
         if saved_fonts_folder is not None:
             saved_fonts_folder = Path(saved_fonts_folder)
@@ -144,7 +147,8 @@ class PrintedTextGenerator(BoxFillerGen):
 
         combined_gen = CombinedGenerator(
             generators=[words_dataset, number_generator],
-            probabilities=[1-probability_of_number, probability_of_number]
+            probabilities=[1-probability_of_number, probability_of_number],
+            symbol_generator=symbol_generator
         )
 
         self.renderer = RenderWordConsistentFont(format="numpy",

@@ -39,6 +39,7 @@ class DirectoryWeightedSampler(Sampler):
                  shuffle=True):
         self.img_dirs = to_list(img_dirs)
         self.img_dir_weights = img_dir_weights
+        self.remove_datasets_with_0_weight()
         self.extensions = set([ext.lower() for ext in extensions])
         self.recursive = recursive
         self.file_name_filter = re.compile(file_name_filter) if file_name_filter else None
@@ -46,6 +47,13 @@ class DirectoryWeightedSampler(Sampler):
         self.weights = self._calculate_weights()
         self.current_img_path = None
         self.shuffle = shuffle
+
+    def remove_datasets_with_0_weight(self):
+        if self.img_dir_weights:
+            filtered_img_dirs, filtered_img_dir_weights = zip(
+                *[(dir, weight) for dir, weight in zip(self.img_dirs, self.img_dir_weights) if weight != 0])
+            self.img_dirs = list(filtered_img_dirs)
+            self.img_dir_weights = list(filtered_img_dir_weights)
 
     def _get_all_files(self):
         all_files = []

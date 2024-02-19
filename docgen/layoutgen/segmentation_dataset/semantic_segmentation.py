@@ -21,7 +21,7 @@ from docgen.image_composition.utils import seamless_composite, composite_the_ima
     prep_composite_images, composite_cropped_imgs
 from docgen.image_composition.utils import compute_paste_origin_from_overlap_auto
 from docgen.transforms.transforms_torch import ToTensorIfNeeded
-from docgen.layoutgen.segmentation_dataset.masks import Mask, NaiveMask
+from docgen.layoutgen.segmentation_dataset.masks import Mask, NaiveMask, GrayscaleMask
 to_pil = ToPILImage()
 
 """
@@ -154,14 +154,6 @@ class SemanticSegmentationCompositionDataset(Dataset):
 
     def __getitem__(self, idx):
         img, metadata = self.get_image(idx)
-
-        # try:
-        #     if "seal" in self.generator.img_dirs[0].lower():
-        #         pass
-        #     else:
-        #         print("IT WORKED")
-        # except:
-        #     pass
 
         if self.transforms_before:
             img = self.transforms_before(img)
@@ -506,7 +498,10 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
             ### HANDLE MASKS
             mask_for_current_dataset = torch.zeros_like(composite_masks[0]) + self.mask_default_value
             mask_for_current_dataset = composite_the_images_torch(mask_for_current_dataset, mask, start_x, start_y, method=torch.max)
-            composite_masks[channel] = torch.max(composite_masks[channel], mask_for_current_dataset)
+            if isinstance(dataset.mask_maker, GrayscaleMask):
+                composite_masks[channel] = torch.min(composite_masks[channel], mask_for_current_dataset)
+            else:
+                composite_masks[channel] = torch.max(composite_masks[channel], mask_for_current_dataset)
 
             ### COMPOSITE IMAGES
             if i == 0: # no composition needed
@@ -520,22 +515,23 @@ class AggregateSemanticSegmentationCompositionDataset(Dataset):
 
                 # CREATE IGNORE INDEX - IMAGE NEEDS TO BE NONTRIVIALLY DARKER AFTER COMPOSITE MERGE
                 # Because layers can be composited differently, only valid to do BEFORE & AFTER image compare
-                img_height, img_width = img.shape[1:]
-                composite_height, composite_width = composite_image.shape[1:]
-                slice_y = slice(start_y, min(start_y + img_height, composite_height))
-                slice_x = slice(start_x, min(start_x + img_width, composite_width))
-                mask = mask_for_current_dataset[slice_y, slice_x].bool()
+                if "background" not in dataset.name:
+                    img_height, img_width = img.shape[1:]
+                    composite_height, composite_width = composite_image.shape[1:]
+                    slice_y = slice(start_y, min(start_y + img_height, composite_height))
+                    slice_x = slice(start_x, min(start_x + img_width, composite_width))
+                    mask = mask_for_current_dataset[slice_y, slice_x].bool()
 
-                mean_img_after = torch.mean(composite_image[:, slice_y, slice_x], dim=0)
+                    mean_img_after = torch.mean(composite_image[:, slice_y, slice_x], dim=0)
 
-                # COMPARE TO THE IMAGE BEFORE THE NEW LAYER WAS PASTED - THIS IS WRONG, SINCE IT COULD BE WE LAYER SUCCESSIVELY DARKER LAYERS
-                #adjusted_mean_threshold = self.how_much_darker * (torch.mean(composite_image_before_new_layer[:, slice_y, slice_x], dim=0) - self.manual_pixel_offset)
+                    # COMPARE TO THE IMAGE BEFORE THE NEW LAYER WAS PASTED - THIS IS WRONG, SINCE IT COULD BE WE LAYER SUCCESSIVELY DARKER LAYERS
+                    #adjusted_mean_threshold = self.how_much_darker * (torch.mean(composite_image_before_new_layer[:, slice_y, slice_x], dim=0) - self.manual_pixel_offset)
 
-                # We only compare to *PROBABLY* the background layer, so it still needs to guess when layers interact
-                adjusted_mean_threshold = self.how_much_darker * ( torch.mean(composite_after_1_layer[:, slice_y, slice_x], dim=0) - self.manual_pixel_offset)
+                    # We only compare to *PROBABLY* the background layer, so it still needs to guess when layers interact
+                    adjusted_mean_threshold = self.how_much_darker * ( torch.mean(composite_after_1_layer[:, slice_y, slice_x], dim=0) - self.manual_pixel_offset)
 
-                new_mask_after_pasting = mask & (mean_img_after > adjusted_mean_threshold)
-                ignore_index[slice_y, slice_x] = torch.max(ignore_index[slice_y, slice_x], new_mask_after_pasting)
+                    new_mask_after_pasting = mask & (mean_img_after > adjusted_mean_threshold)
+                    ignore_index[slice_y, slice_x] = torch.max(ignore_index[slice_y, slice_x], new_mask_after_pasting)
 
             if i == 0:
                 if valid_region_bbox: # CROP TO THE VALID PASTE REGION, KIND OF A HACK

@@ -91,7 +91,10 @@ def main(args=None):
 
 def loop_through_pdf_repos():
     PDF_repos = ["G:/s3/forms/PDF/OPM", "G:/s3/forms/PDF/SSA"]
-    for variant in "other_elements", "text":
+    PDF_repos = ["G:/s3/forms/PDF/IRS"]
+    variants = ["other_elements", "text"]
+    variants = ["text"]
+    for variant in variants:
         for folder in PDF_repos:
             folder = Path(folder)
             input_folder = f"{(folder / variant) / 'PDF'}".replace("\\","/")

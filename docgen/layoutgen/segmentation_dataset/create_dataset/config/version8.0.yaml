@@ -1,7 +1,39 @@
 # My Dataset Configuration v5 - just text / handwriting / backgrounds
 
-v6.6:
+v8.0:
+  - NO extraneous background
+  - always multiply
+  - bigger 768
+  - more font symbols
+  - more varied background noise
+  - Gaussian noise on the handwriting
+  -
+
+v7.4:
+  - no more ignore just for overlapping with other classes
+
+v7.3:
+  - more normal fonts
+
+v7.2:
+  - backgrounds, but no document edges
+
+v7.1:
+  - backgrounds, but no subtle background noise
+
+v7.0:
+  - no backgrounds
+
+v6.8:
+  - images are closer to same font size
+  - Need to pair with RESIZING
+  - Maybe do 224 crops / downsampling
+
+
+v6.6-7:
   - smaller
+  - more italic
+  - limit to 1 handwriting per page
 
 v6.5:
   - BIG
@@ -37,22 +69,27 @@ v6.0:
   - added more real hw lines
 
 workers: 4
-final_size: 448
+final_size: 768
 dataset_length: 50000
 drive_mappings:
   "B:": "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle"
-output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v6.5_50k"
+output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v8.0"
 overwrite: false
-output_img_size: 448
+output_img_size: 768
 composite_function: composite_the_images_torch
 layout_sampler_kwargs:
-  default_min_layers: 2
-  default_max_layers: 5
+  default_min_layers: 3
+  default_max_layers: 6
   number_of_layer_weights:
-    - .1
-    - .3
-    - .3
     - .2
+    - .5
+    - .5
+    - .2
+  max_layers_of_one_type:
+    background: 2
+    handwriting: 2
+    text: 2
+    form_elements: 1
 
 datasets:
   - name: RenderedFonts
@@ -60,49 +97,17 @@ datasets:
     layer_contents: "text"
     base_dataset_kwargs:
       saved_fonts_folder: "G:/s3/synthetic_data/resources/fonts"
-      font_size_rng: [ 10, 60 ]
+      font_size_rng: [ 20, 40 ]
       word_count_rng: [ 10, 20 ]
-      font_class_weights: [ 30, 10, 20, 120 ]
+      font_class_weights: [ 5, 5, 30, 10, 100, 30 ]
       font_size_scalers: [ 1, 2, 1 ]
       probability_of_random_box_fill: .8
       font_class_files:
-        - "G:/s3/synthetic_data/resources/fonts/FONT_SAMPLES/italic2_fonts.pkl"
         - "G:/s3/synthetic_data/resources/fonts/FONT_SAMPLES/italic_fonts.pkl"
+        - "G:/s3/synthetic_data/resources/fonts/FONT_SAMPLES/italic2_fonts.pkl"
+        - "G:/s3/synthetic_data/resources/fonts/FONT_SAMPLES/italic3_fonts.pkl"
         - "G:/s3/synthetic_data/resources/fonts/FONT_SAMPLES/english_fonts.pkl"
         - "G:/s3/synthetic_data/resources/fonts/FONT_SAMPLES/CLEAR_no_typewriter_fonts.pkl"
-    mask:
-      type: MaskWithIgnoreThreshold
-      kwargs:
-        threshold: .9
-        ignore_threshold: .95
-    sample_weight: 5
-    transforms:
-      - ToNumpy
-      - RandomChoice:
-        - InkColorJitter
-        - InkColorJitter
-        - InkColorJitter
-        - InkColorJitter
-        - IdentityTransform
-        - IdentityTransform
-        - IdentityTransform
-        - Blur
-        - Lighten
-      - ToTensor
-      - RandomResize:
-          min_scale: .8
-          max_scale: 1.1
-
-  - name: RenderedFonts
-    type: PrintedTextGenerator
-    layer_contents: "typewriter"
-    base_dataset_kwargs:
-      saved_fonts_folder: "G:/s3/synthetic_data/resources/fonts"
-      font_size_rng: [ 10, 50 ]
-      word_count_rng: [ 10, 20 ]
-      font_class_weights: [ 100 ]
-      probability_of_random_box_fill: .9
-      font_class_files:
         - "G:/s3/synthetic_data/resources/fonts/FONT_SAMPLES/typewriter_fonts.pkl"
     mask:
       type: MaskWithIgnoreThreshold
@@ -112,17 +117,26 @@ datasets:
     sample_weight: 5
     transforms:
       - ToNumpy
+      - type: ACompose
+        p: 1
+        transforms:
+#          - type: ARandomBrightnessContrast
+#            brightness_limit: .1
+#            contrast_limit: .1
+#            p: .1
+          - type: AGaussNoiseSelective
+            p: .4
+#          - type: ABlur
+#            blur_limit: 3
+#            p: .05
       - RandomChoice:
         - InkColorJitter
         - InkColorJitter
         - InkColorJitter
         - InkColorJitter
-        - Blur
-        - Lighten
         - IdentityTransform
         - IdentityTransform
         - IdentityTransform
-      #- Typewriter
       - ToTensor
       - RandomResize:
           min_scale: .8
@@ -131,28 +145,36 @@ datasets:
   - name: handwriting
     type: HWGenerator
     layer_contents: handwriting
-    switch_frequency: 4 # switch to new npy file
+    switch_frequency: 10 # switch to new npy file
     base_dataset_kwargs:
         probability_of_random_box_fill: .95
         saved_hw_folder: "C:/Users/tarchibald/Anaconda3/envs/docgen_windows/hwgen/resources/generated"
+        word_count_rng: [ 10, 20 ]
+        font_size_rng: [ 20, 40 ]
     sample_weight: 5
     transforms:
       - ToNumpy
-      - RandomChoice:
-        - InkColorJitter
-        - InkColorJitter
-        - InkColorJitter
-        - InkColorJitter
-        - IdentityTransform
-        - IdentityTransform
-        - IdentityTransform
-        - Blur
-        - Lighten
-      - MoreContrast
+      - type: ACompose
+        p: 1
+        transforms:
+        - type: ARandomBrightnessContrast
+          brightness_limit: .1
+          contrast_limit: .1
+          p: .1
+        - type: AGaussNoiseSelective
+          p: .4
+#        - type: ABlur
+#          blur_limit: 3
+#          p: .05
+      - type: RandomChoice
+        transforms:
+          - InkColorJitter
+          - IdentityTransform
+          - MoreContrast
       - ToTensor
       - RandomResize:
-          min_scale: .7
-          max_scale: 2
+          min_scale: .8
+          max_scale: 1.1
     composite_function:
         type: CompositerTorch
         method: torchmul
@@ -168,26 +190,29 @@ datasets:
     unigrams_path: null # just use the letters that exist in unigrams
     switch_frequency: null # don't switch "authors" (there's only 1 in EMNIST)
     base_dataset_kwargs:
-        probability_of_random_box_fill: .99
+        probability_of_random_box_fill: .98
         saved_hw_folder: "G:/data/standard_hwr/emnist/tiny"
-    sample_weight: 3
+        word_count_rng: [ 10, 20 ]
+        font_size_rng: [ 20, 40 ]
+    sample_weight: 1
     transforms:
       - ToNumpy
+      - type: ACompose
+        p: 1
+        transforms:
+#        - type: ARandomBrightnessContrast
+#          brightness_limit: .1
+#          contrast_limit: .1
+#          p: .1
+        - type: AGaussNoiseSelective
+          p: .8
       - RandomChoice:
         - InkColorJitter
-        - InkColorJitter
-        - InkColorJitter
-        - InkColorJitter
-        - Blur
-        - Lighten
-        - Lighten
         - IdentityTransform
-        - IdentityTransform
-
       - ToTensor
       - RandomResize:
-          min_scale: .7
-          max_scale: 2
+          min_scale: .8
+          max_scale: 1.1
     composite_function:
         type: CompositerTorch
         method: torchmul
@@ -197,28 +222,30 @@ datasets:
         threshold: .8
         ignore_threshold: .95
 
+  - name: background
+    type: NaiveImageFolder
+    base_dataset_kwargs:
+      # "B:/document_backgrounds/paper_only"
+      img_dirs:
+        - G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/background_splotches
+        - G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/background_fibrous
+      img_dir_weights:
+        - 1
+        - 1
+    layer_contents: noise
+    layer_position: 1 # background layer
+    sample_weight: 10
+    percent_overlap: 1
+    mask:
+      type: GrayscaleMask
+    transforms:
+      - ToTensor
 
   - name: background
     type: NaiveImageFolder
     base_dataset_kwargs:
       # "B:/document_backgrounds/paper_only"
       img_dirs:
-#        - "B:/document_backgrounds/paper_only/old paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting"
-#        - "B:/document_backgrounds/paper_only/paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting"
-#        - "B:/document_backgrounds/paper_only/white paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting"
-#        - "B:/document_backgrounds/paper_only/aged blank letter with imprints of text from the reverse side, as if some vestiges of the ink permeated through the paper, but impossible to read; full frame"
-#        - "B:/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frame"
-#        - "B:/document_backgrounds/paper_only/blank paper with a some random highlighter and marker marks, full frame"
-#        - "B:/document_backgrounds/paper_only/blank paper with mold damage, full frame"
-#        - "B:/document_backgrounds/paper_only/old blank paper with a some random highlighter and marker marks, full frame"
-#        - "B:/document_backgrounds/paper_only/old blank paper with water or coffee stains, full frame"
-#        - "B:/document_backgrounds/paper_only/old blank paper, some wrinkles and imperfections, variable lighting"
-#        - "B:/document_backgrounds/paper_only/old paper with ink marks, crinkles, wrinkles, and imperfections and variable lighting"
-#        - "B:/document_backgrounds/with_backgrounds/"
-
-#        - "B:/document_backgrounds/with_backgrounds/blank discolored paper with creases; it is stapled along the top, bottom, and sides, also has paperclips"
-#        - "B:/document_backgrounds/with_backgrounds/blank old document"
-
         - "B:/document_backgrounds/with_backgrounds/full frame aerial view of 2 blank pages of old open book with wrinkles; book is on top of a noisey background"
         - "B:/document_backgrounds/with_backgrounds/2 blank pages of old book, full frame"
         - "B:/document_backgrounds/with_backgrounds/aerial view of 2 blank pages of old open book with ink marks and wrinkles, full frame"
@@ -226,9 +253,13 @@ datasets:
         - "B:/document_backgrounds/with_backgrounds/microfilm blank old page with ink marks"
         - "B:/document_backgrounds/with_backgrounds/old blank weathered document"
         - "B:/document_backgrounds/with_backgrounds/old microfilm blank document"
-
-        - "B:/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frameG:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frameG:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frame/"
-        - "B:/document_backgrounds/paper_only/aged blank letter with imprints of text from the reverse side, as if some vestiges of the ink permeated through the paper, but impossible to read; full frame/"
+        - B:/paper_only/blank paper with a some random highlighter and marker marks, full frame
+        - B:/paper_only/old blank paper with a some random highlighter and marker marks, full frame
+        - B:/paper_only/old blank paper with water or coffee stains, full frame
+        - B:/paper_only/old blank paper, some wrinkles and imperfections, variable lighting
+        - B:/paper_only/white paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting
+#        - "B:/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frame"
+#        - "B:/document_backgrounds/paper_only/aged blank letter with imprints of text from the reverse side, as if some vestiges of the ink permeated through the paper, but impossible to read; full frame/"
       img_dir_weights:
         - 2
         - 2
@@ -237,12 +268,16 @@ datasets:
         - 1
         - 1
         - 1
-        - 3
-        - 3
-
+        - 1
+        - 1
+        - 1
+        - 1
+        - 1
+#        - 0
+#        - 0
     layer_contents: noise
     layer_position: 0 # background layer
-    sample_weight: 15
+    sample_weight: 10
     percent_overlap: 1
     mask:
       type: GrayscaleMask
@@ -268,8 +303,12 @@ datasets:
       img_dirs:
         - "G:/s3/forms/PDF/OPM/text/images"
         - "G:/s3/forms/PDF/SSA/text/images"
+        - "G:/s3/forms/PDF/IRS/text/images"
+    composite_function:
+        type: CompositerTorch
+        method: torchmul
     layer_contents: text
-    sample_weight: .5
+    sample_weight: 2
     transforms:
       - ToNumpy
       - RandomChoice:
@@ -290,14 +329,13 @@ datasets:
       - ToTensor
       - RandomResize:
           min_scale: .8
-          max_scale: 1.6
+          max_scale: 1.4
           max_upscale: 3
     mask:
       type: MaskWithIgnoreThreshold
       kwargs:
         threshold: .9
         ignore_threshold: .95
-
 
   - name: pdf_form_elements
     type: NaiveImageFolder
@@ -309,7 +347,11 @@ datasets:
         - "G:/s3/forms/PDF/SSA/other_elements/images"
       recursive: false
     layer_contents: form_elements
-    sample_weight: 2
+    sample_weight: 3
+    composite_function:
+      type: CompositerTorch
+      method: torchmul
+
     transforms:
       - ToNumpy
       - RandomChoice:
@@ -393,7 +435,7 @@ datasets:
         - "G:/data/standard_hwr/IAM_OFFLINE/lines"
       recursive: true
     layer_contents: handwriting
-    sample_weight: 1
+    sample_weight: 0
     filters:
       - RejectIfTooManyPixelsAreBelowThreshold:
           threshold: 0.8
@@ -426,8 +468,8 @@ datasets:
     type: NaiveImageFolder
     base_dataset_kwargs:
       img_dirs:
-        - "G:/data/standard_hwr/AllHandwritingImages/"
-        - "G:/data/standard_hwr/CEDAR-Letter-FULL"
+        - "G:/data/standard_hwr/AllHandwritingImages/" # about 60 px
+        - "G:/data/standard_hwr/CEDAR-Letter-FULL" # about 70 px
       recursive: true
     layer_contents: handwriting
     sample_weight: 6
@@ -440,6 +482,11 @@ datasets:
     transforms:
       - ToNumpy
       - CropToDarkness
+      - type: ACompose
+        p: 1
+        transforms:
+          - type: AGaussNoiseSelective
+            p: .6
       - RandomChoice:
         - InkColorJitter
         - InkColorJitter
@@ -449,8 +496,8 @@ datasets:
         - Blur
       - ToTensor
       - RandomResize:
-          min_scale: .2
-          max_scale: 1
+          min_scale: .25
+          max_scale: .5
     composite_function:
         type: CompositerTorch
         method: torchmul
@@ -479,6 +526,9 @@ datasets:
       - RandomResize:
           min_scale: .5
           max_scale: 2
+    composite_function:
+        type: CompositerTorch
+        method: torchmul
     mask:
       type: MaskWithIgnoreThreshold
       kwargs:

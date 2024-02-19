@@ -73,7 +73,8 @@ if __name__ == "__main__":
     #input_pdf_path = Path("C:/Users/tarchibald/Downloads/metadc1757662_m1/full_pdf_data/1.ForRepo/2C5RKIBUAWOITURJRXP244UPY2QHUQXM/2C5RKIBUAWOITURJRXP244UPY2QHUQXM.pdf")
     # PDF_repo = r"G:/s3/forms/PDF/IRS"
     # output_pdf_path = "G:/s3/forms/PDF/IRS"
-    PDF_repos = ["G:/s3/forms/PDF/OPM", "G:/s3/forms/PDF/SSA"]
+    #PDF_repos = ["G:/s3/forms/PDF/OPM", "G:/s3/forms/PDF/SSA"]
+    PDF_repos = ["G:/s3/forms/PDF/IRS"]
     output_pdf_paths = PDF_repos
 
     for PDF_repo, output_pdf_path in zip(PDF_repos, output_pdf_paths):

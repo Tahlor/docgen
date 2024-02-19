@@ -15,6 +15,7 @@ from docgen.layoutgen.segmentation_dataset.utils.dataset_sampler import LayerSam
 from torchvision.transforms import ToTensor
 from docgen.windows.utils import map_drive, unmap_drive
 from docdegrade.torch_transforms import ToNumpy, CHWToHWC, HWCToCHW, RandomChoice, Squeeze
+from docdegrade.albumentations_transforms import GaussNoiseSelective
 from docgen.transforms.transforms_torch import ResizeAndPad, IdentityTransform, RandomResize, RandomCropIfTooBig, \
     ResizeLongestSide, RandomBottomLeftEdgeCrop, CropBorder, RandomFlipOrMirror
 from docgen.transforms.transforms_torch import *
@@ -28,6 +29,9 @@ from docgen.image_composition.utils import seamless_composite, composite_the_ima
 from docgen.datasets.utils.dataset_filters import RejectIfEmpty, RejectIfTooManyPixelsAreBelowThreshold
 from docgen.layoutgen.segmentation_dataset.masks import Mask, NaiveMask, SoftMask, GrayscaleMask, MaskWithIgnoreThreshold
 from hwgen.data.utils import show,display
+from docgen.transforms.transforms_torch import OneOfTransform
+from docgen.layoutgen.segmentation_dataset.create_dataset.transforms.compose import MetaCompose
+
 
 def easydict_representer(dumper, data):
     return dumper.represent_dict(data.items())
@@ -51,7 +55,7 @@ logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
 
 
-class TransformType(Enum):
+class TransformEnum(Enum):
     TONUMPY = ToNumpy
     RANDOMCHOICE = RandomChoice
     RANDOMRESIZE = RandomResize
@@ -83,6 +87,12 @@ class TransformType(Enum):
     MORECONTRAST = MoreContrast
     CROPTODARKNESS = CropToDarkness
     TYPEWRITER = Typewriter
+    AGAUSSNOISESELECTIVE = GaussNoiseSelective
+    ARANDOMBRIGHTNESSCONTRAST = A.RandomBrightnessContrast
+    ACOMPOSE = MetaCompose
+    ABLUR = A.Blur
+    ONEOF = OneOfTransform
+
 
 class DatasetType(Enum):
     HWGENERATOR = HWGenerator
@@ -114,6 +124,40 @@ class Masks(Enum):
 class DatasetFilters(Enum):
     REJECTIFEMPTY = RejectIfEmpty
     REJECTIFTOOMANYPIXELSAREBELOWTHRESHOLD = RejectIfTooManyPixelsAreBelowThreshold
+
+def create_transform(transform_dict):
+    if isinstance(transform_dict, str):
+        return TransformEnum[transform_dict.upper()].value()
+    if "type" not in transform_dict and len(transform_dict) == 1:
+        # deprecated, should change to {type: RandomChoice transforms: [list of transforms]}
+        only_key = list(transform_dict.keys())[0]
+        if only_key.upper() == "RANDOMCHOICE":
+            inner_transform_objects = [TransformEnum[item.upper()].value() for item in transform_dict[only_key]]
+        else:
+            # it's a single transform with some args
+            return TransformEnum[only_key.upper()].value(**transform_dict[only_key])
+        return TransformEnum[only_key.upper()].value(inner_transform_objects)
+
+    transform_type = transform_dict.pop("type", "").upper()
+
+    if transform_type in {"ACOMPOSE"}:
+        transforms = transform_dict.pop("transforms", [])
+        return MetaCompose(transforms=create_transforms(transforms), **transform_dict)
+    elif transform_type in { "AONEOF", "ONEOF", "RANDOMCHOICE"}:
+        transforms = transform_dict.pop("transforms", [])
+        metatransform = TransformEnum[transform_type].value
+        return metatransform(create_transforms(transforms), **transform_dict)
+    else:
+        transform_class = TransformEnum[transform_type].value
+        return transform_class(**transform_dict)
+
+def create_transforms(list_of_dicts):
+    transform_objects = []
+    for transform in list_of_dicts:
+        transform_object = create_transform(transform)
+        transform_objects.append(transform_object)
+    return transform_objects
+
 
 def parse_config(config_file_path: Path):
     with open(config_file_path, 'r') as file:
@@ -175,7 +219,7 @@ def create_individual_dataset(config):
     return segmentation_dataset
 
 
-def create_transforms(transforms_list: List[Union[str, Dict[str, Any]]]) -> List[Any]:
+def create_transforms_OLD(transforms_list: List[Union[str, Dict[str, Any]]]) -> List[Any]:
     """
     Create a list of transform objects based on the configuration list.
 
@@ -185,29 +229,27 @@ def create_transforms(transforms_list: List[Union[str, Dict[str, Any]]]) -> List
     Returns:
         List[Any]: List of initialized transform objects.
     """
-    if not transforms_list:
-        return []
     transform_objects = []
-
-    for transform_item in transforms_list:
-        if isinstance(transform_item, str):
-            # Simple transform
-            transform_cls = TransformType[transform_item.upper()].value
-            transform_objects.append(transform_cls())
-        elif isinstance(transform_item, dict):
-            # Complex transform (with arguments or meta-transform like RandomChoice)
-            for key, value in transform_item.items():
-                if key == 'RandomChoice':
-                    inner_transform_objects = [TransformType[item.upper()].value() for item in value]
-                    transform_objects.append(RandomChoice(inner_transform_objects))
+    if isinstance(transform_item, str):
+        # Simple transform
+        transform_cls = TransformEnum[transform_item.upper()].value
+        transform_objects.append(transform_cls())
+    elif isinstance(transform_item, dict):
+        # Complex transform (with arguments or meta-transform like RandomChoice)
+        for key, value in transform_item.items():
+            if key == 'RandomChoice':
+                inner_transform_objects = [TransformEnum[item.upper()].value() for item in value]
+                transform_objects.append(RandomChoice(inner_transform_objects))
+            else:
+                if key.upper() == "TYPE":
+                    TransformEnum[value.upper()].value
+                transform_cls = TransformEnum[key.upper()].value
+                if value is None:
+                    transform_objects.append(transform_cls())
+                elif isinstance(value, dict):
+                    transform_objects.append(transform_cls(**value))
                 else:
-                    transform_cls = TransformType[key.upper()].value
-                    if value is None:
-                        transform_objects.append(transform_cls())
-                    elif isinstance(value, dict):
-                        transform_objects.append(transform_cls(**value))
-                    else:
-                        transform_objects.append(transform_cls(value))
+                    transform_objects.append(transform_cls(value))
 
     return transform_objects
 
@@ -240,8 +282,8 @@ def create_aggregate_dataset(config):
         if dataset is None:
             input(f"Problem with dataset config: {dataset_config}")
             continue
-        transforms = create_transforms(dataset_config.get("transforms") or [])
-        dataset.transforms = transforms
+        #transforms = create_transforms(dataset_config.get("transforms") or [])
+        #dataset.transforms = transforms
         generators.append(dataset)
 
     layout_sampler = LayerSampler(generators,
