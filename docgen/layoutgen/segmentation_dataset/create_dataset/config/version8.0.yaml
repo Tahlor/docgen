@@ -73,7 +73,7 @@ final_size: 768
 dataset_length: 50000
 drive_mappings:
   "B:": "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle"
-output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v8.0"
+output_path: "C:/Users/tarchibald/github/document_embeddings/document_embeddings/segmentation/dataset/v8.1"
 overwrite: false
 output_img_size: 768
 composite_function: composite_the_images_torch
@@ -253,18 +253,18 @@ datasets:
         - "B:/document_backgrounds/with_backgrounds/microfilm blank old page with ink marks"
         - "B:/document_backgrounds/with_backgrounds/old blank weathered document"
         - "B:/document_backgrounds/with_backgrounds/old microfilm blank document"
-        - B:/paper_only/blank paper with a some random highlighter and marker marks, full frame
-        - B:/paper_only/old blank paper with a some random highlighter and marker marks, full frame
-        - B:/paper_only/old blank paper with water or coffee stains, full frame
-        - B:/paper_only/old blank paper, some wrinkles and imperfections, variable lighting
-        - B:/paper_only/white paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting
+        - B:/document_backgrounds/paper_only/blank paper with a some random highlighter and marker marks, full frame
+        - B:/document_backgrounds/paper_only/old blank paper with a some random highlighter and marker marks, full frame
+        - B:/document_backgrounds/paper_only/old blank paper with water or coffee stains, full frame
+        - B:/document_backgrounds/paper_only/old blank paper, some wrinkles and imperfections, variable lighting
+        - B:/document_backgrounds/paper_only/white paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting
 #        - "B:/document_backgrounds/paper_only/aged blank letter with subtle imprints of text from its other side, as if the ink permeated through the paper; full frame"
 #        - "B:/document_backgrounds/paper_only/aged blank letter with imprints of text from the reverse side, as if some vestiges of the ink permeated through the paper, but impossible to read; full frame/"
       img_dir_weights:
-        - 2
-        - 2
-        - 2
-        - 2
+        - 1
+        - 1
+        - 1
+        - 1
         - 1
         - 1
         - 1
@@ -308,7 +308,7 @@ datasets:
         type: CompositerTorch
         method: torchmul
     layer_contents: text
-    sample_weight: 2
+    sample_weight: 4
     transforms:
       - ToNumpy
       - RandomChoice:
@@ -347,7 +347,7 @@ datasets:
         - "G:/s3/forms/PDF/SSA/other_elements/images"
       recursive: false
     layer_contents: form_elements
-    sample_weight: 3
+    sample_weight: 5
     composite_function:
       type: CompositerTorch
       method: torchmul

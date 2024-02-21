@@ -39,27 +39,35 @@ class DirectoryWeightedSampler(Sampler):
                  shuffle=True):
         self.img_dirs = to_list(img_dirs)
         self.img_dir_weights = img_dir_weights
-        self.remove_datasets_with_0_weight()
+        self.prep_weights()
         self.extensions = set([ext.lower() for ext in extensions])
         self.recursive = recursive
         self.file_name_filter = re.compile(file_name_filter) if file_name_filter else None
-        self.imgs = self._get_all_files()
-        self.weights = self._calculate_weights()
+
+        self.imgs, self.weights = self._get_all_files()
         self.current_img_path = None
         self.shuffle = shuffle
 
-    def remove_datasets_with_0_weight(self):
+    def prep_weights(self):
+        """ Remove directories with weight 0, and set all weights to 1 if no weights are provided
+        """
         if self.img_dir_weights:
             filtered_img_dirs, filtered_img_dir_weights = zip(
                 *[(dir, weight) for dir, weight in zip(self.img_dirs, self.img_dir_weights) if weight != 0])
             self.img_dirs = list(filtered_img_dirs)
             self.img_dir_weights = list(filtered_img_dir_weights)
+        else:
+            self.img_dir_weights = [1] * len(self.img_dirs)
 
     def _get_all_files(self):
         all_files = []
-        for img_dir in self.img_dirs:
+        all_weights = []
+        for i, img_dir in enumerate(self.img_dirs):
             img_dir_path = Path(img_dir)
+            if not img_dir_path.is_dir():
+                warnings.warn(f"Directory {img_dir} does not exist.")
             print(f"Looking for files in {img_dir}...")
+
             if self.recursive:
                 files = img_dir_path.rglob("*.*")
             else:
@@ -70,11 +78,14 @@ class DirectoryWeightedSampler(Sampler):
 
             files = [f for f in files if f.suffix.lower() in self.extensions]
             print(f"Found {len(files)} files in {img_dir} after filtering.")
-
             all_files.extend(files)
+            all_weights.extend([self.img_dir_weights[i]/len(files)] * len(files))
+
+        # normalize weights
+        all_weights = [w / sum(all_weights) for w in all_weights]
 
         print(f"Dataset has {len(all_files)} files after filtering.")
-        return all_files
+        return all_files, all_weights
 
     def _reject_image(self, img_path, img):
         try:
@@ -88,19 +99,6 @@ class DirectoryWeightedSampler(Sampler):
             logger.exception(f"Error processing image {img_path}")
             self.rejected_files.add(img_path)
             return True
-
-    def _calculate_weights(self):
-        if self.img_dir_weights:
-            # Normalize weights and calculate weights for each file
-            total_weight = sum(self.img_dir_weights)
-            normalized_weights = [w / total_weight for w in self.img_dir_weights]
-            file_weights = []
-            for dir_idx, weight in enumerate(normalized_weights):
-                file_weights.extend([weight] * len([f for f in self.imgs if Path(f).parent == Path(self.img_dirs[dir_idx])]))
-            return file_weights
-        else:
-            # Equal weight for all files
-            return [1] * len(self.imgs)
 
     def sample(self, idx=None):
         if idx is not None and idx < len(self.imgs):
