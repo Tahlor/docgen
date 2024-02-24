@@ -82,7 +82,11 @@ class DirectoryWeightedSampler(Sampler):
             files = [f for f in files if f.suffix.lower() in self.extensions]
             print(f"Found {len(files)} files in {img_dir} after filtering.")
             all_files.extend(files)
-            all_weights.extend([self.img_dir_weights[i]/len(files)] * len(files))
+            if len(files) == 0:
+                warnings.warn(f"No files found in {img_dir}")
+
+            else:
+                all_weights.extend([self.img_dir_weights[i]/len(files)] * len(files))
 
         # normalize weights
         all_weights = [w / sum(all_weights) for w in all_weights]
