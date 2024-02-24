@@ -11,7 +11,7 @@ class AlbumentationsWrapper(object):
         self.transform = transform(*args, **kwargs)
         self._to_dict = transform(*args, **kwargs)._to_dict
         self.__repr__ = transform(*args, **kwargs).__repr__
-
+        self.add_targets = lambda *args, **kwargs: None
 
     def __call__(self, image, label=None):
         if label is not None:
@@ -33,10 +33,10 @@ class PILToNumpyTransform(ImageOnlyTransform):
         self.p = p
 
     def apply(self, image, **params):
-        label = None
-        if "label" in params:
-            label = np.array(params["label"])
-        return {"image": np.array(image), "label": label} if label is not None else {"image":np.array(image)}
+        output = {"image": np.array(image)}
+        for k in params:
+            output[k] = np.array(params[k])
+        return output
 
     def __call__(self, *args, **kwargs):
         return self.apply(*args, **kwargs)

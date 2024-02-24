@@ -1,3 +1,4 @@
+from docgen.datasets.image_folder import run_transforms
 from docgen.utils.utils import time_function
 from docgen.layoutgen.segmentation_dataset.cache import Cache
 import inspect
@@ -540,30 +541,6 @@ def process_label(label, gt_options={}):
 
     return label
 
-def run_transforms(transform_list, img, label):
-    if isinstance(transform_list, A.Compose):
-        if transform_list.additional_targets:
-            img_dict = transform_list(image=img, mask=label)
-            img, label = img_dict["image"], img_dict["mask"]
-        else:
-            img = transform_list(image=img)["image"]
-    elif isinstance(transform_list, Compose): # not compatible with albumentations additional targets, so loop through it ourselves and use run_transforms on it
-        for transform in transform_list.transforms:
-            img, label = run_transforms(transform, img, label)
-    elif isinstance(transform_list, list):
-        for transform in transform_list:
-            img, label = run_transforms(transform, img, label)
-    elif isinstance(transform_list, A.OneOf):
-        img, label = transform_list(image=img, mask=label)
-    # else if callable
-    elif callable(transform_list):
-        if "label" in inspect.signature(transform_list).parameters:
-            img, label = transform_list(image=img, label=label)
-        else:
-            img = transform_list(img)
-    else:
-        raise ValueError(f"Unknown transform type {transform_list}")
-    return img, label
 
 def read_label_img(path):
     path = Path(path)

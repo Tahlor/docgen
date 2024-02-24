@@ -1,3 +1,5 @@
+import inspect
+import albumentations as A
 import warnings
 import re
 from tqdm import tqdm
@@ -198,8 +200,8 @@ class NaiveImageFolder(GenericDataset):
 
                 img = Image.open(str(img_path)).convert(self.color_scheme)
                 h,w = img.height, img.width
-                if self.transform_composition.transforms is not None:
-                    img = self.transform_composition(img)
+                if self.transform_list is not None:
+                    img, _ = run_transforms(self.transform_list, img, label=None)
 
                 if self.reject_because_of_filter(img, path=img_path):
                     self.rejected_paths.add(img_path)  # Track rejected image
@@ -252,6 +254,41 @@ class NaiveImageFolder(GenericDataset):
     @staticmethod
     def collate_fn(batch):
         return SemanticSegmentationCompositionDataset.collate_fn(batch)
+
+
+def run_transforms(transform_list, img, label):
+    if isinstance(img, dict):
+        if "label" in img:
+            label = img["label"]
+        img = img["image"]
+    if isinstance(transform_list, A.Compose):
+        if transform_list.additional_targets and not label is None:
+            additional_target_name = list(transform_list.additional_targets.keys())[0]
+            kwargs = {additional_target_name: label}
+            img_dict = transform_list(image=img, **kwargs)
+            img = img_dict["image"]
+            label = img_dict[additional_target_name]
+        else:
+            img = transform_list(image=img)["image"]
+    elif isinstance(transform_list, Compose): # not compatible with albumentations additional targets, so loop through it ourselves and use run_transforms on it
+        for transform in transform_list.transforms:
+            img, label = run_transforms(transform, img, label)
+    elif isinstance(transform_list, list):
+        for transform in transform_list:
+            img, label = run_transforms(transform, img, label)
+    elif isinstance(transform_list, A.OneOf):
+        kwargs = {key: label for key in transform_list.additional_targets}
+        img, label = transform_list(image=img, **kwargs)
+    # else if callable
+    elif callable(transform_list):
+        if "label" in inspect.signature(transform_list).parameters and label is not None:
+            img, label = transform_list(image=img, label=label)
+        else:
+            img = transform_list(img)
+    else:
+        raise ValueError(f"Unknown transform type {transform_list}")
+    return img, label
+
 
 
 class NaiveImageFolderPatch(NaiveImageFolder):
