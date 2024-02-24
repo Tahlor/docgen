@@ -13,15 +13,15 @@ class AlbumentationsWrapper(object):
         self.__repr__ = transform(*args, **kwargs).__repr__
 
 
-    def __call__(self, img, label=None):
+    def __call__(self, image, label=None):
         if label is not None:
-            transformed = self.transform(image=img, label=label)
-            img = transformed['image']
+            transformed = self.transform(image=image, label=label)
+            image = transformed['image']
             label = transformed['label']
         else:
-            transformed = self.transform(image=img)
-            img = transformed['image']
-        return (img, label) if label is not None else img
+            transformed = self.transform(image=image)
+            image = transformed['image']
+        return (image, label) if label is not None else image
 
 
 class PILToNumpyTransform(ImageOnlyTransform):

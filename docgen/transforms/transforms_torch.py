@@ -108,8 +108,11 @@ class RandomCropIfTooBig:
             return image
 
 class ToTensorWithLabel(transforms.ToTensor):
-    def __call__(self, image, label):
-        return super().__call__(image), super().__call__(label)
+    def __call__(self, image, label=None):
+        if label is None:
+            return super().__call__(image)
+        else:
+            return super().__call__(image), super().__call__(label)
 
 
 class RandomCropIfTooBigWithLabel(RandomCropIfTooBig):
