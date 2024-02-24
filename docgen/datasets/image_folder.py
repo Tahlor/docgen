@@ -218,7 +218,6 @@ class NaiveImageFolder(GenericDataset):
                 elif self.return_format == "dict":
                     return {'image': img,
                             "name": img_path.stem,
-                            "mask": None,
                             "original_hw": (h,w),
                             "path": img_path}
                 else:
