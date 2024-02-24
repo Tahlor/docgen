@@ -449,7 +449,6 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                 #     show(label[i], title=f"Layer: {channel_mapper.output_channel_names[i]}"
                 #                          f"Range: {label[i].min()} - {label[i].max()}")
 
-
                 return_dict = {
                         'image': img,
                         'mask': label,
