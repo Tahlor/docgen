@@ -35,6 +35,7 @@ class MetaPairedImgLabelImageFolderDataset(Dataset):
         self.length = sum(len(d) for d in self.datasets)
         self.counter = 0
         self.shuffle = shuffle or kwargs.get("use_cache", True)
+        self.key_intersection = self.get_key_intersection()
 
     def filter_out_0_weights(self, img_dataset_config_paths, weights):
         configs = [config for i,config in enumerate(img_dataset_config_paths) if weights[i] > 0]
@@ -54,12 +55,25 @@ class MetaPairedImgLabelImageFolderDataset(Dataset):
         if self.shuffle:
             chosen_dataset = random.choices(self.datasets, self.weights)[0]
             random_idx = random.randint(0, len(chosen_dataset) - 1)
-            return chosen_dataset[random_idx]
+            output = chosen_dataset[random_idx]
         else:
             for dataset in self.datasets:
                 if idx < len(dataset):
-                    return dataset[idx]
+                    output = dataset[idx]
                 idx -= len(dataset)
+        if isinstance(output, dict):
+            # restrict to the keys that are in all datasets
+            output = {k: v for k, v in output.items() if k in self.key_intersection}
+        return output
+
+    def get_key_intersection(self):
+        batch_of_examples = [dataset[0] for dataset in self.datasets]
+        # get the overlapping keys
+        keys = set()
+        for item in batch_of_examples:
+            if isinstance(item, dict):
+                keys.update(item.keys())  # Use update() to add elements from the item's keys
+        return set(keys)
 
 
 def min_ignore_none(*args):

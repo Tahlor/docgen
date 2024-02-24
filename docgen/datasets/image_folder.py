@@ -218,7 +218,8 @@ class NaiveImageFolder(GenericDataset):
                 elif self.return_format == "dict":
                     return {'image': img,
                             "name": img_path.stem,
-                            "original_size": (h,w),
+                            "mask": None,
+                            "original_hw": (h,w),
                             "path": img_path}
                 else:
                     raise NotImplementedError(f"return_format {self.return_format} not implemented")
