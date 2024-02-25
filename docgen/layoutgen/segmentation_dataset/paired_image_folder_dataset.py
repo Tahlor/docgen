@@ -22,11 +22,12 @@ from hwgen.data.utils import show, display
 import yaml
 from docgen.utils.channel_mapper import SimpleChannelMapper
 import random
+from docgen.datasets.metadataset import MetaDataset
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
 
-class MetaPairedImgLabelImageFolderDataset(Dataset):
+class MetaPairedImgLabelImageFolderDataset(MetaDataset):
     def __init__(self, img_dataset_config_paths, weights=None, shuffle=True, *args, **kwargs):
         if weights is None:
             weights = [1] * len(img_dataset_config_paths)
@@ -65,15 +66,6 @@ class MetaPairedImgLabelImageFolderDataset(Dataset):
             # restrict to the keys that are in all datasets
             output = {k: v for k, v in output.items() if k in self.key_intersection}
         return output
-
-    def get_key_intersection(self):
-        batch_of_examples = [dataset[0] for dataset in self.datasets]
-        # get the overlapping keys
-        keys = set()
-        for item in batch_of_examples:
-            if isinstance(item, dict):
-                keys.update(item.keys())  # Use update() to add elements from the item's keys
-        return set(keys)
 
 
 def min_ignore_none(*args):
