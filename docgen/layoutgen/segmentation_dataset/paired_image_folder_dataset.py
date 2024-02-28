@@ -91,7 +91,7 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                  img_id_regexes="(\d+)",
                  output_channel_names=None,
                  input_channel_class_names=None,
-                 use_cache=True,
+                 use_cache=False,
                  cache_size=300,
                  max_cache_reuse=10,
                  **kwargs,
@@ -488,6 +488,7 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
     @staticmethod
     #@time_function
     def collate_fn(batch, tensor_keys=["image", "mask"]):
+        logger.debug("Collating batch!")
         if isinstance(batch[0], list):
             return batch
         keys = batch[0].keys()
