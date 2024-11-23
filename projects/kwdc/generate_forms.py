@@ -159,7 +159,7 @@ def init_worker(dictionary_paths, font_config, json_path, output_dir, image_dir)
         global_image_cache[img_id] = img.convert("RGBA")
 
 def get_last_image_id(output_dir):
-    """Find the highest image ID from existing batch files"""
+    """Find the highest image ID from existing batch files and final JSON"""
     last_id = None
     
     # Check pickle files
@@ -170,7 +170,22 @@ def get_last_image_id(output_dir):
                 # Get the highest ID in this batch
                 batch_max = max(int(img['id']) for img in batch_data['images'])
                 last_id = batch_max if last_id is None else max(last_id, batch_max)
-      
+    
+    # Check final JSON if it exists
+    json_path = output_dir / "ground_truth.json"
+    if json_path.exists():
+        with open(json_path, 'r') as f:
+            json_data = json.load(f)
+            if json_data.get('images'):
+                json_max = max(int(img['id']) for img in json_data['images'])
+                last_id = json_max if last_id is None else max(last_id, json_max)
+                
+                # Save JSON data as batch_0.pkl if it doesn't exist
+                batch_0_path = output_dir / "ground_truth_batch_0.pkl"
+                if not batch_0_path.exists():
+                    with open(batch_0_path, "wb") as f:
+                        pickle.dump(json_data, f)
+    
     return str(last_id).zfill(6) if last_id is not None else None
 
 def main():
@@ -264,6 +279,15 @@ def main():
     image_composer = ImageComposer(text_generator)
     output_saver = OutputSaver(output_dir)
     
+    # Handle resume functionality
+    if args.resume:
+        last_id = get_last_image_id(output_dir)
+        if last_id:
+            output_prefix = str(int(last_id) + 1).zfill(6)
+            logger.info(f"Resuming from image ID: {output_prefix}")
+        else:
+            logger.info("No existing images found. Starting from the beginning.")
+    
     # Prepare tasks by looping through reference images
     tasks = []
     reference_image_ids = list(image_loader.images.keys())
@@ -287,7 +311,8 @@ def main():
             return
         logger.info(f"Excluded {len(args.exclude_images)} images. Using {len(reference_image_ids)} remaining images.")
     
-    for i in range(num_images):
+    current_id = int(output_prefix)
+    for i in range(current_id, num_images + 1):
         base_image_id = random.choice(reference_image_ids)
         
         base_image = image_loader.images[base_image_id]
@@ -299,11 +324,11 @@ def main():
             fields,
             dict_dir,
             font_config,
-            output_prefix
+            current_id
         )
         tasks.append(task_data)
-        output_prefix = str(int(output_prefix) + 1).zfill(6)
-
+        current_id += 1 
+    
     ground_truth = {'images': []}
     batch_num = 0
     

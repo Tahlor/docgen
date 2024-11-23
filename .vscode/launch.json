@@ -18,10 +18,11 @@
             "program": "${workspaceFolder}/projects/kwdc/generate_forms.py",
             "console": "integratedTerminal",
             // "args": ["--processes", "2", "--num_images", "4", "--batch_size", "2"],
-            "args": ["--processes", "10", 
+            "args": ["--processes", "1", 
             "--num_images", "100000", 
             "--batch_size", "1000", 
-            "--output_dir", "C:/Users/tarchibald/github/docgen/projects/kwdc/kwdc-synthetic-data-forms/output_new",
+            //"--output_dir", "C:/Users/tarchibald/github/docgen/projects/kwdc/kwdc-synthetic-data-forms/output_new",
+            "--output_dir", "C:/Users/tarchibald/github/docgen/projects/kwdc/kwdc-synthetic-data-forms/old/output_v3",
             //"--exclude_images", "Guam_Arriola_SSS.j2k_page_2.j2k", "Guam_Arriola_SSS.j2k_page_1.j2k",
             "--resume"
         ],
