@@ -378,7 +378,7 @@ datasets:
     type: NaiveImageFolder
     base_dataset_kwargs:
       img_dirs:
-        - "G:/data/standard_hwr/AllHandwritingImages/"
+        - "G:/data/standard_hwr/CSAFE_handwriting/"
       recursive: true
     layer_contents: handwriting
     sample_weight: 5

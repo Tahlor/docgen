@@ -1,7 +1,14 @@
 from torch.utils.data import Dataset
 from torchvision.transforms import Compose
 import torch
+import functools
+import logging
 
+logger = logging.getLogger(__name__)
+
+def log_print(message):
+    logger.info(message)
+    print(message)
 
 class GenericDataset(Dataset):
     def __init__(self, transform_list=None,
@@ -92,3 +99,26 @@ class GenericDataset(Dataset):
     @staticmethod
     def tensor_collate_fn(batch):
         return torch.stack(batch, dim=0)
+
+
+def retry_on_failure(max_attempts=100, increment_idx=False):
+    def decorator_retry(func):
+        @functools.wraps(func)
+        def wrapper_retry(*args, **kwargs):
+            attempts = 0
+            args = list(args)  # Convert tuple to list to modify it if necessary
+            while attempts < max_attempts:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    attempts += 1
+                    log_print(f"Attempt {attempts}: Failure, retrying...")
+                    if increment_idx and 'idx' in kwargs and isinstance(kwargs['idx'], int):
+                        kwargs['idx'] += 1
+                    elif increment_idx and len(args) > 0 and isinstance(args[0], int):
+                        args[0] += 1  # Assuming 'idx' is the first positional argument
+                    if attempts == max_attempts:
+                        log_print(f"Max retries reached: {max_attempts}")
+                        raise RuntimeError(f"Max retries reached: {max_attempts}") from e
+        return wrapper_retry
+    return decorator_retry

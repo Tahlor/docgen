@@ -1,15 +1,15 @@
 import random
 import sys
-if sys.version_info >= (3, 8):
-    from typing import Literal
-else:
-    from typing_extensions import Literal
+import pickle
+import warnings
+from typing import Literal
 from PIL import ImageDraw, Image
 from cv2 import rectangle as np_rectangle
 import numpy as np
 from matplotlib.colors import to_rgb
 import cv2
-import warnings
+import json
+from io import BytesIO
 
 try:
     from scipy.spatial import ConvexHull
@@ -18,7 +18,13 @@ except:
 
 ravel = lambda sublist: sublist.ravel() if isinstance(sublist, np.ndarray) else sublist
 
-class BBox:
+class BBox(list):
+    __slots__ = [
+        'origin', '_bbox', 'format', 'force_int', 'img', 'height_ll',
+        'line_number', 'line_word_index', 'text', 'parent_bbox',
+        'paragraph_index', 'font_size', 'category'
+    ]
+    
     def __init__(self,
                  origin: Literal['ul', 'll'],
                  bbox,
@@ -30,9 +36,10 @@ class BBox:
                  force_int=True,
                  img=None,
                  font_size=None,
-                 format:Literal['XYXY', 'XYWH']="XYXY",
+                 format: Literal['XYXY', 'XYWH'] = "XYXY",
                  height_ll=None,
-                 category=None):
+                 category=None,
+                 ):
         """
         Store BBox as UL XYXY TUPLE to prevent accidental modification
         The only functions that should modify in place are: update_bbox, enlarge, expand, offset_origin
@@ -51,11 +58,12 @@ class BBox:
                             You can input/output to XYWH (COCO)
             height (int): if origin is ll, you must supply the height of the image; ONLY USED FOR LL calculation
         """
+        super().__init__(bbox)
+
         self.origin = origin
         self.format = format
-        self.force_int = self._force_int if force_int else lambda *x:x
+        self.force_int = self._force_int if force_int else lambda *x: x
         self.img = img
-
         self.height_ll = height_ll
 
         # BBox is always stored as XYXY, update if format is XYWH
@@ -68,6 +76,20 @@ class BBox:
         self.paragraph_index = paragraph_index
         self.font_size = font_size
         self.category = category
+
+    def __getstate__(self):
+        state = {slot: getattr(self, slot) for slot in self.__slots__}
+        if getattr(self, 'img', None) is not None:
+            warnings.warn("Attribute 'img' is present but will not be pickled for security reasons.")
+            state['img'] = None  # Remove 'img' from the state to ignore it
+        return state
+
+    def __setstate__(self, state):
+        if state.get('img') is not None:
+            warnings.warn("Attribute 'img' was found during unpickling but is being ignored.")
+            state['img'] = None  # Ignore 'img' by setting it to None
+        for slot, value in state.items():
+            setattr(self, slot, value)
 
     def update_bbox(self, bbox, format:Literal['XYXY', 'XYWH']="XYXY", origin="ul"):
         if isinstance(bbox, tuple):
@@ -89,14 +111,32 @@ class BBox:
                 self._bbox = tuple(self._XYWH_to_XYXY(self._bbox))
 
         self._bbox = self.force_int(self._bbox)
+        self[:] = self._bbox
 
     def expand_rightward(self, pixels):
         self._bbox = self.force_int((self._bbox[0], self._bbox[1], self._bbox[2]+pixels, self._bbox[3]))
-        return self.bbox
+        return self
 
     def expand_downward(self, pixels):
         self._bbox = self.force_int((self._bbox[0], self._bbox[1], self._bbox[2], self._bbox[3]+pixels))
-        return self.bbox
+        return self
+
+    def expand_horizontally(self, pixels):
+        self._bbox = self.force_int((self._bbox[0]-pixels, self._bbox[1], self._bbox[2]+pixels, self._bbox[3]))
+        return self
+
+    def expand_vertically(self, pixels):
+        self._bbox = self.force_int((self._bbox[0], self._bbox[1]-pixels, self._bbox[2], self._bbox[3]+pixels))
+        return self
+
+    def expand_random_amount(self, max_padding_horizontal, max_padding_vertical):
+        horizontal_expansion = random.randint(0, max_padding_horizontal)
+        vertical_expansion = random.randint(0, max_padding_vertical)
+        self._bbox = self.force_int((self._bbox[0]-horizontal_expansion,
+                                     self._bbox[1]-vertical_expansion,
+                                     self._bbox[2]+horizontal_expansion,
+                                     self._bbox[3]+vertical_expansion))
+        return self
 
     def rescale(self, scale):
         self._rescale(self._bbox, scale)
@@ -240,6 +280,40 @@ class BBox:
             min_size_y = max_size_y
         return min_size_x, min_size_y, max_size_x, max_size_y
 
+    def get_bbox_as_list(self):
+        """
+        Returns the bounding box coordinates as a list of integers.
+        """
+        return list(self._bbox)
+
+    def __json__(self):
+        """
+        Method to customize JSON serialization.
+        """
+        return self.get_bbox_as_list()
+
+    def toJSON(self):
+        """
+        Serialize the object to JSON format.
+        """
+        return json.dumps(self.__json__())
+
+    @property
+    def __dict__(self):
+        """ Customize the dictionary representation of the object for serialization. """
+        # This dictionary format is directly serializable by json.dumps.
+        return {
+            'bbox': self.get_bbox_as_list(),
+            # 'origin': self.origin,
+            # 'format': self.format,
+            # 'force_int': self.force_int,
+            # 'line_index': self.line_index,
+            # 'line_word_index': self.line_word_index,
+            # 'text': self.text,
+            # 'paragraph_index': self.paragraph_index,
+            # 'category': self.category
+        }
+
     @property
     def bbox(self):
         return self.get_bbox()
@@ -335,6 +409,26 @@ class BBox:
 
     def __len__(self):
         return len(self._bbox)
+
+    def __copy__(self):
+        return BBox(
+            self.origin,
+            list(self),  # use list(self) to get the list contents
+            line_index=self.line_number,
+            line_word_index=self.line_word_index,
+            text=self.text,
+            parent_obj_bbox=self.parent_bbox,
+            paragraph_index=self.paragraph_index,
+            force_int=self.force_int is not None,
+            img=self.img,
+            font_size=self.font_size,
+            format=self.format,
+            height_ll=self.height_ll,
+            category=self.category
+        )
+
+    def copy(self):
+        return self.__copy__()
 
     @property
     def x1(self):
@@ -523,10 +617,6 @@ class BBox:
     def __str__(self):
         return str(self.bbox)
 
-    # def __getstate__(self):
-    #     return self.bbox
-    # THIS WILL BREAK PICKLING
-
     def toJSON(self):
         return self.bbox
 
@@ -540,10 +630,13 @@ class BBox:
         """
         boxes = np.array(list_of_bboxes).reshape(-1,4)
         #boxes = np.array(range(0,20))
-        return [int(np.min(boxes[:, 0])),
+        bbox_list = [int(np.min(boxes[:, 0])),
         int(np.min(boxes[:, 1])),
         int(np.max(boxes[:, 2])),
         int(np.max(boxes[:, 3]))]
+        return bbox_list
+
+
 
     @staticmethod
     def _top_left_format(bbox):
@@ -560,6 +653,8 @@ class BBox:
 
 
 class BBoxNGon(BBox):
+    __slots__ = BBox.__slots__  # Inherit slots from BBox
+
     def __init__(self,
                  origin: Literal['ul', 'll'],
                  bbox,
@@ -574,7 +669,6 @@ class BBoxNGon(BBox):
                  height_ll=None
                  ):
         """
-
         Args:
             bbox_4gon [x1,y1,x2,y2,x3,y3,...]:
 
@@ -753,9 +847,9 @@ def flatten2(list_of_bboxes):
     if isinstance(list_of_bboxes, np.ndarray):
         points = list_of_bboxes.ravel()
     elif isinstance(list_of_bboxes, list):
-        if isinstance(list_of_bboxes[0], list): # flatten nested list
+        if isinstance(list_of_bboxes[0], list):  # flatten nested list
             points = np.array([item for sublist in list_of_bboxes for item in sublist])
-        elif not isinstance(list_of_bboxes[0], np.ndarray): # list of ints
+        elif not isinstance(list_of_bboxes[0], np.ndarray):  # list of ints
              points = np.array(list_of_bboxes).ravel()
         else:
             # List of ndarrays

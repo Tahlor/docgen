@@ -17,7 +17,7 @@ from torchvision.transforms import Compose
 import logging
 from tifffile import imread, imsave, TiffFile
 import json
-from docgen.datasets.generic_dataset import GenericDataset
+from docgen.datasets.generic_dataset import GenericDataset, retry_on_failure
 from hwgen.data.utils import show, display
 import yaml
 from docgen.utils.channel_mapper import SimpleChannelMapper
@@ -34,6 +34,7 @@ class MetaPairedImgLabelImageFolderDataset(MetaDataset):
         self.img_dataset_config_paths, self.weights = self.filter_out_0_weights(img_dataset_config_paths, weights)
         self.datasets = [PairedImgLabelImageFolderDataset(img_dataset_config_paths=config, *args, **kwargs) for config in self.img_dataset_config_paths]
         self.length = sum(len(d) for d in self.datasets)
+        logger.info(f"MetaPairedImgLabelImageFolderDataset with {len(self.datasets)} datasets and {self.length} total items")
         self.counter = 0
         self.shuffle = shuffle or kwargs.get("use_cache", True)
         self.key_intersection = self.get_key_intersection()
@@ -52,6 +53,7 @@ class MetaPairedImgLabelImageFolderDataset(MetaDataset):
     def __len__(self):
         return self.length
 
+    @retry_on_failure(max_attempts=3, increment_idx=True)
     def __getitem__(self, idx):
         if self.shuffle:
             chosen_dataset = random.choices(self.datasets, self.weights)[0]
@@ -141,6 +143,11 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                 for each folder, what the corresponding channel_names are
                 these will be remapped to match the output_channel_names
         """
+        #logger.info(f"{inspect.getargvalues(inspect.currentframe())}")
+        # set all self variables as the same name as the arguments
+        for key, value in locals().items():
+            if key != 'self':
+                setattr(self, key, value)
 
         super().__init__(
             max_uniques=max_uniques,
@@ -148,12 +155,6 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
             transform_list=transform_list,
             collate_fn=PairedImgLabelImageFolderDataset.collate_fn,
         )
-        self.max_length_override = int(max_length_override) if max_length_override else None
-        self.min_length_override = int(min_length_override) if min_length_override else None
-        self.max_uniques = int(max_uniques) if max_uniques else None
-        if self.max_uniques or self.max_length_override:
-            self.max_uniques = min_ignore_none(self.max_uniques, self.max_length_override)
-
         self.img_dataset_config_paths = [img_dataset_config_paths] if isinstance(img_dataset_config_paths, (str, Path)) else img_dataset_config_paths
         self.number_of_datasets = len(self.img_dataset_config_paths) if self.img_dataset_config_paths is not None else len(img_dirs)
         parallel_configs = self.process_dataset_configs(img_dataset_config_paths=self.img_dataset_config_paths,
@@ -163,6 +164,33 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
                                                         label_name_patterns=label_name_patterns,
                                                         img_id_regexes=img_id_regexes,
                                                         input_channel_class_names=input_channel_class_names, )
+        print(f"Number of datasets: {self.number_of_datasets}")
+        if self.number_of_datasets == 1:
+            # load the config, if any args exist in it, override the parameters
+            if self.img_dataset_config_paths[0]:
+                print(f"FIRST CONFIG: {self.img_dataset_config_paths}")
+                config = yaml.safe_load(Path(self.img_dataset_config_paths[0]).read_text())
+                if config:
+                    for key in config:
+                        #logger.info(f"Config key: {key}")
+                        if key in kwargs:
+                            kwargs[key] = config[key]
+                            #logger.info(f"Overriding {key} with {config[key]}")
+                        if hasattr(self, key):
+                            setattr(self, key, config[key])
+                            #logger.info(f"Overriding {key} with {config[key]}")
+
+        else:
+            print(f"Multiple datasets, {self.img_dataset_config_paths}")
+            
+
+        self.max_length_override = int(self.max_length_override) if self.max_length_override else None
+        self.min_length_override = int(self.min_length_override) if self.min_length_override else None
+        self.max_uniques = int(self.max_uniques) if self.max_uniques else None
+        if self.max_uniques or self.max_length_override:
+            self.max_uniques = min_ignore_none(self.max_uniques, self.max_length_override)
+        logger.info(f"PairedImgLabelImageFolderDataset with {self.img_dirs} and {self.label_dirs}")
+        logger.info(f"Max uniques: {self.max_uniques} Max length override: {self.max_length_override} Min length override: {self.min_length_override}")
 
         self.img_dirs, self.label_dirs, self.img_id_regexes, self.img_glob_patterns, self.label_name_patterns, self.input_channel_class_names, self.img_dataset_configs = parallel_configs
 
@@ -359,6 +387,7 @@ class PairedImgLabelImageFolderDataset(GenericDataset):
         return path_database
 
     #@time_function
+    @retry_on_failure(max_attempts=10, increment_idx=True)
     def _load_idx(self, idx):
         idx = self._validate_idx(idx)
         paths = self.path_database[idx]
@@ -548,6 +577,7 @@ def process_label(label, gt_options={}):
     return label
 
 
+@retry_on_failure(max_attempts=3, increment_idx=False)
 def read_label_img(path):
     path = Path(path)
     # if TIFF, open as TIFF

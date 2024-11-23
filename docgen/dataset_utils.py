@@ -432,7 +432,7 @@ def draw_boxes_sections_COCO(coco_format,
                     bbox = BBox("ul", annotation["bbox"], format="XYWH")
                     if annotation["category"] in enlarge_box_by_pixels:
                         bbox.enlarge_box(enlarge_box_by_pixels[annotation["category"]])
-                    bbox.draw_box(background_img, color=color)
+                    bbox.draw_form_element(background_img, color=color)
                 if draw_segmentations:
                     for segment in annotation["segmentation"]:
                         BBox.draw_segmentation(segment, background_img, color=color)

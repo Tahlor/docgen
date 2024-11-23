@@ -81,7 +81,7 @@ if __name__ == '__main__':
 
     # Test draw boxes on numpy
     for bbox in bboxs1:
-        bbox.draw_box(box1)
+        bbox.draw_form_element(box1)
 
     background_img.paste(Image.fromarray(box1), bbox1_origin)
     background_img.paste(Image.fromarray(box2), bbox2_origin)
@@ -89,11 +89,11 @@ if __name__ == '__main__':
 
     for bbox in bboxs2:
         bbox.offset_origin(*bbox2_origin)
-        bbox.draw_box(background_img)
+        bbox.draw_form_element(background_img)
 
     for bbox in bboxs3:
         bbox.offset_origin(*bbox3_origin)
-        bbox.draw_box(background_img)
+        bbox.draw_form_element(background_img)
 
     display(background_img)
     pass

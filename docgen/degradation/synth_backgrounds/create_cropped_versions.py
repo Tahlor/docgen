@@ -5,6 +5,13 @@ import albumentations as A
 from docgen.transforms.transforms import *
 from tqdm import tqdm
 from multiprocessing import cpu_count
+import pickle
+
+def load_bounding_boxes(pkl_path):
+    with open(pkl_path, 'rb') as f:
+        bounding_boxes = pickle.load(f)
+    return bounding_boxes
+
 
 class ImageTransformer:
     def __init__(self, args):
@@ -23,6 +30,8 @@ class ImageTransformer:
         ])
         self.recursive = args.recursive
         self.rename_to_idx = args.rename_to_idx
+        self.overwrite = args.overwrite
+        self.bounding_box_file = args.bounding_box_file
 
     def transform_and_save_images(self):
         for input_folder in self.input_folders:
@@ -47,14 +56,21 @@ class ImageTransformer:
         else:
             input_path_glob = input_path.glob
 
+        if self.bounding_box_file:
+            bounding_boxes = load_bounding_boxes(self.bounding_box_file)
+        else:
+            bounding_boxes = {}
+
         files = sorted(list(input_path_glob('*')))
         for i, image_path in tqdm(enumerate(files), desc=f'Processing {input_path.name}'):
 
             relative_output_path_and_name = self.get_output(input_path, image_path, i)
             full_output_path = output_path / relative_output_path_and_name
-
+            if full_output_path.exists() and not self.overwrite:
+                continue
             if i == 0:
-                input(f"\nTaking input from {image_path}\n and saving output to {full_output_path}. Press enter to continue.")
+                print(f"\nTaking input from {image_path}\n and saving output to {full_output_path}.")
+                print("Continuing...")
 
             # Read image
             image = cv2.imread(str(image_path))
@@ -63,7 +79,11 @@ class ImageTransformer:
                 continue
 
             # Apply transformation
+            if image_path.stem in bounding_boxes:
+                bounding_box = bounding_boxes[image_path.stem]
+
             transformed = self.pipeline(image=image)['image']
+
 
 
             # Save the transformed image
@@ -90,6 +110,10 @@ def parse_args(args=None):
     # rename to idx number
     parser.add_argument("--rename_to_idx", action="store_true",
                         help="If true, the script will rename files to idx number")
+    parser.add_argument("--overwrite", action="store_true",
+                        help="If true, the script will overwrite existing files")
+    parser.add_argument("--bounding_box_file", type=str,
+                        help="Path to the bounding box file, not implemented")
 
     if args is not None:
         import shlex
@@ -110,8 +134,18 @@ if __name__ == '__main__':
             # "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting",
             # "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/white paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting",
             # "//?/G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/aged blank letter with imprints of text from the reverse side, as if some vestiges of the ink permeated through the paper, but impossible to read; full frame",
-            r"G:\s3\synthetic_data\resources\backgrounds\synthetic_backgrounds\dalle\document_backgrounds\paper_only\white paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting"
+            #r"G:\s3\synthetic_data\resources\backgrounds\synthetic_backgrounds\dalle\document_backgrounds\paper_only\white paper with many ink marks, crinkles, wrinkles, and imperfections and variable lighting"
+
+            "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/old_highlighter_marks",
+            "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/old_wrinkled_var_light",
+            "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/paper_only/old_liquid_stains",
         ]
-        args.output_folder = """G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/CROPPED"""
+
+        root = "G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/with_backgrounds"
+        args.input_folders = [
+            str(subfolder) for subfolder in Path(root).iterdir() if subfolder.is_dir()
+        ]
+        args.output_folder = """G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/CROPPED_with_backgrounds"""
+        args.bounding_box_file = r"""G:/s3/synthetic_data/resources/backgrounds/synthetic_backgrounds/dalle/document_backgrounds/with_backgrounds/bounding_boxes_FILESTEM_BOUNDINGBOX.pkl"""
     main(args)
 

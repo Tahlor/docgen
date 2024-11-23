@@ -55,7 +55,7 @@ def main():
 
     # Test draw boxes on numpy
     for bbox in bboxs1:
-        bbox.draw_box(box1)
+        bbox.draw_form_element(box1)
 
     background_img.paste(Image.fromarray(box1), origin)
     ocr_format = convert_to_ocr_format(bboxs1, origin_offset=origin)

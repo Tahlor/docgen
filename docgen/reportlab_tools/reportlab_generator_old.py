@@ -13,7 +13,6 @@ else:
 from easydict import EasyDict as edict
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from docgen.bbox import BBox
-from textgen.field_generator.format_form_fields import FieldCollection, FieldPair, Field
 
 folder = Path(os.path.dirname(__file__))
 
@@ -36,7 +35,6 @@ class FormGenerator():
                  field_label_position: Literal['adjacent', 'inside'] = "adjacent",
                  fill_fields_with_text: bool = False,
                  prob_of_drawing_boxes: float = 0.5,
-                 prob_of_drawing_underlines: float = 0.5,
                  use_random_font: bool = True,
                  margins: Dict[str, int] = {"L": 40, "T": 40, "R": 40, "B": 40},
                  horizontal_space: int = 10,
@@ -70,7 +68,6 @@ class FormGenerator():
         self.field_label_position = field_label_position
         self.fill_fields_with_text = fill_fields_with_text
         self.prob_of_drawing_boxes = prob_of_drawing_boxes
-        self.prob_of_drawing_underlines = prob_of_drawing_underlines
         self.use_random_font = use_random_font
         self.margins = edict(margins)
         self.horizontal_space = horizontal_space
@@ -83,7 +80,6 @@ class FormGenerator():
         self.prob_of_random_horizontal_space = prob_of_random_horizontal_space
         self.prob_of_random_newline = prob_of_random_newline
         self.randomize_field_order = randomize_field_order
-        self.margin_buffer_space = 50
 
     def create_new_form(self,
                         fields,
@@ -115,21 +111,11 @@ class FormGenerator():
         self.c.setFont(font, size)
         self.line_height = self.fontHeight() + self.vertical_space
 
-    def add_to_ocr(self, merged_text, merged_bbox, category, parts=None):
-        section = {
-            "text": merged_text,
-            "bbox": merged_bbox,
-            "paragraphs": []
-        }
-        if parts is not None:
-            for bbox, text, sub_category in parts:
-                section["paragraphs"].append({
-                    "bbox": bbox,
-                    "text": text,
-                    "category": sub_category
-                })
-
-        self.ocr["sections"].append(section)
+    def add_to_ocr(self,
+                   text,
+                   bbox,
+                   category=""):
+        self.ocr["sections"].append({"paragraphs": [{"bbox":bbox, "text":text, "category":category}]})
 
     def pos_to_bbox(self, width, height=None, x1=None, y1=None):
         x1 = self.current_position[0] if x1 is None else x1
@@ -193,7 +179,6 @@ class FormGenerator():
         return text
 
     def _add_field_from_list(self, field, font_size=12):
-        self.setFont()
         if self.use_random_font:
             self.setFont()
         if len(field)==3:
@@ -207,173 +192,70 @@ class FormGenerator():
     def add_fields(self, fields):
         if isinstance(fields, dict):
             fields = list(tuple(x) for x in fields.items())
-        if isinstance(fields, (list, tuple)):
-            fields = list(fields)
-            if self.randomize_field_order:
-                random.shuffle(fields)
-        elif isinstance(fields, FieldCollection) and self.randomize_field_order:
-            fields.randomize()
-
+        fields = list(fields)
+        if self.randomize_field_order:
+            random.shuffle(fields)
         for field in fields:
             if isinstance(field, (list, tuple)):
                 self._add_field_from_list(field)
             elif isinstance(field, dict):
                 self._add_field_from_list(field.items())
-            elif isinstance(field, FieldPair):
-                self._add_field_from_field_pair(field)
             if random.random() < self.prob_of_random_horizontal_space:
+                # pick something between 0 and 1/2 of the total horizontal space
                 self.current_position[0] += random.random() * self.remaining_horizontal_space() / 2
             if random.random() < self.prob_of_random_newline:
                 self.current_position[1] -= self.line_height
 
-    def _add_fields_from_field_collection(self, field_collection):
-        for field_pair in field_collection:
-            self.add_field(field_pair.prompt, field_pair.response)
 
-    def _add_field_from_field_pair(self, field_pair):
-        self.add_section(field_pair)
+    def add_field(self, title, user_specified_value_width, value=''):
+        value = f" {value} "
+        value_width = max(self.stringWidth(value), user_specified_value_width)
+        title_width = self.stringWidth(title)
+        self.move_to_next_line_if_needed(text_width=title_width, form_field_width=value_width)
+        if self.field_label_position== "adjacent":
+            position_with_vertical_offset = self.current_position[1] + (self.line_height-self.fontHeight())/2
+            self.c.drawString(self.current_position[0], position_with_vertical_offset, title)
+            bbox = self.pos_to_bbox(width=self.stringWidth(title))
+            self.add_to_ocr(title, bbox, "field_name")
 
-    def add_section(self, field_pair: FieldPair):
-        full_string = field_pair.prompt.to_string() + field_pair.response.to_string()
-        self.new_line_if_needed(text_width=self.stringWidth(full_string), additional_spaces=self.margin_buffer_space + self.horizontal_space)
+            self.current_position[0] += self.stringWidth(title) + self.horizontal_space
 
-        self.add_prompt(field_pair.prompt)
-        self.add_response(field_pair.response)
+        elif self.field_label_position== "inside":
+            raise NotImplementedError
+            self.c.drawString(*self.current_position, title)
 
-    def add_prompt(self, prompt: Field):
-        self.populate_paragraph(prompt, "prompt")
+        if self.within_line_idx==0:
+            value = self.truncate_text_to_fit(value) + " "
+            value_width = max(self.stringWidth(value), user_specified_value_width)
 
-    def add_response(self, response: Field):
-        self.populate_paragraph(response, "response")
-
-    def populate_paragraph(self, field: Field, field_type: str):
-        parts = []
-
+        print(self.current_position)
         box_height = self.fontHeight() + self.vertical_space / 2
-        position_with_vertical_offset = self.current_position[1] + (self.line_height - self.fontHeight()) / 2
 
-        # THIS SHOULD BE HANDLED BY THE CHILD OBJ
-        parsed_values2 = self.parse_nested_field(field.field_data)
-        parsed_values = field.field_data
-        for key, sub_value in parsed_values2:
-            #sub_value = f" {sub_value} " if key != "value" else sub_value
-            sub_value_width = self.stringWidth(sub_value)
-            bbox = self.pos_to_bbox(sub_value_width,
+        if False:
+            self.form.textfield(name=title, tooltip=title,
+                                x=self.current_position[0],
+                                y=self.current_position[1] + (self.line_height-box_height)/2,
+                                width=value_width,
+                                height=box_height,
+                                borderStyle='inset',
+                                forceBorder=True,
+                                value=value)
+        else:
+            bbox = self.pos_to_bbox(value_width,
                                     box_height,
                                     self.current_position[0],
                                     self.current_position[1] + (self.line_height-box_height)/2
             )
-
-            # bbox = self.pos_to_bbox(sub_value_width, box_height,
-            #                         self.current_position[0],
-            #                         self.current_position[1] + (self.line_height - box_height) / 2)
-            if self.fill_fields_with_text:
-                self.c.drawString(self.current_position[0], position_with_vertical_offset, sub_value)
-
-            #self.draw_bbox(bbox)
-
-            parts.append((bbox, sub_value.strip(), key if key else field_type))
-            self.current_position[0] += sub_value_width
-        self.current_position[0] += self.horizontal_space
-
-        if parts:
-            #merged_text, merged_bbox = self.merge_text_and_bboxes(parts)
-            merged_text = field.to_string()
-            merged_bbox = BBox(origin="ll", bbox=BBox.get_maximal_box([bbox for bbox, _, _ in parts]),
-                              height_ll=self.document_height)
-            self.add_to_ocr(merged_text, merged_bbox, field_type, parts)
-            self.draw_form_element(merged_bbox)
-
-    def draw_form_element(self, bbox):
-        if random.random() < self.prob_of_drawing_boxes:
-            # add random padding
-            new_bbox = bbox.copy().expand_random_amount(max_padding_horizontal=5, max_padding_vertical=5)
-            self.draw_bbox(new_bbox)
-        elif random.random() < self.prob_of_drawing_underlines:
-            self.c.line(bbox.x1, bbox.y1, bbox.x2, bbox.y1)
-
-    def draw_bbox(self, bbox):
-        self.c.rect(x=bbox.x1, y=bbox.y1, width=bbox.width, height=bbox.height)
-
-    def new_line(self):
-        self.current_position[1] -= self.line_height
-        self.current_position[0] = self.margins.L
-        self.within_line_idx = 0
-
-    def new_line_if_needed(self, text_width, additional_spaces=0):
-        if text_width + additional_spaces > self.remaining_horizontal_space():
-            self.new_line()
-
-    @staticmethod
-    def parse_nested_field(field):
-        if isinstance(field, list):
-            parsed_fields = []
-            for f in field:
-                if isinstance(f, dict):
-                    key = list(f.keys())[0]
-                    value = f[key]
-                    parsed_fields.append((key, value))
-                else:
-                    parsed_fields.append(("", f))
-            return parsed_fields
-        elif isinstance(field, dict):
-            key = list(field.keys())[0]
-            value = field[key]
-            return [(key, value)]
-        return [("", field)]
-
-    def add_field(self, title, user_specified_value_width, value=''):
-        self.setFont()
-        if hasattr(value, "to_string"):
-            full_string = value.to_string()
-        else:
-            full_string = value
-
-        parsed_values = self.parse_nested_field(value)  # Parse the nested structure
-        title_width = self.stringWidth(title)
-        total_value_width = sum(self.stringWidth(f" {v} ") for _, v in parsed_values)
-        value_width = max(total_value_width, user_specified_value_width)
-        self.move_to_next_line_if_needed(text_width=title_width, form_field_width=value_width)
-
-        if self.field_label_position == "adjacent":
-            position_with_vertical_offset = self.current_position[1] + (self.line_height - self.fontHeight()) / 2
-            self.c.drawString(self.current_position[0], position_with_vertical_offset, title)
-            bbox = self.pos_to_bbox(width=self.stringWidth(title))
-            self.add_to_ocr(title, bbox, "field_name")
-            self.current_position[0] += self.stringWidth(title) + self.horizontal_space
-
-        elif self.field_label_position == "inside":
-            raise NotImplementedError
-
-        # Handle nested fields
-        for key, sub_value in parsed_values:
-            sub_value = f" {sub_value} "
-            sub_value_width = self.stringWidth(sub_value)
-
-            if self.within_line_idx == 0:
-                sub_value = self.truncate_text_to_fit(sub_value) + " "
-                sub_value_width = max(self.stringWidth(sub_value), user_specified_value_width)
-
-            box_height = self.fontHeight() + self.vertical_space / 2
-
-            bbox = self.pos_to_bbox(sub_value_width,
-                                    box_height,
-                                    self.current_position[0],
-                                    self.current_position[1] + (self.line_height - box_height) / 2)
             if random.random() < self.prob_of_drawing_boxes:
-                self.c.rect(x=bbox.x1, y=bbox.y1, width=bbox.width, height=bbox.height)
-
+                self.c.rect(x=bbox.x1,y=bbox.y1,width=bbox.width,height=bbox.height)
             position_with_vertical_offset = self.current_position[1] + (self.line_height - self.fontHeight()) / 2
+
             if self.fill_fields_with_text:
-                self.c.drawString(self.current_position[0], position_with_vertical_offset, sub_value)
+                self.c.drawString(self.current_position[0], position_with_vertical_offset,value)
+            self.add_to_ocr(value, bbox, "field")
 
-            self.add_to_ocr(sub_value.strip(), bbox, key if key else "field")
-            self.within_line_idx += 1
-            self.current_position[0] += sub_value_width + self.horizontal_space
-
-        self.within_line_idx = 0
-        self.current_position[1] -= self.line_height  # Move to the next line
-        self.current_position[0] = self.margins.L  # Reset horizontal position
+        self.within_line_idx += 1
+        self.current_position[0] += value_width + self.horizontal_space
 
     def move_to_next_line_if_needed(self, text_width, form_field_width, new_line_height=None):
         if new_line_height is None:

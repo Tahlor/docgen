@@ -443,7 +443,7 @@ datasets:
     type: NaiveImageFolder
     base_dataset_kwargs:
       img_dirs:
-        - "G:/data/standard_hwr/AllHandwritingImages/" # about 60 px
+        - "G:/data/standard_hwr/CSAFE_handwriting/" # about 60 px
         - "G:/data/standard_hwr/CEDAR-Letter-FULL" # about 70 px
       recursive: true
     layer_contents: handwriting

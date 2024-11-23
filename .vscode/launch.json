@@ -1,0 +1,43 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Generate Forms",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/projects/kwdc/generate_forms.py",
+            "console": "integratedTerminal",
+            // "args": ["--processes", "2", "--num_images", "4", "--batch_size", "2"],
+            "args": ["--processes", "10", 
+            "--num_images", "100000", 
+            "--batch_size", "1000", 
+            "--output_dir", "C:/Users/tarchibald/github/docgen/projects/kwdc/kwdc-synthetic-data-forms/output_new",
+            //"--exclude_images", "Guam_Arriola_SSS.j2k_page_2.j2k", "Guam_Arriola_SSS.j2k_page_1.j2k",
+            "--resume"
+        ],
+            "justMyCode": true
+        },
+        {
+            "name": "Combine Ground Truth Pickles",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/projects/kwdc/utils/combine_gt_pkl.py",
+            "console": "integratedTerminal",
+            "args": [
+                "C:/Users/tarchibald/github/docgen/projects/kwdc/kwdc-synthetic-data-forms/output_v2",
+                "--no-cleanup"
+            ],
+            "justMyCode": true
+        }
+    ]
+}
